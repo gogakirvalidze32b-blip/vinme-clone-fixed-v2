@@ -7,6 +7,7 @@ import SettingsModal from "@/components/SettingsModal";
 import { supabase } from "@/lib/supabase";
 import { getOrCreateAnonId, generateAnonName } from "@/lib/guest";
 
+
 /* ================= TYPES ================= */
 
 type Gender = "male" | "female" | "nonbinary" | "other";
@@ -58,6 +59,7 @@ async function testMatchTop() {
   const [profiles, setProfiles] = useState<DbProfile[]>([]);
   const top = useMemo(() => profiles[0] ?? null, [profiles]);
   const router = useRouter();
+const [matchId, setMatchId] = useState<string | null>(null);
 
 const [matchedUser, setMatchedUser] = useState<DbProfile | null>(null);
 const [matchedMatchId, setMatchedMatchId] = useState<string | null>(null);
@@ -77,6 +79,36 @@ const [matchedMatchId, setMatchedMatchId] = useState<string | null>(null);
     seeking: "everyone",
     bio: "",
   });
+
+  async function getOrCreateMatch(otherUserId: string) {
+  const { data: authData, error: authErr } = await supabase.auth.getUser();
+  if (authErr) throw authErr;
+
+  const me = authData.user?.id;
+  if (!me) throw new Error("Not authenticated");
+
+  const { data: existing, error: findErr } = await supabase
+    .from("matches")
+    .select("id")
+    .or(
+      `and(user1.eq.${me},user2.eq.${otherUserId}),and(user1.eq.${otherUserId},user2.eq.${me})`
+    )
+    .limit(1)
+    .maybeSingle();
+
+  if (findErr) throw findErr;
+  if (existing?.id) return existing.id as string;
+
+  const { data: created, error: insErr } = await supabase
+    .from("matches")
+    .insert({ user1: me, user2: otherUserId })
+    .select("id")
+    .single();
+
+  if (insErr) throw insErr;
+  return created.id as string;
+}
+
 
   const pollRef = useRef<number | null>(null);
 
@@ -263,38 +295,99 @@ const [matchedMatchId, setMatchedMatchId] = useState<string | null>(null);
     setSaving(false);
   }
 
-  const cardUser = top
+
+console.log("TOP DEBUG 👉", top);
+console.log("TOP KEYS 👉", top ? Object.keys(top as any) : null);
+
+const otherId =
+  (top as any)?.user_id ??
+  (top as any)?.userId ??
+  (top as any)?.profile_id ??
+  (top as any)?.id ??
+  (top as any)?.uid ??
+  (top as any)?.owner_id ??
+  null;
+
+const cardUser =
+  top && otherId
     ? {
+        id: String(otherId),
         nickname: top.nickname,
         age: top.age,
         city: top.city,
         distanceKm: 0,
         recentlyActive: true,
-        photo_url: top.photo1_url,
+        photo_url: (top as any).photo1_url ?? null,
       }
     : null;
+
+
+console.log("cardUser DEBUG 👉", cardUser);
+console.log("cardUser keys 👉", cardUser ? Object.keys(cardUser as any) : null);
+
 
   return (
     <div className="min-h-screen bg-black text-white flex justify-center">
       {/* phone frame */}
       <div className="relative w-full max-w-[420px] min-h-screen overflow-hidden">
         {/* Old UI: only logo top-left (inside TinderCard). */}
-        <TinderCard
-          user={cardUser}
-          loading={loading}
-          onLike={likeTop}
-          onSkip={skipTop}
-          onOpenProfile={() => setSettingsOpen(true)}
-          showTopTabs={false}
-        />
+   <TinderCard
+  user={cardUser}
+otherUserId={String(
+  (cardUser as any)?.id ??
+  (cardUser as any)?.user_id ??
+  (cardUser as any)?.uid ??
+  ""
+)}
 
-        <MatchOverlay
-          visible={matchOpen}
-          onClose={() => setMatchOpen(false)}
-          otherPhoto={cardUser?.photo_url ?? null}
-          otherName={cardUser?.nickname ?? "Match"}
-          onMessage={(text) => console.log("SEND:", text)}
-        />
+  loading={loading}
+  onLike={likeTop}
+  onSkip={skipTop}
+  onOpenProfile={() => setSettingsOpen(true)}
+  showTopTabs={false}
+/>
+
+
+       <MatchOverlay
+  visible={matchOpen}
+  onClose={() => setMatchOpen(false)}
+  otherPhoto={cardUser?.photo_url ?? null}
+  otherName={cardUser?.nickname ?? "Match"}
+  onMessage={async (text) => {
+    try {
+      const otherUserId = String(
+        (cardUser as any)?.id ??
+          (cardUser as any)?.user_id ??
+          (cardUser as any)?.uid ??
+          ""
+      );
+
+      if (!otherUserId) {
+        console.error("Missing otherUserId for match/message", cardUser);
+        return;
+      }
+
+      const id = await getOrCreateMatch(otherUserId);
+      setMatchId(id);
+
+      const { error } = await supabase.from("messages").insert({
+        match_id: id,
+        sender_anon: "me",
+        content: text,
+      });
+
+      if (error) {
+        console.error("Message insert error:", error);
+        return;
+      }
+
+      setMatchOpen(false);
+      router.push(`/chat/${id}`);
+    } catch (err) {
+      console.error("SEND MESSAGE FAILED:", err);
+    }
+  }}
+/>
 
         {settingsOpen && (
           <SettingsModal

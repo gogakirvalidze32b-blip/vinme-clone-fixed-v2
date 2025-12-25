@@ -42,6 +42,13 @@ export default function TinderCard({
   const [showMatch, setShowMatch] = useState(false);
 const [matchId, setMatchId] = useState<string | null>(null);
 
+const closeMatch = () => setShowMatch(false);
+const openMatch = async () => {
+  setShowMatch(true);
+  await onLike?.();
+};
+
+
   const router = useRouter();
   const pathname = usePathname();
 
@@ -65,21 +72,15 @@ const [matchId, setMatchId] = useState<string | null>(null);
     return x > 0 ? "LIKE 💚" : "NOPE ❌";
   }, [x]);
 
-  const openMatch = async () => {
-    setShowMatch(true);
-    await onLike?.();
-  };
 
-  const closeMatch = () => setShowMatch(false);
-async function getOrCreateMatch(otherUserId: string ) {
+
+async function getOrCreateMatch(otherUserId: string) {
   const { data: authData, error: authErr } = await supabase.auth.getUser();
-  
   if (authErr) throw authErr;
 
   const me = authData.user?.id;
   if (!me) throw new Error("Not authenticated");
 
-  // მოძებნე უკვე არსებული match (ორივე მიმართულებით)
   const { data: existing, error: findErr } = await supabase
     .from("matches")
     .select("id")
@@ -92,7 +93,6 @@ async function getOrCreateMatch(otherUserId: string ) {
   if (findErr) throw findErr;
   if (existing?.id) return existing.id as string;
 
-  // თუ არ არსებობს — შექმენი ახალი match
   const { data: created, error: insErr } = await supabase
     .from("matches")
     .insert({ user1: me, user2: otherUserId })
@@ -102,7 +102,6 @@ async function getOrCreateMatch(otherUserId: string ) {
   if (insErr) throw insErr;
   return created.id as string;
 }
-
 
 
   // ✅ EARLY RETURNS AFTER HOOKS
