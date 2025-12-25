@@ -1,408 +1,311 @@
 "use client";
+
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import TinderCard from "@/components/TinderCard";
-import MatchOverlay from "@/components/MatchOverlay";
-import SettingsModal from "@/components/SettingsModal";
+
 import { supabase } from "@/lib/supabase";
-import { getOrCreateAnonId, generateAnonName } from "@/lib/guest";
+import TinderCard from "@/components/TinderCard";
+import BottomNav from "@/components/BottomNav";
 
+type Gender = "" | "male" | "female" | "other";
+type Seeking = "everyone" | "male" | "female" | "other";
 
-/* ================= TYPES ================= */
-
-type Gender = "male" | "female" | "nonbinary" | "other";
-
-type Seeking = "everyone" | Gender;
-
-type DbProfile = {
-  anon_id: string;
-  nickname: string;
-  age: number;
-  city: string;
+type ProfileRow = {
+  // ✅ აქ id არის alias-ით დაბრუნებული user_id
+  id: string;
+  anon_id: string | null;
+  nickname: string | null;
+  age: number | null;
+  city: string | null;
   bio: string | null;
   gender: Gender | null;
   seeking: Seeking | null;
-  photo1_url: string | null;
-  created_at: string;
+  photo_url: string | null;
+  created_at: string | null;
 };
 
-type SettingsState = {
+type CardUser = {
+  id: string;
+  anon_id?: string | null;
   nickname: string;
   age: number;
   city: string;
-  gender: Gender | "";
-  seeking: Seeking;
   bio: string;
+  gender: Gender;
+  seeking: Seeking;
+  photo_url?: string | null;
 };
 
-/* ================= PAGE ================= */
-
 export default function FeedPage() {
-async function testMatchTop() {
-  if (!top || !meId) return;
-
-  const matchId = await ensureMatchWith(top.anon_id);
-
-  if (!matchId) {
-    alert("matchId NULL (matches insert/check failed)");
-    return;
-  }
-
-  setMatchedUser(top);
-  setMatchedMatchId(matchId);
-  setMatchOpen(true);
-}
-
-
-  const [meId, setMeId] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [profiles, setProfiles] = useState<DbProfile[]>([]);
-  const top = useMemo(() => profiles[0] ?? null, [profiles]);
   const router = useRouter();
-const [matchId, setMatchId] = useState<string | null>(null);
 
-const [matchedUser, setMatchedUser] = useState<DbProfile | null>(null);
-const [matchedMatchId, setMatchedMatchId] = useState<string | null>(null);
+  const [me, setMe] = useState<ProfileRow | null>(null);
+  const [top, setTop] = useState<ProfileRow | null>(null);
 
+  const [loading, setLoading] = useState(true);
+  const [loadingTop, setLoadingTop] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [msg, setMsg] = useState("");
-  const [saving, setSaving] = useState(false);
+  const toCardUser = useCallback((p: ProfileRow): CardUser => {
+    return {
+      id: p.id,
+      anon_id: p.anon_id,
+      nickname: p.nickname ?? "Anonymous",
+      age: p.age ?? 18,
+      city: p.city ?? "",
+      bio: p.bio ?? "",
+      gender: (p.gender ?? "") as Gender,
+      seeking: (p.seeking ?? "everyone") as Seeking,
+      photo_url: p.photo_url ?? null,
+    };
+  }, []);
 
-  const [matchOpen, setMatchOpen] = useState(false);
+  const loadMe = useCallback(async () => {
+    setErr(null);
 
-  const [s, setS] = useState<SettingsState>({
-    nickname: "",
-    age: 18,
-    city: "",
-    gender: "",
-    seeking: "everyone",
-    bio: "",
-  });
+    // ✅ session-safe (არ აგდებს Auth session missing!)
+    const {
+      data: { session },
+      error: sessionErr,
+    } = await supabase.auth.getSession();
 
-  async function getOrCreateMatch(otherUserId: string) {
-  const { data: authData, error: authErr } = await supabase.auth.getUser();
-  if (authErr) throw authErr;
-
-  const me = authData.user?.id;
-  if (!me) throw new Error("Not authenticated");
-
-  const { data: existing, error: findErr } = await supabase
-    .from("matches")
-    .select("id")
-    .or(
-      `and(user1.eq.${me},user2.eq.${otherUserId}),and(user1.eq.${otherUserId},user2.eq.${me})`
-    )
-    .limit(1)
-    .maybeSingle();
-
-  if (findErr) throw findErr;
-  if (existing?.id) return existing.id as string;
-
-  const { data: created, error: insErr } = await supabase
-    .from("matches")
-    .insert({ user1: me, user2: otherUserId })
-    .select("id")
-    .single();
-
-  if (insErr) throw insErr;
-  return created.id as string;
-}
-
-
-  const pollRef = useRef<number | null>(null);
-
-  async function loadMeAndFeed(id: string) {
-    const { data: me, error } = await supabase
-      .from("profiles")
-      .select("anon_id,nickname,age,city,bio,gender,seeking")
-      .eq("anon_id", id)
-      .maybeSingle();
-
-    if (error) {
-      console.log("me error:", error.message);
-      return;
+    if (sessionErr) {
+      console.error("Session error:", sessionErr.message);
+      setErr("Auth error");
+      return null;
     }
 
-    const myGender = me?.gender ?? null;
-    const mySeeking = me?.seeking ?? "everyone";
+    if (!session?.user) {
+      router.replace("/"); // ან /login
+      return null;
+    }
 
-    setS({
-      nickname: me?.nickname ?? generateAnonName(),
-      age: me?.age ?? 18,
-      city: me?.city ?? "",
-      gender: (me?.gender as Gender) ?? "",
-      seeking: (me?.seeking as Seeking) ?? "everyone",
-      bio: me?.bio ?? "",
-    });
+    const userId = session.user.id;
 
-    const { data: people, error: e2 } = await supabase
+    // ✅ profiles-ში ახლა გვაქვს user_id, ვაბრუნებთ alias-ით როგორც id
+    const { data, error } = await supabase
       .from("profiles")
       .select(
-        "anon_id,nickname,age,city,bio,gender,seeking,photo1_url,created_at"
+        "user_id:id, anon_id, nickname, age, city, bio, gender, seeking, photo_url, created_at"
       )
-      .neq("anon_id", id)
-      .order("created_at", { ascending: false });
+      .eq("user_id", userId)
+      .maybeSingle<ProfileRow>();
 
-    if (e2) {
-      console.log("feed error:", e2.message);
-      setProfiles([]);
-      return;
+    if (error) {
+      console.error("Profile load error:", error.message);
+      setErr(error.message);
+      return null;
     }
 
-    const filtered =
-      people?.filter((p) => {
-        if (!p.gender) return false;
+    // თუ user_id არ გაქვს ჯერ შევსებული, data იქნება null
+    setMe(data ?? null);
+    return data ?? null;
+  }, [router]);
 
-        const iLikeThem = mySeeking === "everyone" || p.gender === mySeeking;
-        const theyLikeMe =
-          p.seeking === "everyone" || (myGender && p.seeking === myGender);
+  const loadTop = useCallback(async (myUserId: string) => {
+    setLoadingTop(true);
+    setErr(null);
 
-        return iLikeThem && theyLikeMe;
-      }) ?? [];
+    // ✅ 1 პროფილი ჩემის გარდა
+    const { data, error } = await supabase
+  .from("profiles")
+  .select("user_id:id, anon_id, nickname, age, city, bio, gender, seeking, photo_url, created_at")
+  .neq("user_id", myUserId)
+  .not("user_id", "is", null)
+  .order("created_at", { ascending: false })
+  .limit(1)
+  .maybeSingle();
 
-    setProfiles(filtered);
-  }
+if (error) {
+  setErr(error.message);
+  setTop(null);
+} else {
+  setTop((data as ProfileRow | null) ?? null);
+}
+
+
+    setLoadingTop(false);
+  }, []);
 
   useEffect(() => {
+    let alive = true;
+
     (async () => {
       setLoading(true);
-      const id = getOrCreateAnonId();
-      setMeId(id);
-      await loadMeAndFeed(id);
+
+      const meRow = await loadMe();
+      if (!alive) return;
+
+      // ✅ თუ ჩემი პროფილი არ არსებობს profiles-ში (user_id არაა შევსებული), გადავიყვანოთ settings-ზე
+      if (!meRow?.id) {
+        setTop(null);
+        setLoading(false);
+        return;
+      }
+
+      await loadTop(meRow.id);
+
+      if (!alive) return;
       setLoading(false);
     })();
 
     return () => {
-      if (pollRef.current) window.clearInterval(pollRef.current);
+      alive = false;
     };
-  }, []);
+  }, [loadMe, loadTop]);
 
-  useEffect(() => {
-    if (loading) return;
+  // --- Actions (თუ tables გაქვს) ---
+  const writeSwipe = useCallback(
+    async (action: "like" | "skip", targetUserId: string) => {
+      if (!me?.id) return;
 
-    // stop polling if we have profiles
-    if (profiles.length > 0) {
-      if (pollRef.current) {
-        window.clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-      return;
-    }
-
-    // start polling when feed is empty
-    if (pollRef.current) return;
-
-    pollRef.current = window.setInterval(async () => {
-      if (!meId) return;
-      await loadMeAndFeed(meId);
-    }, 8000);
-
-    return () => {
-      if (pollRef.current) {
-        window.clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    };
-  }, [profiles.length, loading, meId]);
-
-  function popTop() {
-    setProfiles((p) => p.slice(1));
-  }
-
-  async function likeTop() {
-    if (!top || !meId) return;
-
-    const { error } = await supabase.from("likes").insert({
-      from_anon: meId,
-      to_anon: top.anon_id,
-    });
-
-    if (error && !error.message.toLowerCase().includes("duplicate")) {
-      console.log("like error:", error.message);
-    }
-
-    const { data: match } = await supabase
-      .from("matches")
-      .select("id")
-      .or(
-        `and(user1.eq.${meId},user2.eq.${top.anon_id}),and(user1.eq.${top.anon_id},user2.eq.${meId})`
-      )
-      .maybeSingle();
-
-    if (match) setMatchOpen(true);
-
-    popTop();
-  }
-
-  function skipTop() {
-    popTop();
-  }
-  async function ensureMatchWith(otherAnon: string) {
-  // 1) match არსებობს?
-  const { data: existing, error: e1 } = await supabase
-    .from("matches")
-    .select("id,a_anon,b_anon")
-    .or(`and(a_anon.eq.${meId},b_anon.eq.${otherAnon}),and(a_anon.eq.${otherAnon},b_anon.eq.${meId})`)
-    .maybeSingle();
-
-  if (e1) console.log("match check error:", e1.message);
-
-  if (existing?.id) return existing.id as string;
-
-  // 2) თუ არა — შექმენი
-  const { data: created, error: e2 } = await supabase
-    .from("matches")
-    .insert({ a_anon: meId, b_anon: otherAnon })
-    .select("id")
-    .single();
-
-  if (e2) {
-    console.log("match create error:", e2.message);
-    return null;
-  }
-
-  return (created?.id as string) ?? null;
-}
-
-
-  async function saveSettings() {
-    setMsg("");
-    setSaving(true);
-
-    if (!meId) {
-      setMsg("Anon ID ვერ მოიძებნა");
-      setSaving(false);
-      return;
-    }
-
-    const { error } = await supabase.from("profiles").upsert({
-      anon_id: meId,
-      nickname: s.nickname.trim(),
-      age: s.age,
-      city: s.city.trim(),
-      bio: s.bio,
-      gender: s.gender || null,
-      seeking: s.seeking,
-    });
-
-    if (error) setMsg(error.message);
-    else {
-      setSettingsOpen(false);
-      await loadMeAndFeed(meId);
-    }
-
-    setSaving(false);
-  }
-
-
-console.log("TOP DEBUG 👉", top);
-console.log("TOP KEYS 👉", top ? Object.keys(top as any) : null);
-
-const otherId =
-  (top as any)?.user_id ??
-  (top as any)?.userId ??
-  (top as any)?.profile_id ??
-  (top as any)?.id ??
-  (top as any)?.uid ??
-  (top as any)?.owner_id ??
-  null;
-
-const cardUser =
-  top && otherId
-    ? {
-        id: String(otherId),
-        nickname: top.nickname,
-        age: top.age,
-        city: top.city,
-        distanceKm: 0,
-        recentlyActive: true,
-        photo_url: (top as any).photo1_url ?? null,
-      }
-    : null;
-
-
-console.log("cardUser DEBUG 👉", cardUser);
-console.log("cardUser keys 👉", cardUser ? Object.keys(cardUser as any) : null);
-
-
-  return (
-    <div className="min-h-screen bg-black text-white flex justify-center">
-      {/* phone frame */}
-      <div className="relative w-full max-w-[420px] min-h-screen overflow-hidden">
-        {/* Old UI: only logo top-left (inside TinderCard). */}
-   <TinderCard
-  user={cardUser}
-otherUserId={String(
-  (cardUser as any)?.id ??
-  (cardUser as any)?.user_id ??
-  (cardUser as any)?.uid ??
-  ""
-)}
-
-  loading={loading}
-  onLike={likeTop}
-  onSkip={skipTop}
-  onOpenProfile={() => setSettingsOpen(true)}
-  showTopTabs={false}
-/>
-
-
-       <MatchOverlay
-  visible={matchOpen}
-  onClose={() => setMatchOpen(false)}
-  otherPhoto={cardUser?.photo_url ?? null}
-  otherName={cardUser?.nickname ?? "Match"}
-  onMessage={async (text) => {
-    try {
-      const otherUserId = String(
-        (cardUser as any)?.id ??
-          (cardUser as any)?.user_id ??
-          (cardUser as any)?.uid ??
-          ""
-      );
-
-      if (!otherUserId) {
-        console.error("Missing otherUserId for match/message", cardUser);
-        return;
-      }
-
-      const id = await getOrCreateMatch(otherUserId);
-      setMatchId(id);
-
-      const { error } = await supabase.from("messages").insert({
-        match_id: id,
-        sender_anon: "me",
-        content: text,
+      // ⚠️ თუ table names/columns სხვანაირად გაქვს, აქ მოარგე
+      const { error } = await supabase.from("swipes").insert({
+        from_id: me.id, // user_id
+        to_id: targetUserId, // user_id
+        action,
       });
 
+      if (error) console.warn("swipe insert error:", error.message);
+    },
+    [me?.id]
+  );
+
+  const tryMakeMatch = useCallback(
+    async (targetUserId: string) => {
+      if (!me?.id) return false;
+
+      const { data: backLike, error } = await supabase
+        .from("swipes")
+        .select("id")
+        .eq("from_id", targetUserId)
+        .eq("to_id", me.id)
+        .eq("action", "like")
+        .limit(1);
+
       if (error) {
-        console.error("Message insert error:", error);
-        return;
+        console.warn("backLike check error:", error.message);
+        return false;
       }
 
-      setMatchOpen(false);
-      router.push(`/chat/${id}`);
-    } catch (err) {
-      console.error("SEND MESSAGE FAILED:", err);
-    }
-  }}
-/>
+      const isMutual = (backLike?.length ?? 0) > 0;
+      if (!isMutual) return false;
 
-        {settingsOpen && (
-          <SettingsModal
-            value={s}
-            setValue={setS}
-            onClose={() => setSettingsOpen(false)}
-            onSave={saveSettings}
-            saving={saving}
-            msg={msg}
-            onRandomName={() =>
-              setS((p) => ({ ...p, nickname: generateAnonName() }))
-            }
+      const { error: mErr } = await supabase.from("matches").insert({
+        user_a: me.id,
+        user_b: targetUserId,
+      });
+
+      if (mErr) console.warn("match insert error:", mErr.message);
+      return true;
+    },
+    [me?.id]
+  );
+
+  const onSkip = useCallback(async () => {
+    if (!top || !me?.id) return;
+    await writeSwipe("skip", top.id);
+    await loadTop(me.id);
+  }, [loadTop, me?.id, top, writeSwipe]);
+
+  const onLike = useCallback(async () => {
+    if (!top || !me?.id) return;
+
+    await writeSwipe("like", top.id);
+    const matched = await tryMakeMatch(top.id);
+
+    if (matched) {
+      console.log("✅ MATCH!");
+      // router.push("/matches");
+      // ან router.push(`/chat/${top.id}`);
+    }
+
+    await loadTop(me.id);
+  }, [loadTop, me?.id, top, tryMakeMatch, writeSwipe]);
+
+  const onOpenProfile = useCallback(() => {
+    if (!top) return;
+    router.push(`/profile/${top.id}`);
+  }, [router, top]);
+
+  const cardUser = useMemo(() => (top ? toCardUser(top) : null), [toCardUser, top]);
+
+  // --- UI ---
+  if (loading) {
+    return (
+      <div className="min-h-[100dvh] flex items-center justify-center bg-black text-white">
+        Loading…
+      </div>
+    );
+  }
+
+  // ✅ თუ ჩემი profile row არ არის (user_id ჯერ არ შეივსო), გადამისამართება/მინიშნება
+  if (!me?.id) {
+    return (
+      <div className="min-h-[100dvh] flex flex-col bg-black text-white">
+        <div className="flex-1 flex items-center justify-center px-6 text-center">
+          <div>
+            <div className="text-xl font-semibold mb-2">Finish your profile 📝</div>
+            <div className="opacity-80 text-sm">
+              Profiles table-ში შენი user_id ჯერ არ არის ჩაწერილი. შედი Settings-ში და Save დააჭირე.
+            </div>
+            <button
+              className="mt-4 px-4 py-2 rounded-xl bg-white text-black"
+              onClick={() => router.push("/settings")}
+            >
+              Go to Settings
+            </button>
+          </div>
+        </div>
+        <BottomNav />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-[100dvh] flex flex-col bg-black text-white">
+      <div className="flex-1 flex items-center justify-center px-4">
+        {err ? (
+          <div className="max-w-md w-full text-center">
+            <div className="text-red-400 font-semibold mb-2">Error</div>
+            <div className="text-sm opacity-90 break-words">{err}</div>
+            <button
+              className="mt-4 px-4 py-2 rounded-lg bg-white text-black"
+              onClick={() => router.refresh()}
+            >
+              Reload
+            </button>
+          </div>
+        ) : !cardUser ? (
+          <div className="text-center">
+            <div className="text-lg font-semibold">No profiles found 😅</div>
+            <div className="mt-4 flex gap-3 justify-center">
+              <button
+                className="px-4 py-2 rounded-xl bg-neutral-800"
+                onClick={() => router.push("/")}
+              >
+                Home
+              </button>
+              <button
+                className="px-4 py-2 rounded-xl bg-white text-black"
+                onClick={() => router.push("/settings")}
+              >
+                Settings
+              </button>
+            </div>
+          </div>
+        ) : (
+          <TinderCard
+            user={cardUser}
+            loading={loadingTop}
+            onLike={onLike}
+            onSkip={onSkip}
+            onOpenProfile={onOpenProfile}
           />
         )}
       </div>
+
+      <BottomNav />
     </div>
   );
 }
