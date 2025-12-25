@@ -1,5 +1,5 @@
 "use client";
-
+import { useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import TinderCard from "@/components/TinderCard";
 import MatchOverlay from "@/components/MatchOverlay";
@@ -37,10 +37,31 @@ type SettingsState = {
 /* ================= PAGE ================= */
 
 export default function FeedPage() {
+async function testMatchTop() {
+  if (!top || !meId) return;
+
+  const matchId = await ensureMatchWith(top.anon_id);
+
+  if (!matchId) {
+    alert("matchId NULL (matches insert/check failed)");
+    return;
+  }
+
+  setMatchedUser(top);
+  setMatchedMatchId(matchId);
+  setMatchOpen(true);
+}
+
+
   const [meId, setMeId] = useState("");
   const [loading, setLoading] = useState(true);
   const [profiles, setProfiles] = useState<DbProfile[]>([]);
   const top = useMemo(() => profiles[0] ?? null, [profiles]);
+  const router = useRouter();
+
+const [matchedUser, setMatchedUser] = useState<DbProfile | null>(null);
+const [matchedMatchId, setMatchedMatchId] = useState<string | null>(null);
+
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [msg, setMsg] = useState("");
@@ -185,6 +206,33 @@ export default function FeedPage() {
   function skipTop() {
     popTop();
   }
+  async function ensureMatchWith(otherAnon: string) {
+  // 1) match არსებობს?
+  const { data: existing, error: e1 } = await supabase
+    .from("matches")
+    .select("id,a_anon,b_anon")
+    .or(`and(a_anon.eq.${meId},b_anon.eq.${otherAnon}),and(a_anon.eq.${otherAnon},b_anon.eq.${meId})`)
+    .maybeSingle();
+
+  if (e1) console.log("match check error:", e1.message);
+
+  if (existing?.id) return existing.id as string;
+
+  // 2) თუ არა — შექმენი
+  const { data: created, error: e2 } = await supabase
+    .from("matches")
+    .insert({ a_anon: meId, b_anon: otherAnon })
+    .select("id")
+    .single();
+
+  if (e2) {
+    console.log("match create error:", e2.message);
+    return null;
+  }
+
+  return (created?.id as string) ?? null;
+}
+
 
   async function saveSettings() {
     setMsg("");
