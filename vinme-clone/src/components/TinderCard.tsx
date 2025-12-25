@@ -16,16 +16,18 @@ type CardUser = {
 
 type Props = {
   user: CardUser | null;
+  otherUserId?: string; // ✅ ეს
   loading?: boolean;
   onLike?: () => void | Promise<void>;
   onSkip?: () => void | Promise<void>;
   onOpenProfile?: () => void;
-  /** Show the "For You / Double Date" header tabs (new UI). Default: false (old UI). */
   showTopTabs?: boolean;
 };
 
+
 export default function TinderCard({
-  user,
+   user,
+  otherUserId,
   loading,
   onLike,
   onSkip,
@@ -38,6 +40,7 @@ export default function TinderCard({
   const [dragging, setDragging] = useState(false);
   const [animating, setAnimating] = useState(false);
   const [showMatch, setShowMatch] = useState(false);
+const [matchId, setMatchId] = useState<string | null>(null);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -68,8 +71,9 @@ export default function TinderCard({
   };
 
   const closeMatch = () => setShowMatch(false);
-async function getOrCreateMatch(otherUserId: string) {
+async function getOrCreateMatch(otherUserId: string ) {
   const { data: authData, error: authErr } = await supabase.auth.getUser();
+  
   if (authErr) throw authErr;
 
   const me = authData.user?.id;
@@ -178,14 +182,30 @@ async function getOrCreateMatch(otherUserId: string) {
           {/* PHOTO AREA */}
 
           {/* ✅ TEST MATCH */}
+
+          
           <button
             type="button"
             onPointerDown={(e) => e.stopPropagation()}
             onPointerUp={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowMatch(true);
-            }}
+           onClick={async (e) => {
+  e.stopPropagation();
+
+  if (!otherUserId) {
+    console.error("Missing otherUserId for match creation");
+    setShowMatch(true); // მაინც გამოაჩინე modal, რომ ნახო UI
+    return;
+  }
+
+  try {
+    const id = await getOrCreateMatch(otherUserId);
+    setMatchId(id);
+    setShowMatch(true);
+  } catch (err) {
+    console.error("TEST MATCH failed:", err);
+  }
+}}
+
             className="absolute right-4 top-4 z-[9999] rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black shadow"
           >
             TEST MATCH
@@ -402,15 +422,21 @@ async function getOrCreateMatch(otherUserId: string) {
       </nav>
 
       {/* ✅ MATCH MODAL */}
-      {showMatch && (
-        <MatchModal
-          onClose={closeMatch}
-          onOpenChat={() => router.push("/chat")}
-        />
-      )}
-    </div>
-  );
-}
+   {/* ✅ MATCH MODAL */}
+{showMatch && (
+  <MatchModal
+    onClose={closeMatch}
+    onOpenChat={() => {
+      if (!matchId) {
+        console.warn("No matchId, cannot open chat");
+        return;
+      }
+      router.push(`/chat/${matchId}`);
+    }}
+  />
+)}
+</div>
+);
 
 function TinderSkeleton() {
   return (
@@ -522,4 +548,5 @@ function MatchModal({
       </div>
     </div>
   );
+}
 }
