@@ -287,72 +287,98 @@ if (matchId) {
       </div>
     );
   }
-
-  // ✅ If my profile row doesn't exist yet
-  if (!me?.user_id) {
-    return (
-<div className="relative w-full h-[calc(100dvh-96px)] bg-red-500">
-        <div className="flex-1 flex items-center justify-center px-6 text-center">
-          <div>
-            <div className="text-xl font-semibold mb-2">Finish your profile 📝</div>
-            <div className="opacity-80 text-sm">
-              Profiles table-ში შენი user_id ჯერ არ არის ჩაწერილი. შედი Settings-ში და Save დააჭირე.
+// ✅ If my profile row doesn't exist yet
+if (!me?.user_id) {
+  return (
+    <div className="min-h-[100dvh] flex flex-col bg-black text-white">
+      <div className="flex-1 relative px-0 pb-28 overflow-hidden">
+        <div className="mx-auto w-full max-w-[420px] px-4 pt-8">
+          <div
+            className="
+              w-full
+              rounded-3xl
+              bg-zinc-950/60
+              ring-1 ring-white/10
+              p-6
+              shadow-[0_20px_60px_rgba(0,0,0,0.55)]
+            "
+          >
+            <div className="text-center">
+              <div className="text-xl font-semibold mb-2">
+                Finish your profile 📝
+              </div>
+              <div className="opacity-80 text-sm">
+                Profiles table-ში შენი user_id ჯერ არ არის ჩაწერილი. შედი Settings-ში და Save დააჭირე.
+              </div>
+              <button
+                className="mt-5 w-full px-5 py-3 rounded-2xl bg-white text-black font-semibold active:scale-[0.99]"
+                onClick={() => router.push("/settings")}
+              >
+                Go to Settings
+              </button>
             </div>
-            <button
-              className="mt-4 px-4 py-2 rounded-xl bg-white text-black"
-              onClick={() => router.push("/settings")}
-            >
-              Go to Settings
-            </button>
           </div>
         </div>
+      </div>
+
+      <div className="fixed bottom-0 left-0 right-0">
         <BottomNav />
       </div>
-    );
-  }
+    </div>
+  );
+}
+
 return (
   <div className="min-h-[100dvh] flex flex-col bg-black text-white">
-<div className="flex-1 relative px-0 pb-24 overflow-hidden">
+    <div className="flex-1 relative px-0 pb-28 overflow-hidden">
       {err ? (
-<div className="w-full h-full px-0">
-
+        <div className="w-full h-full px-6 flex items-center justify-center text-center">
+          <div>
             <div className="text-red-400 font-semibold mb-2">Error</div>
             <div className="text-sm opacity-90 break-words">{err}</div>
             <button
-              className="mt-4 px-4 py-2 rounded-lg bg-white text-black"
+              className="mt-4 px-4 py-2 rounded-lg bg-white text-black active:scale-[0.99]"
               onClick={() => router.refresh()}
             >
               Reload
             </button>
           </div>
-        ) : !cardUser ? (
-          <div className="text-center">
+        </div>
+      ) : !cardUser ? (
+        <div className="w-full h-full px-6 flex items-center justify-center text-center">
+          <div>
             <div className="text-lg font-semibold">No profiles found 😅</div>
             <div className="mt-4 flex gap-3 justify-center">
-              <button className="px-4 py-2 rounded-xl bg-neutral-800" onClick={() => router.push("/")}>
+              <button
+                className="px-4 py-2 rounded-xl bg-neutral-800 active:scale-[0.99]"
+                onClick={() => router.push("/")}
+              >
                 Home
               </button>
-              <button className="px-4 py-2 rounded-xl bg-white text-black" onClick={() => router.push("/settings")}>
+              <button
+                className="px-4 py-2 rounded-xl bg-white text-black active:scale-[0.99]"
+                onClick={() => router.push("/settings")}
+              >
                 Settings
               </button>
             </div>
           </div>
-        ) : (
+        </div>
+      ) : (
+        <TinderCard
+          user={cardUser as any}
+          otherUserId={cardUser.id} // ✅ target user_id
+          loading={loadingTop}
+          onLike={onLike}
+          onSkip={onSkip}
+          onOpenProfile={onOpenProfile}
+        />
+      )}
+    </div>
 
-          <TinderCard
-  user={cardUser as any}
-  otherUserId={cardUser.id}   // ✅ ეს აკლდა (target user_id)
-  loading={loadingTop}
-  onLike={onLike}
-  onSkip={onSkip}
-  onOpenProfile={onOpenProfile}
-
-            
-          />
-        )}
-      </div>
-
+    <div className="fixed bottom-0 left-0 right-0">
       <BottomNav />
     </div>
-  );
+  </div>
+);
 }

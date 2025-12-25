@@ -1,10 +1,8 @@
 "use client";
-"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { getOrCreateAnonId } from "@/lib/guest";
 
 type MsgRow = {
   id: string;
@@ -28,11 +26,57 @@ type ProfileRow = {
   photo1_url: string | null;
 };
 
+function safeUUID() {
+  // Browser crypto
+  if (typeof window !== "undefined" && window.crypto?.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+
+  if (typeof window !== "undefined" && window.crypto?.getRandomValues) {
+    const bytes = new Uint8Array(16);
+    window.crypto.getRandomValues(bytes);
+
+    // RFC 4122 v4
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+    const hex = [...bytes]
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+
+    return (
+      hex.slice(0, 8) +
+      "-" +
+      hex.slice(8, 12) +
+      "-" +
+      hex.slice(12, 16) +
+      "-" +
+      hex.slice(16, 20) +
+      "-" +
+      hex.slice(20)
+    );
+  }
+
+  // last fallback
+  return `anon-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+function getOrCreateAnonId() {
+  if (typeof window === "undefined") return "anon";
+  const KEY = "vinme_anon_id";
+
+  const existing = localStorage.getItem(KEY);
+  if (existing) return existing;
+
+  const id = safeUUID();
+  localStorage.setItem(KEY, id);
+  return id;
+}
+
 export default function ChatPage() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [meId, setMeId] = useState<string>("");
-const router = useRouter();
+  const router = useRouter();
 
   const [matches, setMatches] = useState<MatchRow[]>([]);
   const [messages, setMessages] = useState<MsgRow[]>([]);
@@ -96,7 +140,10 @@ const router = useRouter();
     return messages.filter((m) => {
       const other = m.from_anon === meId ? m.to_anon : m.from_anon;
       const name = profilesByAnon[other]?.nickname ?? "";
-      return name.toLowerCase().includes(needle) || m.text.toLowerCase().includes(needle);
+      return (
+        name.toLowerCase().includes(needle) ||
+        m.text.toLowerCase().includes(needle)
+      );
     });
   }, [q, messages, meId, profilesByAnon]);
 
@@ -132,14 +179,12 @@ const router = useRouter();
               const other = m.a_anon === meId ? m.b_anon : m.a_anon;
               const p = profilesByAnon[other];
               return (
-               <button
-  key={m.id}
-  onClick={() => router.push(`/chat/${m.id}`)}
-  className="relative h-28 w-20 shrink-0 overflow-hidden rounded-2xl bg-white/5 ring-1 ring-white/10"
-  title={p?.nickname ?? "Match"}
->
-
-                
+                <button
+                  key={m.id}
+                  onClick={() => router.push(`/chat/${m.id}`)}
+                  className="relative h-28 w-20 shrink-0 overflow-hidden rounded-2xl bg-white/5 ring-1 ring-white/10"
+                  title={p?.nickname ?? "Match"}
+                >
                   {p?.photo1_url ? (
                     <img src={p.photo1_url} className="h-full w-full object-cover" alt="" />
                   ) : (
@@ -173,10 +218,9 @@ const router = useRouter();
                     key={m.id}
                     className="flex w-full items-center gap-4 text-left"
                     onClick={() => {
-  if (!m.match_id) return; // უსაფრთხოება
-  router.push(`/chat/${m.match_id}`);
-}}
-
+                      if (!m.match_id) return; // უსაფრთხოება
+                      router.push(`/chat/${m.match_id}`);
+                    }}
                   >
                     <div className="h-14 w-14 overflow-hidden rounded-full bg-white/10 ring-1 ring-white/10">
                       {p?.photo1_url ? (
@@ -187,9 +231,7 @@ const router = useRouter();
                     </div>
                     <div className="flex-1">
                       <div className="text-xl font-extrabold">{p?.nickname ?? "Unknown"}</div>
-                      <div className="mt-0.5 text-white/65 line-clamp-1">
-                        ↩ {m.text}
-                      </div>
+                      <div className="mt-0.5 text-white/65 line-clamp-1">↩ {m.text}</div>
                       <div className="mt-4 h-px w-full bg-white/10" />
                     </div>
                   </button>
