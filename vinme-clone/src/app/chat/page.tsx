@@ -1,6 +1,8 @@
 "use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { getOrCreateAnonId } from "@/lib/guest";
 
@@ -30,6 +32,7 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [meId, setMeId] = useState<string>("");
+const router = useRouter();
 
   const [matches, setMatches] = useState<MatchRow[]>([]);
   const [messages, setMessages] = useState<MsgRow[]>([]);
@@ -129,15 +132,14 @@ export default function ChatPage() {
               const other = m.a_anon === meId ? m.b_anon : m.a_anon;
               const p = profilesByAnon[other];
               return (
-                <button
-                  key={m.id}
-                  onClick={() => {
-                    // TODO: როცა chat/[matchId] მზად იქნება
-                    // window.location.href = `/chat/${m.id}`;
-                  }}
-                  className="relative h-28 w-20 shrink-0 overflow-hidden rounded-2xl bg-white/5 ring-1 ring-white/10"
-                  title={p?.nickname ?? "Match"}
-                >
+               <button
+  key={m.id}
+  onClick={() => router.push(`/chat/${m.id}`)}
+  className="relative h-28 w-20 shrink-0 overflow-hidden rounded-2xl bg-white/5 ring-1 ring-white/10"
+  title={p?.nickname ?? "Match"}
+>
+
+                
                   {p?.photo1_url ? (
                     <img src={p.photo1_url} className="h-full w-full object-cover" alt="" />
                   ) : (
@@ -171,8 +173,10 @@ export default function ChatPage() {
                     key={m.id}
                     className="flex w-full items-center gap-4 text-left"
                     onClick={() => {
-                      // TODO: window.location.href = `/chat/${m.match_id ?? other}`;
-                    }}
+  if (!m.match_id) return; // უსაფრთხოება
+  router.push(`/chat/${m.match_id}`);
+}}
+
                   >
                     <div className="h-14 w-14 overflow-hidden rounded-full bg-white/10 ring-1 ring-white/10">
                       {p?.photo1_url ? (

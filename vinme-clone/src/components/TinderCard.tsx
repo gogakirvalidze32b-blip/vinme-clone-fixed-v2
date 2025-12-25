@@ -22,6 +22,11 @@ type Props = {
   showTopTabs?: boolean;
 };
 
+
+
+
+
+
 export default function TinderCard({
   user,
   loading,
@@ -35,6 +40,7 @@ export default function TinderCard({
   const [rot, setRot] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [animating, setAnimating] = useState(false);
+const [showMatch, setShowMatch] = useState(false);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -138,6 +144,15 @@ export default function TinderCard({
         onPointerCancel={onPointerUp}
       >
         {/* PHOTO AREA */}
+<button
+  type="button"
+  onClick={() => setShowMatch(true)}
+  className="absolute right-4 top-4 z-[9999] rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black shadow"
+>
+  TEST MATCH
+</button>
+
+
         <div className="absolute inset-0 overflow-hidden">
          <img
   src={photoSrc}
@@ -151,6 +166,13 @@ export default function TinderCard({
 
         {/* Gradient */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-transparent to-black/70" />
+<button
+  type="button"
+  onClick={() => router.push("/chat")}
+  className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-black"
+>
+  TEST
+</button>
 
         {/* Corner LIKE/NOPE */}
         {dir !== "none" && (
@@ -160,7 +182,9 @@ export default function TinderCard({
             }`}
             style={{ opacity: progress }}
           >
+            
             <div
+            
               className={`rounded-xl border-2 px-5 py-3 text-xl font-extrabold tracking-widest bg-black/25 backdrop-blur-sm ${
                 dir === "right"
                   ? "border-emerald-400 text-emerald-300"
@@ -174,7 +198,7 @@ export default function TinderCard({
 
         {/* Top tabs (new UI) */}
         {showTopTabs && (
-          <div className="absolute left-0 right-0 top-0 z-40 px-4 pt-4">
+          // <div className="absolute left-0 right-0 top-0 z-40 px-4 pt-4">
             <div className="flex items-center justify-center">
               <div className="flex gap-2 rounded-full bg-white/10 p-1">
                 <button
@@ -190,7 +214,7 @@ export default function TinderCard({
                   Double Date
                 </button>
               </div>
-            </div>
+          
 
             <div className="mt-3 h-1 w-full rounded-full bg-white/20">
               <div className="h-1 w-1/3 rounded-full bg-white/60" />
@@ -393,6 +417,8 @@ function CircleBtn({
   disabled?: boolean;
 }) {
   return (
+
+    
     <button
       type="button"
       onClick={onClick}
@@ -407,6 +433,8 @@ function CircleBtn({
     >
       {label}
     </button>
+
+    
   );
 }
 
