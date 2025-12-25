@@ -99,17 +99,24 @@ export default function FeedPage() {
     return row;
   }, [router]);
 
-  const loadTop = useCallback(async (myUserId: string) => {
+const loadTop = useCallback(async (myUserId: string, meSeeking?: Seeking | null) => {
     setLoadingTop(true);
     setErr(null);
 
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("user_id, anon_id, nickname, age, city, bio, gender, seeking, photo_url, created_at")
-      .neq("user_id", myUserId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+  const q = supabase
+  .from("profiles")
+  .select("user_id, anon_id, nickname, age, city, bio, gender, seeking, photo_url, created_at")
+  .neq("user_id", myUserId);
+
+// ✅ seeking filter
+if (me?.seeking && me.seeking !== "everyone") {
+  q.eq("gender", meSeeking);
+}
+
+const { data, error } = await q
+  .order("created_at", { ascending: false })
+  .limit(1)
+  .maybeSingle();
 
       console.log("=== LOAD TOP ===");
   console.log("MY USER ID:", myUserId);
@@ -143,7 +150,7 @@ export default function FeedPage() {
           return;
         }
 
-        await loadTop(meRow.user_id);
+await loadTop(meRow.user_id, meRow.seeking);
       } catch (e) {
         console.error("Feed load fatal error:", e);
         if (alive) {
