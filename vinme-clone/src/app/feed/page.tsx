@@ -175,37 +175,60 @@ export default function FeedPage() {
     },
     [me?.user_id]
   );
+const tryMakeMatch = useCallback(
+  async (targetUserId: string) => {
+    if (!me?.user_id) return null;
 
-  const tryMakeMatch = useCallback(
-    async (targetUserId: string) => {
-      if (!me?.user_id) return false;
+    // 1) check if target already liked me
+    const { data: backLike, error } = await supabase
+      .from("swipes")
+      .select("id")
+      .eq("from_id", targetUserId)
+      .eq("to_id", me.user_id)
+      .eq("action", "like")
+      .limit(1);
 
-      const { data: backLike, error } = await supabase
-        .from("swipes")
-        .select("id")
-        .eq("from_id", targetUserId)
-        .eq("to_id", me.user_id)
-        .eq("action", "like")
-        .limit(1);
+    if (error) {
+      console.warn("backLike check error:", error.message);
+      return null;
+    }
 
-      if (error) {
-        console.warn("backLike check error:", error.message);
-        return false;
-      }
+    const isMutual = (backLike?.length ?? 0) > 0;
+    if (!isMutual) return null;
 
-      const isMutual = (backLike?.length ?? 0) > 0;
-      if (!isMutual) return false;
+    // 2) if mutual -> find existing match first (avoid duplicates)
+    const { data: existing, error: findErr } = await supabase
+      .from("matches")
+      .select("id")
+      .or(
+        `and(user_a.eq.${me.user_id},user_b.eq.${targetUserId}),and(user_a.eq.${targetUserId},user_b.eq.${me.user_id})`
+      )
+      .limit(1)
+      .maybeSingle();
 
-      const { error: mErr } = await supabase.from("matches").insert({
-        user_a: me.user_id,
-        user_b: targetUserId,
-      });
+    if (findErr) {
+      console.warn("match find error:", findErr.message);
+      return null;
+    }
+    if (existing?.id) return String(existing.id);
 
-      if (mErr) console.warn("match insert error:", mErr.message);
-      return true;
-    },
-    [me?.user_id]
-  );
+    // 3) create match + return id
+    const { data: created, error: mErr } = await supabase
+      .from("matches")
+      .insert({ user_a: me.user_id, user_b: targetUserId })
+      .select("id")
+      .single();
+
+    if (mErr) {
+      console.warn("match insert error:", mErr.message);
+      return null;
+    }
+
+    return String(created.id);
+  },
+  [me?.user_id]
+);
+
 
   const onSkip = useCallback(async () => {
     if (!top || !me?.user_id) return;
@@ -213,20 +236,20 @@ export default function FeedPage() {
     await loadTop(me.user_id);
   }, [loadTop, me?.user_id, top, writeSwipe]);
 
-  const onLike = useCallback(async () => {
-    if (!top || !me?.user_id) return;
+const onLike = useCallback(async (): Promise<string | null> => {
+  if (!top || !me?.user_id) return null;
 
-    await writeSwipe("like", top.user_id);
-    const matched = await tryMakeMatch(top.user_id);
 
-    if (matched) {
-      console.log("✅ MATCH!");
-      // router.push("/matches");
-      // router.push(`/chat/${top.user_id}`);
-    }
+  const matchId = await tryMakeMatch(top.user_id);
 
-    await loadTop(me.user_id);
-  }, [loadTop, me?.user_id, top, tryMakeMatch, writeSwipe]);
+if (matchId) {
+  console.log("✅ MATCH! id:", matchId);
+}
+
+
+  await loadTop(me.user_id);
+  return matchId; // ✅ ეს წავა TinderCard-ში
+}, [loadTop, me?.user_id, top, tryMakeMatch, writeSwipe]);
 
   const onOpenProfile = useCallback(() => {
     if (!top) return;

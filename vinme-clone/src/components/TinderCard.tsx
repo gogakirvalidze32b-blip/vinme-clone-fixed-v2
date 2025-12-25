@@ -17,7 +17,7 @@ type Props = {
   user: CardUser | null;
   otherUserId?: string; // ✅ target user's auth id (uuid)
   loading?: boolean;
-  onLike?: () => void | Promise<void>;
+onLike?: () => string | null | Promise<string | null>;
   onSkip?: () => void | Promise<void>;
   onOpenProfile?: () => void;
   showTopTabs?: boolean;
@@ -121,13 +121,16 @@ export default function TinderCard({
     await new Promise((r) => setTimeout(r, 220));
 
     try {
-      if (action === "like") {
-        // show match UI immediately (optional)
-        setShowMatch(true);
-        await onLike?.();
-      } else {
-        await onSkip?.();
-      }
+   if (action === "like") {
+  const id = await onLike?.();
+  if (id) {
+    setMatchId(String(id));
+    setShowMatch(true);
+  }
+} else {
+  await onSkip?.();
+}
+
     } finally {
       setX(0);
       setRot(0);
