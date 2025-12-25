@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 type CardUser = {
+    anon_id: string; // ✅ დაამატე ეს
   nickname: string;
   age: number;
   city: string;
@@ -39,6 +40,7 @@ export default function TinderCard({
   const [rot, setRot] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [animating, setAnimating] = useState(false);
+  
   const [showMatch, setShowMatch] = useState(false);
 const [matchId, setMatchId] = useState<string | null>(null);
 
@@ -106,7 +108,8 @@ async function getOrCreateMatch(otherUserId: string) {
 
   // ✅ EARLY RETURNS AFTER HOOKS
   if (loading === true) return <TinderSkeleton />;
-  if (!user) return <TinderEmpty onOpenProfile={onOpenProfile} />;
+if (!user || !user.anon_id)
+  return <TinderEmpty onOpenProfile={onOpenProfile} />;
 
   function onPointerDown(e: React.PointerEvent) {
     if (animating) return;
@@ -162,11 +165,11 @@ async function getOrCreateMatch(otherUserId: string) {
 
   return (
     // NOTE: use vh/screen units for broad browser support (some WebViews don't support svh).
-    <div className="relative h-[100dvh] overflow-hidden overscroll-none bg-black text-white">
+<div className="relative min-h-[100dvh] bg-black text-white overflow-x-hidden pb-28">
       {/* Card */}
-      <div className="absolute inset-0 flex w-full justify-center">
+<div className="absolute inset-0 flex w-full items-center justify-center">
         <div
-          className="relative h-screen w-full max-w-[420px]"
+className="relative w-full max-w-[420px] min-h-[100dvh]"
           style={{
             transform: `translateX(${x}px) rotate(${rot}deg)`,
             transition: dragging ? "none" : "transform 180ms ease-out",

@@ -12,8 +12,8 @@ export default function BottomNav() {
     }`;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-[max(16px,env(safe-area-inset-bottom))]">
-      <div className="mx-auto w-full max-w-[420px] rounded-3xl bg-black/45 backdrop-blur-md ring-1 ring-white/10">
+    <div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-[env(safe-area-inset-bottom)]">
+  <div className="mx-auto max-w-md rounded-3xl bg-black/60 backdrop-blur border border-white/10">
         <nav className="flex justify-around rounded-3xl bg-black/40 py-3 backdrop-blur">
           <button type="button" onClick={() => router.push("/feed")} className={btn("/feed")}>
             🔥

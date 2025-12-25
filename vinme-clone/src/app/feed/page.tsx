@@ -45,6 +45,7 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true);
   const [loadingTop, setLoadingTop] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+console.log("TOP:", top);
 
   const toCardUser = useCallback((p: ProfileRow): CardUser => {
     return {
@@ -59,48 +60,43 @@ export default function FeedPage() {
       photo_url: p.photo_url ?? null,
     };
   }, []);
+const loadMe = useCallback(async () => {
+  setErr(null);
 
-  const loadMe = useCallback(async () => {
-    setErr(null);
+  const {
+    data: { session },
+    error: sessionErr,
+  } = await supabase.auth.getSession();
 
-    // ✅ session-safe (არ აგდებს Auth session missing!)
-    const {
-      data: { session },
-      error: sessionErr,
-    } = await supabase.auth.getSession();
+  if (sessionErr) {
+    setErr(sessionErr.message);
+    return null;
+  }
 
-    if (sessionErr) {
-      console.error("Session error:", sessionErr.message);
-      setErr("Auth error");
-      return null;
-    }
+  if (!session?.user) {
+    router.replace("/");
+    return null;
+  }
 
-    if (!session?.user) {
-      router.replace("/"); // ან /login
-      return null;
-    }
+  const userId = session.user.id;
 
-    const userId = session.user.id;
+  const { data, error } = await supabase
+    .from("profiles")
+.select("id:user_id, anon_id, nickname, age, city, bio, gender, seeking, user_id")
+    .eq("user_id", userId)
+    .maybeSingle();
 
-    // ✅ profiles-ში ახლა გვაქვს user_id, ვაბრუნებთ alias-ით როგორც id
-    const { data, error } = await supabase
-      .from("profiles")
-      .select(
-        "user_id:id, anon_id, nickname, age, city, bio, gender, seeking, photo_url, created_at"
-      )
-      .eq("user_id", userId)
-      .maybeSingle<ProfileRow>();
+  if (error) {
+    console.error("Profile load error:", error.message);
+    setErr(error.message);
+    setMe(null);
+    return null;
+  }
 
-    if (error) {
-      console.error("Profile load error:", error.message);
-      setErr(error.message);
-      return null;
-    }
+  setMe((data as ProfileRow | null) ?? null);
+  return (data as ProfileRow | null) ?? null;
+}, [router]);
 
-    // თუ user_id არ გაქვს ჯერ შევსებული, data იქნება null
-    setMe(data ?? null);
-    return data ?? null;
-  }, [router]);
 
   const loadTop = useCallback(async (myUserId: string) => {
     setLoadingTop(true);
@@ -111,7 +107,7 @@ export default function FeedPage() {
   .from("profiles")
   .select("user_id:id, anon_id, nickname, age, city, bio, gender, seeking, photo_url, created_at")
   .neq("user_id", myUserId)
-  .not("user_id", "is", null)
+  // .not("user_id", "is", null)
   .order("created_at", { ascending: false })
   .limit(1)
   .maybeSingle();
@@ -133,20 +129,14 @@ if (error) {
     (async () => {
       setLoading(true);
 
-      const meRow = await loadMe();
-      if (!alive) return;
+   const meRow = await loadMe();
+if (!alive) return;
 
-      // ✅ თუ ჩემი პროფილი არ არსებობს profiles-ში (user_id არაა შევსებული), გადავიყვანოთ settings-ზე
-      if (!meRow?.id) {
-        setTop(null);
-        setLoading(false);
-        return;
-      }
+await loadTop(meRow!.id);
 
-      await loadTop(meRow.id);
+if (!alive) return;
+setLoading(false);
 
-      if (!alive) return;
-      setLoading(false);
     })();
 
     return () => {
@@ -227,8 +217,20 @@ if (error) {
     if (!top) return;
     router.push(`/profile/${top.id}`);
   }, [router, top]);
+const cardUser = useMemo(() => {
+  if (!top) return null;
 
-  const cardUser = useMemo(() => (top ? toCardUser(top) : null), [toCardUser, top]);
+  return {
+    anon_id: top.anon_id,
+    nickname: top.nickname ?? "Anonymous",
+    age: top.age ?? 18,
+    city: top.city ?? "",
+    bio: top.bio ?? "",
+    gender: top.gender ?? "",
+    seeking: top.seeking ?? "everyone",
+    photo_url: top.photo_url ?? null,
+  };
+}, [top]);
 
   // --- UI ---
   if (loading) {
@@ -242,7 +244,7 @@ if (error) {
   // ✅ თუ ჩემი profile row არ არის (user_id ჯერ არ შეივსო), გადამისამართება/მინიშნება
   if (!me?.id) {
     return (
-      <div className="min-h-[100dvh] flex flex-col bg-black text-white">
+<div className="min-h-[100dvh] flex flex-col bg-black text-white pb-24">
         <div className="flex-1 flex items-center justify-center px-6 text-center">
           <div>
             <div className="text-xl font-semibold mb-2">Finish your profile 📝</div>
