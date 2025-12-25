@@ -14,15 +14,17 @@ export default function OnboardingShell({
   footer?: React.ReactNode;
 }) {
   return (
-    <main className="min-h-[100svh] w-full bg-zinc-950 text-white">
-      <div className="mx-auto w-full max-w-md px-5 py-8">
-        <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
-        {subtitle && <p className="mt-2 text-sm text-zinc-400">{subtitle}</p>}
+<main className="min-h-[100svh] w-full bg-zinc-950 text-white">
+  <div className="w-full px-5 py-8">
+    <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
+    {subtitle && (
+      <p className="mt-2 text-sm text-zinc-400">{subtitle}</p>
+    )}
 
-        <div className="mt-6 space-y-4">{children}</div>
+    <div className="mt-6 space-y-4">{children}</div>
 
-        {footer && <div className="mt-8">{footer}</div>}
-      </div>
-    </main>
+    {footer && <div className="mt-8">{footer}</div>}
+  </div>
+</main>
   );
 }

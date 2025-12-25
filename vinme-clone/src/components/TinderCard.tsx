@@ -151,11 +151,16 @@ export default function TinderCard({
   }
 
   return (
-    <div className="relative min-h-[100dvh] bg-black text-white overflow-x-hidden pb-28">
-      {/* ✅ CARD WRAPPER */}
-      <div className="relative z-10 flex w-full items-center justify-center px-4 pt-4">
-        <div
-          className="relative z-10 w-full max-w-[420px] h-[78vh] md:h-[75vh] rounded-3xl overflow-hidden bg-black shadow-[0_20px_60px_rgba(0,0,0,0.55)]"
+<div className="relative min-h-[100dvh] bg-black text-white overflow-x-hidden pb-28">
+  {/* ✅ CARD WRAPPER (stick to bottom above BottomNav) */}
+  <div className="relative z-10 flex w-full justify-center items-end px-0 pt-0">
+    <div
+      className="
+        relative z-10 w-full max-w-[420px]
+        h-[calc(100dvh-12px)]
+        overflow-hidden
+        bg-black shadow-[0_20px_60px_rgba(0,0,0,0.55)]
+      "
           style={{
             transform: `translateX(${x}px) rotate(${rot}deg)`,
             transition: dragging ? "none" : "transform 180ms ease-out",
@@ -220,7 +225,7 @@ export default function TinderCard({
           {/* Corner LIKE/NOPE */}
           {dir !== "none" && (
             <div
-              className={`absolute top-2 z-40 select-none ${
+              className={`absolute top-0 z-30 select-none ${
                 dir === "right"
                   ? "left-4 rotate-[-10deg]"
                   : "right-4 rotate-[10deg]"
@@ -299,7 +304,7 @@ export default function TinderCard({
           </div>
 
           {/* ✅ ACTIONS (z-40) */}
-          <div className="absolute bottom-10 left-0 right-0 z-40 flex justify-center">
+          <div className="absolute bottom-15 left-0 right-0 z-40 flex justify-center">
             <div className="flex items-center gap-8">
               {/* ❌ */}
               <div

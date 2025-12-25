@@ -261,7 +261,7 @@ export default function FeedPage() {
   // ✅ If my profile row doesn't exist yet
   if (!me?.user_id) {
     return (
-      <div className="min-h-[100dvh] flex flex-col bg-black text-white pb-24">
+<div className="relative w-full h-[calc(100dvh-96px)] bg-red-500">
         <div className="flex-1 flex items-center justify-center px-6 text-center">
           <div>
             <div className="text-xl font-semibold mb-2">Finish your profile 📝</div>
@@ -280,12 +280,12 @@ export default function FeedPage() {
       </div>
     );
   }
+return (
+  <div className="min-h-[100dvh] flex flex-col bg-black text-white">
+<div className="flex-1 relative px-0 pb-24 overflow-hidden">
+      {err ? (
+<div className="w-full h-full px-0">
 
-  return (
-    <div className="min-h-[100dvh] flex flex-col bg-black text-white">
-<div className="flex-1 relative px-4 border border-red-500">
-        {err ? (
-          <div className="max-w-md w-full text-center">
             <div className="text-red-400 font-semibold mb-2">Error</div>
             <div className="text-sm opacity-90 break-words">{err}</div>
             <button
@@ -308,12 +308,16 @@ export default function FeedPage() {
             </div>
           </div>
         ) : (
+
+          
           <TinderCard
             user={cardUser}
             loading={loadingTop}
             onLike={onLike}
             onSkip={onSkip}
             onOpenProfile={onOpenProfile}
+
+            
           />
         )}
       </div>

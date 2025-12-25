@@ -19,7 +19,7 @@ export default function SettingsModal({
 }) {
   return (
     <div className="fixed inset-0 bg-black/70 flex items-end justify-center p-3 z-50">
-      <div className="w-full max-w-md bg-zinc-950 p-4 rounded-3xl space-y-3">
+<div className="w-full bg-zinc-950 p-4 rounded-3xl space-y-3">
         <button
           onClick={onClose}
           className="rounded-xl bg-white/10 px-4 py-2 text-white"
