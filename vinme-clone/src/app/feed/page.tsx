@@ -309,13 +309,13 @@ return (
           </div>
         ) : (
 
-          
           <TinderCard
-            user={cardUser}
-            loading={loadingTop}
-            onLike={onLike}
-            onSkip={onSkip}
-            onOpenProfile={onOpenProfile}
+  user={cardUser as any}
+  otherUserId={cardUser.id}   // ✅ ეს აკლდა (target user_id)
+  loading={loadingTop}
+  onLike={onLike}
+  onSkip={onSkip}
+  onOpenProfile={onOpenProfile}
 
             
           />

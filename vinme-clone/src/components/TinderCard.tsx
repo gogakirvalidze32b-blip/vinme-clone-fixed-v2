@@ -157,7 +157,7 @@ export default function TinderCard({
     <div
       className="
         relative z-10 w-full max-w-[420px]
-        h-[calc(100dvh-12px)]
+h-[calc(100dvh-12px)]
         overflow-hidden
         bg-black shadow-[0_20px_60px_rgba(0,0,0,0.55)]
       "
@@ -203,11 +203,13 @@ export default function TinderCard({
             onClick={async (e) => {
               e.stopPropagation();
 
-              if (!otherUserId) {
-                console.error("Missing otherUserId for match creation");
-                setShowMatch(true);
-                return;
-              }
+
+if (!otherUserId) {
+  console.warn("Missing otherUserId, skipping match create"); // optional
+  setShowMatch(true); // თუ გინდა მაინც გამოჩნდეს modal
+  return;
+}
+
 
               try {
                 const id = await getOrCreateMatch(otherUserId);
