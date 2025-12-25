@@ -1,12 +1,10 @@
 "use client";
 
-
 import React, { useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 type CardUser = {
-    anon_id: string; // ✅ დაამატე ეს
   nickname: string;
   age: number;
   city: string;
@@ -17,7 +15,7 @@ type CardUser = {
 
 type Props = {
   user: CardUser | null;
-  otherUserId?: string; // ✅ ეს
+  otherUserId?: string; // ✅ target user's auth id (uuid)
   loading?: boolean;
   onLike?: () => void | Promise<void>;
   onSkip?: () => void | Promise<void>;
@@ -25,9 +23,8 @@ type Props = {
   showTopTabs?: boolean;
 };
 
-
 export default function TinderCard({
-   user,
+  user,
   otherUserId,
   loading,
   onLike,
@@ -40,16 +37,9 @@ export default function TinderCard({
   const [rot, setRot] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [animating, setAnimating] = useState(false);
-  
+
   const [showMatch, setShowMatch] = useState(false);
-const [matchId, setMatchId] = useState<string | null>(null);
-
-const closeMatch = () => setShowMatch(false);
-const openMatch = async () => {
-  setShowMatch(true);
-  await onLike?.();
-};
-
+  const [matchId, setMatchId] = useState<string | null>(null);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -58,7 +48,6 @@ const openMatch = async () => {
   const downAt = useRef(0);
 
   const threshold = 120;
-
   const progress = Math.min(Math.abs(x) / threshold, 1);
   const dir = x > 10 ? "right" : x < -10 ? "left" : "none";
 
@@ -69,47 +58,41 @@ const openMatch = async () => {
       ? user.photo_url
       : "/bg-retro-mobile.png";
 
-  const hint = useMemo(() => {
-    if (Math.abs(x) < 10) return "";
-    return x > 0 ? "LIKE 💚" : "NOPE ❌";
-  }, [x]);
+  const closeMatch = () => setShowMatch(false);
 
+  // ✅ matches table: user_a / user_b
+  async function getOrCreateMatch(targetUserId: string) {
+    const { data: authData, error: authErr } = await supabase.auth.getUser();
+    if (authErr) throw authErr;
 
+    const me = authData.user?.id;
+    if (!me) throw new Error("Not authenticated");
 
-async function getOrCreateMatch(otherUserId: string) {
-  const { data: authData, error: authErr } = await supabase.auth.getUser();
-  if (authErr) throw authErr;
+    const { data: existing, error: findErr } = await supabase
+      .from("matches")
+      .select("id")
+      .or(
+        `and(user_a.eq.${me},user_b.eq.${targetUserId}),and(user_a.eq.${targetUserId},user_b.eq.${me})`
+      )
+      .limit(1)
+      .maybeSingle();
 
-  const me = authData.user?.id;
-  if (!me) throw new Error("Not authenticated");
+    if (findErr) throw findErr;
+    if (existing?.id) return String(existing.id);
 
-  const { data: existing, error: findErr } = await supabase
-    .from("matches")
-    .select("id")
-    .or(
-      `and(user1.eq.${me},user2.eq.${otherUserId}),and(user1.eq.${otherUserId},user2.eq.${me})`
-    )
-    .limit(1)
-    .maybeSingle();
+    const { data: created, error: insErr } = await supabase
+      .from("matches")
+      .insert({ user_a: me, user_b: targetUserId })
+      .select("id")
+      .single();
 
-  if (findErr) throw findErr;
-  if (existing?.id) return existing.id as string;
-
-  const { data: created, error: insErr } = await supabase
-    .from("matches")
-    .insert({ user1: me, user2: otherUserId })
-    .select("id")
-    .single();
-
-  if (insErr) throw insErr;
-  return created.id as string;
-}
-
+    if (insErr) throw insErr;
+    return String(created.id);
+  }
 
   // ✅ EARLY RETURNS AFTER HOOKS
   if (loading === true) return <TinderSkeleton />;
-if (!user || !user.anon_id)
-  return <TinderEmpty onOpenProfile={onOpenProfile} />;
+  if (!user) return <TinderEmpty onOpenProfile={onOpenProfile} />;
 
   function onPointerDown(e: React.PointerEvent) {
     if (animating) return;
@@ -130,8 +113,7 @@ if (!user || !user.anon_id)
     if (animating) return;
     setAnimating(true);
 
-    if (action === "like") setShowMatch(true);
-
+    // animate off-screen
     const off = action === "like" ? window.innerWidth : -window.innerWidth;
     setX(off);
     setRot(action === "like" ? 14 : -14);
@@ -139,8 +121,13 @@ if (!user || !user.anon_id)
     await new Promise((r) => setTimeout(r, 220));
 
     try {
-      if (action === "like") await onLike?.();
-      else await onSkip?.();
+      if (action === "like") {
+        // show match UI immediately (optional)
+        setShowMatch(true);
+        await onLike?.();
+      } else {
+        await onSkip?.();
+      }
     } finally {
       setX(0);
       setRot(0);
@@ -164,12 +151,11 @@ if (!user || !user.anon_id)
   }
 
   return (
-    // NOTE: use vh/screen units for broad browser support (some WebViews don't support svh).
-<div className="relative min-h-[100dvh] bg-black text-white overflow-x-hidden pb-28">
-      {/* Card */}
-<div className="absolute inset-0 flex w-full items-center justify-center">
+    <div className="relative min-h-[100dvh] bg-black text-white overflow-x-hidden pb-28">
+      {/* ✅ CARD WRAPPER */}
+      <div className="relative z-10 flex w-full items-center justify-center px-4 pt-4">
         <div
-className="relative w-full max-w-[420px] min-h-[100dvh]"
+          className="relative z-10 w-full max-w-[420px] h-[78vh] md:h-[75vh] rounded-3xl overflow-hidden bg-black shadow-[0_20px_60px_rgba(0,0,0,0.55)]"
           style={{
             transform: `translateX(${x}px) rotate(${rot}deg)`,
             transition: dragging ? "none" : "transform 180ms ease-out",
@@ -181,60 +167,54 @@ className="relative w-full max-w-[420px] min-h-[100dvh]"
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
         >
-          {/* PHOTO AREA */}
+          {/* ✅ IMAGE (z-0) */}
+          <img
+            src={photoSrc}
+            alt={user?.nickname ?? "photo"}
+            className="absolute inset-0 h-full w-full object-cover object-center z-0"
+            draggable={false}
+            onLoad={() => console.log("IMG LOADED ✅", photoSrc)}
+            onError={(e) => console.log("IMG ERROR ❌", photoSrc, e)}
+          />
 
-          {/* ✅ TEST MATCH */}
+          {/* ✅ GRADIENT (z-10) */}
+          <div className="absolute inset-0 z-10 bg-gradient-to-b from-black/30 via-transparent to-black/70" />
 
-          
+          {/* ✅ TOP BUTTONS (z-50) */}
+          <button
+            type="button"
+            onClick={() => router.push("/chat")}
+            onPointerDown={(e) => e.stopPropagation()}
+            onPointerUp={(e) => e.stopPropagation()}
+            className="absolute left-4 top-4 z-50 rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-black shadow"
+          >
+            TEST
+          </button>
+
           <button
             type="button"
             onPointerDown={(e) => e.stopPropagation()}
             onPointerUp={(e) => e.stopPropagation()}
-           onClick={async (e) => {
-  e.stopPropagation();
+            onClick={async (e) => {
+              e.stopPropagation();
 
-  if (!otherUserId) {
-    console.error("Missing otherUserId for match creation");
-    setShowMatch(true); // მაინც გამოაჩინე modal, რომ ნახო UI
-    return;
-  }
+              if (!otherUserId) {
+                console.error("Missing otherUserId for match creation");
+                setShowMatch(true);
+                return;
+              }
 
-  try {
-    const id = await getOrCreateMatch(otherUserId);
-    setMatchId(id);
-    setShowMatch(true);
-  } catch (err) {
-    console.error("TEST MATCH failed:", err);
-  }
-}}
-
-            className="absolute right-4 top-4 z-[9999] rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black shadow"
+              try {
+                const id = await getOrCreateMatch(otherUserId);
+                setMatchId(id);
+                setShowMatch(true);
+              } catch (err) {
+                console.error("TEST MATCH failed:", err);
+              }
+            }}
+            className="absolute right-4 top-4 z-50 rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black shadow"
           >
             TEST MATCH
-          </button>
-
-          {/* Image */}
-          <div className="absolute inset-0 overflow-hidden">
-            <img
-              src={photoSrc}
-              alt={user?.nickname ?? "photo"}
-              className="absolute inset-0 h-full w-full object-cover object-center -translate-y-10 md:translate-y-0"
-              draggable={false}
-              onLoad={() => console.log("IMG LOADED ✅", photoSrc)}
-              onError={(e) => console.log("IMG ERROR ❌", photoSrc, e)}
-            />
-          </div>
-
-          {/* Gradient */}
-          <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-transparent to-black/70" />
-
-          {/* optional quick test */}
-          <button
-            type="button"
-            onClick={() => router.push("/chat")}
-            className="absolute left-4 top-4 z-[9999] rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-black"
-          >
-            TEST
           </button>
 
           {/* Corner LIKE/NOPE */}
@@ -259,7 +239,7 @@ className="relative w-full max-w-[420px] min-h-[100dvh]"
             </div>
           )}
 
-          {/* Top tabs (new UI) ✅ FIXED */}
+          {/* Top tabs */}
           {showTopTabs && (
             <div className="absolute left-0 right-0 top-0 z-40 px-4 pt-4">
               <div className="flex items-center justify-center">
@@ -285,8 +265,8 @@ className="relative w-full max-w-[420px] min-h-[100dvh]"
             </div>
           )}
 
-          {/* Info */}
-          <div className="absolute bottom-[180px] md:bottom-32 left-0 right-0 z-30 px-4">
+          {/* ✅ INFO (z-30) */}
+          <div className="absolute bottom-28 left-0 right-0 z-30 px-4">
             {user.recentlyActive && (
               <span className="inline-block rounded-full bg-emerald-300/90 px-3 py-1 text-xs font-semibold text-black">
                 Recently Active
@@ -310,6 +290,7 @@ className="relative w-full max-w-[420px] min-h-[100dvh]"
 
               <button
                 type="button"
+                onClick={onOpenProfile}
                 className="rounded-full bg-white/10 px-3 py-3 text-lg"
               >
                 ⬆️
@@ -317,8 +298,8 @@ className="relative w-full max-w-[420px] min-h-[100dvh]"
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="absolute bottom-40 md:bottom-22 left-0 right-0 z-40 flex justify-center">
+          {/* ✅ ACTIONS (z-40) */}
+          <div className="absolute bottom-10 left-0 right-0 z-40 flex justify-center">
             <div className="flex items-center gap-8">
               {/* ❌ */}
               <div
@@ -366,17 +347,10 @@ className="relative w-full max-w-[420px] min-h-[100dvh]"
               </div>
             </div>
           </div>
-
-          {/* optional debug */}
-          {/* {hint && (
-            <div className="absolute top-24 left-4 rounded-xl bg-black/40 px-3 py-2 text-sm font-semibold ring-1 ring-white/10 backdrop-blur">
-              {hint}
-            </div>
-          )} */}
         </div>
       </div>
 
-      {/* ✅ BOTTOM PANEL – fixed */}
+      {/* ✅ BOTTOM PANEL */}
       <nav className="fixed bottom-0 left-0 right-0 z-[9999]">
         <div className="w-full bg-black/60 backdrop-blur-md">
           <div className="mx-auto flex max-w-[420px] items-center justify-between px-4 py-2 pb-[max(6px,env(safe-area-inset-bottom))]">
@@ -424,25 +398,25 @@ className="relative w-full max-w-[420px] min-h-[100dvh]"
       </nav>
 
       {/* ✅ MATCH MODAL */}
-   {/* ✅ MATCH MODAL */}
-{showMatch && (
-  <MatchModal
-    onClose={closeMatch}
-    onOpenChat={() => {
-      if (!matchId) {
-        console.warn("No matchId, cannot open chat");
-        return;
-      }
-      router.push(`/chat/${matchId}`);
-    }}
-  />
-)}
-</div>
-);
+      {showMatch && (
+        <MatchModal
+          onClose={closeMatch}
+          onOpenChat={() => {
+            if (!matchId) {
+              console.warn("No matchId, cannot open chat");
+              return;
+            }
+            router.push(`/chat/${matchId}`);
+          }}
+        />
+      )}
+    </div>
+  );
+}
 
 function TinderSkeleton() {
   return (
-    <div className="fixed inset-0 overflow-hidden bg-black text-white flex justify-center">
+    <div className="fixed inset-0 overflow-hidden text-white flex items-center justify-center bg-black">
       <div className="absolute inset-0 bg-zinc-900 animate-pulse" />
     </div>
   );
@@ -450,7 +424,7 @@ function TinderSkeleton() {
 
 function TinderEmpty({ onOpenProfile }: { onOpenProfile?: () => void }) {
   return (
-    <div className="fixed inset-0 flex flex-col items-center justify-center gap-3 bg-black text-white px-4">
+    <div className="fixed inset-0 flex flex-col items-center justify-center gap-3 text-white px-4 bg-black">
       <p className="text-lg font-semibold">No profiles found 😅</p>
 
       <div className="flex gap-2">
@@ -494,7 +468,7 @@ function CircleBtn({
       disabled={disabled}
       className={[
         "flex h-16 w-16 items-center justify-center rounded-full text-2xl backdrop-blur ring-1 ring-white/10 transition",
-        disabled ? "opacity-60 cursor-not-allowed" : "",
+        disabled ? "opacity-60 cursor-not-allowed" : "active:scale-95",
         primary
           ? "bg-emerald-400/90 text-black hover:bg-emerald-400"
           : "bg-white/10 text-white hover:bg-white/20",
@@ -550,5 +524,4 @@ function MatchModal({
       </div>
     </div>
   );
-}
 }
