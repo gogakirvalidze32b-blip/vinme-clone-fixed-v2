@@ -1,15 +1,22 @@
 "use client";
 
-import React from "react";
+import { usePathname } from "next/navigation";
 import BottomNav from "@/components/BottomNav";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-h-[100dvh] bg-black text-white">
-      {/* content space so bottom nav doesn't cover */}
-      <div className="pb-16">{children}</div>
+  const pathname = usePathname();
 
-      <BottomNav />
-    </div>
+  // აქ ჩაწერე ყველა auth გვერდი სადაც არ გინდა BottomNav
+  const hide =
+    pathname === "/" ||
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/signup");
+
+  return (
+    <>
+      <main className={hide ? "" : "pb-20"}>{children}</main>
+      {!hide && <BottomNav />}
+    </>
   );
 }
