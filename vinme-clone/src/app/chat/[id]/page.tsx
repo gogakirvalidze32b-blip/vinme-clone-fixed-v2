@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { photoSrc } from "@/lib/photos";
 
 type DbMessage = {
   id: string;
@@ -74,9 +75,12 @@ export default function ChatThreadPage() {
     return match.user_a === meUserId ? match.user_b : match.user_a;
   }, [meUserId, match]);
 
-  const otherAvatar = useMemo(() => {
-    return resolveAvatarUrl(otherProfile?.photo_url ?? null, otherProfile?.photo1_url ?? null);
-  }, [otherProfile?.photo_url, otherProfile?.photo1_url]);
+
+
+const otherAvatar = useMemo(() => {
+  const raw = otherProfile?.photo_url ?? otherProfile?.photo1_url ?? null;
+  return photoSrc(raw);
+}, [otherProfile?.photo_url, otherProfile?.photo1_url]);
 
   // ✅ init: get auth user + my anon_id from profiles
   useEffect(() => {
@@ -258,6 +262,23 @@ export default function ChatThreadPage() {
         <button onClick={() => router.push("/chat")} style={{ padding: "6px 10px", borderRadius: 10 }}>
           ← Back
         </button>
+        {otherAvatar ? (
+  <img
+    src={otherAvatar}
+    alt="avatar"
+    style={{ width: 36, height: 36, borderRadius: 999, objectFit: "cover" }}
+  />
+) : (
+  <div
+    style={{
+      width: 36,
+      height: 36,
+      borderRadius: 999,
+      background: "rgba(255,255,255,0.12)",
+    }}
+  />
+)}
+
 
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
          {otherProfile?.photo1_url ? (

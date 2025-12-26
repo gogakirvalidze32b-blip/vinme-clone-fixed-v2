@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { photoSrc } from "@/lib/photos";
+
 
 type MatchRow = {
   id: number; // bigint
@@ -173,15 +175,19 @@ export default function ChatPage() {
                   className="relative h-28 w-20 shrink-0 overflow-hidden rounded-2xl bg-white/5 ring-1 ring-white/10"
                   title={p?.nickname ?? "Match"}
                 >
-                  {p?.photo1_url ? (
-                    <img
-                      src={p.photo1_url}
-                      className="h-full w-full object-cover"
-                      alt=""
-                    />
-                  ) : (
-                    <div className="h-full w-full bg-zinc-800/40" />
-                  )}
+           {(() => {
+  const avatar = photoSrc(p?.photo1_url ?? p?.photo1_url ?? null);
+
+  return avatar ? (
+    <img
+      src={avatar}
+      className="h-full w-full object-cover"
+      alt=""
+    />
+  ) : (
+    <div className="h-full w-full bg-zinc-800/40" />
+  );
+})()}
 
                   {/* tiny name strip */}
                   <div className="absolute inset-x-0 bottom-0 bg-black/50 px-2 py-1 text-xs font-semibold">
@@ -218,14 +224,21 @@ export default function ChatPage() {
                     className="flex w-full items-center gap-4 text-left"
                     onClick={() => router.push(`/chat/${m.id}`)}
                   >
-                    <div className="h-14 w-14 overflow-hidden rounded-full bg-white/10 ring-1 ring-white/10">
-                      {p?.photo1_url ? (
-                        <img src={p.photo1_url} className="h-full w-full object-cover" alt="" />
-                      ) : (
-                        <div className="h-full w-full bg-zinc-800/40" />
-                      )}
-                    </div>
+                  <div className="h-14 w-14 overflow-hidden rounded-full bg-white/10 ring-1 ring-white/10">
+  {(() => {
+    const avatar = photoSrc(p?.photo1_url ?? p?.photo1_url ?? null);
 
+    return avatar ? (
+      <img
+        src={avatar}
+        className="h-full w-full object-cover"
+        alt=""
+      />
+    ) : (
+      <div className="h-full w-full bg-zinc-800/40" />
+    );
+  })()}
+</div>
                     <div className="flex-1">
                       <div className="text-xl font-extrabold">
                         {p?.nickname ?? "Unknown"}
