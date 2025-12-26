@@ -23,12 +23,36 @@ type DbProfile = {
   user_id: string; // uuid
   anon_id: string; // text
   nickname: string;
-  photo1_url: string | null;
+  photo_url?: string | null;
+  photo1_url?: string | null;
 };
+
+/**
+ * ✅ Avatar resolver:
+ * - If value is already a full URL -> use as is
+ * - Otherwise assume it's a storage path -> convert to public URL from bucket
+ * ⚠️ IMPORTANT: change "avatars" to your real bucket name in Supabase Storage
+ */
+function resolveAvatarUrl(
+  photo_url?: string | null,
+  photo1_url?: string | null
+) {
+  const raw = photo_url ?? photo1_url ?? null;
+  if (!raw) return null;
+
+  // თუ უკვე სრული URL-ია
+  if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
+
+  // ⚠️ აქ არის მთავარი FIX — photos
+  console.log("RAW PHOTO VALUE:", raw);
+
+  const { data } = supabase.storage.from("photos").getPublicUrl(raw);
+  return data?.publicUrl ?? null;
+}
 
 export default function ChatThreadPage() {
   const params = useParams<{ id: string }>();
-  const matchIdStr = params?.id as string;
+  const matchIdStr = (params?.id as string) ?? "";
   const matchId = Number(matchIdStr);
 
   const router = useRouter();
@@ -50,29 +74,42 @@ export default function ChatThreadPage() {
     return match.user_a === meUserId ? match.user_b : match.user_a;
   }, [meUserId, match]);
 
+  const otherAvatar = useMemo(() => {
+    return resolveAvatarUrl(otherProfile?.photo_url ?? null, otherProfile?.photo1_url ?? null);
+  }, [otherProfile?.photo_url, otherProfile?.photo1_url]);
+
   // ✅ init: get auth user + my anon_id from profiles
   useEffect(() => {
+    let alive = true;
+
     (async () => {
       const { data } = await supabase.auth.getUser();
       const u = data.user;
-      if (!u) return;
+      if (!u || !alive) return;
 
       setMeUserId(u.id);
 
       const { data: meProf, error: meProfErr } = await supabase
         .from("profiles")
-        .select("user_id, anon_id, nickname, photo1_url")
+        .select("user_id, anon_id, nickname, photo_url, photo1_url")
         .eq("user_id", u.id)
         .maybeSingle();
 
       if (meProfErr) console.error("Me profile load error:", meProfErr);
-      if (meProf?.anon_id) setMyAnon(meProf.anon_id);
+      if (meProf?.anon_id && alive) setMyAnon(meProf.anon_id);
     })();
+
+    return () => {
+      alive = false;
+    };
   }, []);
 
   // ✅ load match + other profile (by user_id)
   useEffect(() => {
-    if (!meUserId || !matchId) return;
+    if (!meUserId) return;
+    if (!matchId || Number.isNaN(matchId)) return;
+
+    let alive = true;
 
     (async () => {
       setLoading(true);
@@ -82,6 +119,8 @@ export default function ChatThreadPage() {
         .select("id, user_a, user_b")
         .eq("id", matchId)
         .maybeSingle();
+
+      if (!alive) return;
 
       if (matchErr || !matchData) {
         console.error("Match load error:", matchErr);
@@ -98,20 +137,27 @@ export default function ChatThreadPage() {
 
       const { data: prof, error: profErr } = await supabase
         .from("profiles")
-        .select("user_id, anon_id, nickname, photo1_url")
+        .select("user_id, anon_id, nickname, photo_url, photo1_url")
         .eq("user_id", otherId)
         .maybeSingle();
+
+      if (!alive) return;
 
       if (profErr) console.error("Other profile load error:", profErr);
       if (prof) setOtherProfile(prof as any);
 
       setLoading(false);
     })();
+
+    return () => {
+      alive = false;
+    };
   }, [meUserId, matchId]);
 
   // ✅ load messages
   useEffect(() => {
-    if (!meUserId || !matchId) return;
+    if (!meUserId) return;
+    if (!matchId || Number.isNaN(matchId)) return;
 
     (async () => {
       const { data, error } = await supabase
@@ -127,7 +173,8 @@ export default function ChatThreadPage() {
 
   // ✅ realtime
   useEffect(() => {
-    if (!meUserId || !matchId) return;
+    if (!meUserId) return;
+    if (!matchId || Number.isNaN(matchId)) return;
 
     const channel = supabase
       .channel(`messages:${matchId}`)
@@ -165,7 +212,6 @@ export default function ChatThreadPage() {
 
     setText("");
 
-    // ✅ insert + return inserted row so we can update UI instantly
     const { data, error } = await supabase
       .from("messages")
       .insert({
@@ -181,7 +227,6 @@ export default function ChatThreadPage() {
       return;
     }
 
-    // ✅ show immediately without refresh
     setMessages((prev) => {
       if (prev.some((x) => x.id === data.id)) return prev;
       return [...prev, data as any];
@@ -191,7 +236,15 @@ export default function ChatThreadPage() {
   if (!matchIdStr) return null;
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#09090b", color: "white" }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        background: "#09090b",
+        color: "white",
+      }}
+    >
       {/* Header */}
       <div
         style={{
@@ -207,16 +260,19 @@ export default function ChatThreadPage() {
         </button>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {otherProfile?.photo1_url ? (
-            <img
-              src={otherProfile.photo1_url}
-              alt="avatar"
-              style={{ width: 36, height: 36, borderRadius: 999, objectFit: "cover" }}
-            />
-          ) : (
-            <div style={{ width: 36, height: 36, borderRadius: 999, background: "rgba(255,255,255,0.12)" }} />
-          )}
-          <div style={{ fontWeight: 700 }}>{otherProfile?.nickname ?? (loading ? "Loading…" : "Chat")}</div>
+         {otherProfile?.photo1_url ? (
+  <img
+    src={otherProfile.photo1_url}
+    alt="avatar"
+    style={{ width: 36, height: 36, borderRadius: 999, objectFit: "cover" }}
+  />
+) : (
+  <div style={{ width: 36, height: 36, borderRadius: 999, background: "rgba(255,255,255,0.12)" }} />
+)}
+
+          <div style={{ fontWeight: 700 }}>
+            {otherProfile?.nickname ?? (loading ? "Loading…" : "Chat")}
+          </div>
         </div>
       </div>
 

@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { photoSrc } from "@/lib/photos";
 
 import { supabase } from "@/lib/supabase";
 import TinderCard from "@/components/TinderCard";
@@ -71,8 +72,8 @@ export default function FeedPage() {
     }
 
     if (!session?.user) {
-      router.replace("/");
       setMe(null);
+      router.replace("/");
       return null;
     }
 
@@ -129,6 +130,7 @@ export default function FeedPage() {
         }
 
         if (swipedIds.length > 0) {
+          // supabase "in" expects "(...)" as a string when using .not("col","in", value)
           const inList = `(${swipedIds.map((id) => `"${id}"`).join(",")})`;
           q = q.not("user_id", "in", inList);
         }
@@ -277,21 +279,26 @@ export default function FeedPage() {
     router.push(`/profile/${top.user_id}`);
   }, [router, top]);
 
-  const cardUser = useMemo<CardUser | null>(() => {
-    if (!top) return null;
-    const photo = (top.photo_url ?? null) || (top.photo1_url ?? null) || null;
+// ✅ აქ ხდება PATH -> URL
+const cardUser = useMemo<CardUser | null>(() => {
+  if (!top) return null;
 
-    return {
-      id: top.user_id,
-      anon_id: top.anon_id,
-      nickname: top.nickname ?? "Anonymous",
-      age: top.age ?? 18,
-      city: top.city ?? "",
-      bio: top.bio ?? "",
-      gender: (top.gender ?? "") as Gender,
-      seeking: (top.seeking ?? "everyone") as Seeking,
-      photo_url: photo,
-    };
+  const raw = top.photo_url ?? top.photo1_url ?? null;
+  const photo = photoSrc(raw); // ✅ PATH -> URL
+
+
+return {
+  id: top.user_id,
+  anon_id: top.anon_id,
+  nickname: top.nickname ?? "Anonymous",
+  age: top.age ?? 18,
+  city: top.city ?? "",
+  bio: top.bio ?? "",
+  gender: (top.gender ?? "") as any,
+  seeking: (top.seeking ?? "everyone") as any,
+  photo_url: photo, // ✅ აქ უკვე URL მიდის TinderCard-ში
+};
+
   }, [top]);
 
   // ----------------------------

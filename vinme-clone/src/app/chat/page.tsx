@@ -39,6 +39,8 @@ export default function ChatPage() {
   const [matches, setMatches] = useState<MatchRow[]>([]);
   const [latestByMatch, setLatestByMatch] = useState<Record<number, MsgRow>>({});
   const [profilesByUser, setProfilesByUser] = useState<Record<string, ProfileRow>>({});
+  const [matchedUser, setMatchedUser] = useState<any>(null);
+
 
   useEffect(() => {
     (async () => {
@@ -56,7 +58,7 @@ export default function ChatPage() {
       // 0.1) my profile -> anon_id
       const { data: meProf, error: meProfErr } = await supabase
         .from("profiles")
-        .select("user_id, anon_id, nickname, photo1_url")
+.select("user_id, anon_id, nickname, photo_url, photo1_url")
         .eq("user_id", u.id)
         .maybeSingle();
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { supabase } from "@/lib/supabase";
+import { photoSrc } from "@/lib/photos";
 
 export default function GoogleButton() {
   async function handleGoogle() {

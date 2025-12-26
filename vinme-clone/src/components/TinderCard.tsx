@@ -3,6 +3,8 @@
 import React, { useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { photoSrc } from "@/lib/photos";
+
 
 type CardUser = {
   nickname: string;
@@ -407,19 +409,20 @@ if (!otherUserId) {
         </div>
       </nav>
 
-      {/* ✅ MATCH MODAL */}
-      {showMatch && (
-        <MatchModal
-          onClose={closeMatch}
-          onOpenChat={() => {
-            if (!matchId) {
-              console.warn("No matchId, cannot open chat");
-              return;
-            }
-            router.push(`/chat/${matchId}`);
-          }}
-        />
-      )}
+{showMatch && (
+  <MatchModal
+    onClose={closeMatch}
+    onOpenChat={() => {
+      if (!matchId) return;
+      router.push(`/chat/${matchId}`);
+    }}
+    meName="მე"
+    matchName="ვიღაც"
+    myPhoto="/avatar-placeholder.png"
+    theirPhoto="/avatar-placeholder.png"
+  />
+)}
+
     </div>
   );
 }
@@ -489,12 +492,27 @@ function CircleBtn({
   );
 }
 
+
+
+type PersonMini = {
+  name?: string | null;
+  photo?: string | null;
+};
+
 function MatchModal({
   onClose,
   onOpenChat,
+  meName = "მე",
+  matchName = "ვიღაც",
+  myPhoto = "/avatar-placeholder.png",
+  theirPhoto = "/avatar-placeholder.png",
 }: {
   onClose: () => void;
   onOpenChat: () => void;
+  meName?: string;
+  matchName?: string;
+  myPhoto?: string;
+  theirPhoto?: string;
 }) {
   return (
     <div
@@ -502,34 +520,54 @@ function MatchModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-[420px] rounded-3xl bg-zinc-950/80 p-6 ring-1 ring-white/10 shadow-2xl"
+        className="w-full max-w-[360px] rounded-3xl bg-zinc-950/85 px-6 py-8 ring-1 ring-white/10 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="text-center">
-          <div className="text-4xl font-extrabold tracking-wide text-emerald-300">
-            IT&apos;S A MATCH!
+          <div className="text-4xl font-extrabold tracking-tight text-orange-300">
+            შეხვვდით 🎉
           </div>
+
           <div className="mt-2 text-sm text-white/70">
-            You and liked each other 💚
+            <span className="font-semibold text-white/90">{meName}</span>
+            <span className="mx-2 text-white/40">და</span>
+            <span className="font-semibold text-white/90">{matchName}</span>
           </div>
 
-          <div className="mt-5 flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 rounded-2xl bg-white/10 px-4 py-3 text-sm font-semibold text-white ring-1 ring-white/10"
-            >
-              Keep Swiping
-            </button>
-
-            <button
-              type="button"
-              onClick={onOpenChat}
-              className="flex-1 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-zinc-900"
-            >
-              Open Chat
-            </button>
+          <div className="mt-1 text-sm text-white/65">
+            ყველაფერი შეხვედრით იწყება ✨
           </div>
+        </div>
+
+        <div className="mt-6 flex items-center justify-center gap-5">
+          <img
+            src={myPhoto}
+            alt={meName}
+            className="h-20 w-20 rounded-full object-cover ring-2 ring-white/15"
+          />
+          <img
+            src={theirPhoto}
+            alt={matchName}
+            className="h-20 w-20 rounded-full object-cover ring-2 ring-white/15"
+          />
+        </div>
+
+        <div className="mt-7 space-y-3">
+          <button
+            type="button"
+            onClick={onOpenChat}
+            className="w-full rounded-2xl bg-orange-400 px-4 py-3 text-sm font-semibold text-black hover:bg-orange-300 active:scale-[0.99]"
+          >
+            მიწერა 💬
+          </button>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full rounded-2xl px-4 py-3 text-sm font-semibold text-white/90 ring-1 ring-white/15 hover:bg-white/5 active:scale-[0.99]"
+          >
+            გაგრძელება →
+          </button>
         </div>
       </div>
     </div>

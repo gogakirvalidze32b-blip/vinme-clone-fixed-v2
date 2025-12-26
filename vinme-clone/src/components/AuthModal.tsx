@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { photoSrc } from "@/lib/photos";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -68,3 +69,4 @@ export default function AuthCallbackPage() {
     </main>
   );
 }
+

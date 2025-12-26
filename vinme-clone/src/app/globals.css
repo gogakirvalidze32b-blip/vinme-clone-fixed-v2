@@ -28,3 +28,11 @@ html, body {
   overscroll-behavior: none;
 }
 
+:root {
+  --brand-font: var(--font-brand);
+}
+.brand-font {
+  font-family: var(--brand-font);
+}
+
+

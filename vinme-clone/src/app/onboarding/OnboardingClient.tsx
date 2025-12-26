@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import OnboardingShell from "@/components/OnboardingShell";
+import { photoSrc } from "@/lib/photos";
+
 import { getOrCreateAnonId, generateAnonName } from "@/lib/guest";
 import { supabase } from "@/lib/supabase";
 import {
@@ -81,26 +83,33 @@ function PrimaryButton({
     </button>
   );
 }
+
+// ✅ ONLY change: auto-format DD/MM/YYYY, digits-only, auto-insert "/"
+function formatDMYInput(v: string) {
+  const digits = v.replace(/\D/g, "").slice(0, 8);
+  const dd = digits.slice(0, 2);
+  const mm = digits.slice(2, 4);
+  const yyyy = digits.slice(4, 8);
+
+  if (digits.length <= 2) return dd;
+  if (digits.length <= 4) return `${dd}/${mm}`;
+  return `${dd}/${mm}/${yyyy}`;
+}
+
 function computeNextStep(profile: Profile): Step {
   if (!profile.first_name?.trim()) return "name";
 
-  if (!profile.birthdate) return "birth";
-
-  // 🔥 მარტივი ასაკის შემოწმება — NO helper, NO bug
-  const birthYear = Number(profile.birthdate.split("-")[0]);
-  const currentYear = new Date().getFullYear();
-
-  if (currentYear - birthYear < 18) return "birth";
+  // ✅ ONLY change: TS-safe (age may be invalid/null depending on helper)
+  const a = profile.birthdate ? calcAgeFromBirthdate(profile.birthdate) : null;
+  if (!profile.birthdate || a == null || a < 18) return "birth";
 
   if (!profile.gender) return "gender";
   if (!profile.seeking) return "seeking";
   if (!profile.intent) return "intent";
   if (!profile.distance_km) return "distance";
   if (!profile.photo1_url) return "photos";
-
   return "photos";
 }
-
 
 export default function OnboardingClient() {
   const [mounted, setMounted] = useState(false);
@@ -151,14 +160,12 @@ export default function OnboardingClient() {
           await upsertProfileByIdentity({
             user_id: uid,
             anon_id: a,
-            age: 18,
           } as any);
         } else {
           // anon-only (guest)
           await upsertProfileByIdentity({
             anon_id: a,
             user_id: null,
-            age: 18,
           } as any);
         }
 
@@ -242,22 +249,14 @@ export default function OnboardingClient() {
   }, []);
 
   const canNext = useMemo(() => {
-  if (step === "birth") {
-  const iso = formatBirthInputToISO(birthInput);
-  if (!iso) return false;
-
-  const birthYear = Number(iso.split("-")[0]);
-  const now = new Date();
-
-  const age =
-    now.getFullYear() -
-    birthYear -
-    (now < new Date(`${iso.slice(0, 4)}-${iso.slice(5, 7)}-${iso.slice(8, 10)}`) ? 1 : 0);
-
-  return age >= 18;
-}
-
-    
+    if (step === "rules") return true;
+    if (step === "name") return p.first_name.trim().length >= 2;
+    if (step === "birth") {
+      const iso = formatBirthInputToISO(birthInput);
+      if (!iso) return false;
+      const a = calcAgeFromBirthdate(iso);
+      return a != null && a >= 18;
+    }
     if (step === "gender") return Boolean(p.gender);
     if (step === "seeking") return Boolean(p.seeking);
     if (step === "intent") return Boolean(p.intent);
@@ -290,50 +289,53 @@ export default function OnboardingClient() {
       setSaving(false);
     }
   }
+async function uploadToStorage(file: File, slot: 1 | 2 | 3 | 4 | 5 | 6) {
+  if (!file) return;
 
-  async function uploadToStorage(file: File, slot: 1 | 2 | 3 | 4 | 5 | 6) {
-    if (!file) return;
+  setSaving(true);
+  setMsg("");
 
-    setSaving(true);
-    setMsg("");
+  try {
+    const uid =
+      userId ?? (await supabase.auth.getUser()).data.user?.id ?? null;
 
-    try {
-      const uid =
-        userId ?? (await supabase.auth.getUser()).data.user?.id ?? null;
+    const owner = uid ?? anonId;
+    if (!owner) throw new Error("No user/anon id");
 
-      const owner = uid ?? anonId;
-      if (!owner) throw new Error("No user/anon id");
+    const ext = file.name.split(".").pop() || "jpg";
+    const path = `${owner}/photo${slot}-${Date.now()}.${ext}`;
 
-      const ext = file.name.split(".").pop() || "jpg";
-      const path = `${owner}/photo${slot}-${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage
+      .from("photos")
+      .upload(path, file, {
+        upsert: true,
+        contentType: file.type,
+        cacheControl: "3600",
+      });
 
-      const { error: upErr } = await supabase.storage
-        .from("photos")
-        .upload(path, file, {
-          upsert: true,
-          contentType: file.type,
-          cacheControl: "3600",
-        });
+    if (upErr) throw upErr;
 
-      if (upErr) throw upErr;
+    // ✅ DB-ში ვინახავთ PATH-ს (არა publicUrl-ს)
+    const key = `photo${slot}_url` as const;
 
-      const { data } = supabase.storage.from("photos").getPublicUrl(path);
-      const publicUrl = data?.publicUrl;
-      if (!publicUrl) throw new Error("No public URL");
+    // ლოკალურ state-შიც PATH შევინახოთ (სჯობს, რომ ყველგან ერთნაირად იმუშაოს)
+    setP((prev) => ({ ...prev, [key]: path } as any));
+    await savePartial({ [key]: path } as any);
 
-      const key = `photo${slot}_url` as const;
-
-      setP((prev) => ({ ...prev, [key]: publicUrl } as any));
-      await savePartial({ [key]: publicUrl } as any);
-
-      setMsg(`Photo ${slot} saved ✅`);
-    } catch (e: any) {
-      console.error(e);
-      setMsg(e?.message ?? "Upload failed");
-    } finally {
-      setSaving(false);
-    }
+    // ✅ სურვილისამებრ: თუ ამ გვერდზე preview გჭირდება მაშინ აქვე ააწყობ publicUrl-ს
+    // (preview-ს გამოიყენებ მხოლოდ UI-ში, DB-ში მაინც path ინახება)
+    // const { data } = supabase.storage.from("photos").getPublicUrl(path);
+    // const previewUrl = data?.publicUrl ?? null;
+  } catch (e: any) {
+    console.error("upload error:", e);
+    setMsg(e?.message ?? "Upload failed");
+  } finally {
+    setSaving(false);
   }
+}
+
+
+ 
 
   async function goNext() {
     setMsg("");
@@ -352,16 +354,18 @@ export default function OnboardingClient() {
 
       return setStep("birth");
     }
-if (step === "birth") {
-  const iso = formatBirthInputToISO(birthInput);
-  if (!iso) return false;
 
-  const birthYear = Number(iso.split("-")[0]);
-  const currentYear = new Date().getFullYear();
+    if (step === "birth") {
+      const iso = formatBirthInputToISO(birthInput);
+      if (!iso) return;
 
-  return currentYear - birthYear >= 18;
-}
+      const age = calcAgeFromBirthdate(iso);
+      if (age == null) return;
+      if (age < 18) return setMsg("18+ უნდა იყო 🙂");
 
+      await savePartial({ birthdate: iso, age, onboarding_step: 3 });
+      return setStep("gender");
+    }
 
     if (step === "gender") {
       await savePartial({
@@ -504,8 +508,10 @@ if (step === "birth") {
         <div className="space-y-4">
           <input
             value={birthInput}
-            onChange={(e) => setBirthInput(e.target.value)}
+            onChange={(e) => setBirthInput(formatDMYInput(e.target.value))}
             placeholder="DD/MM/YYYY"
+            inputMode="numeric"
+            maxLength={10}
             className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/40 px-4 py-4 text-white outline-none"
           />
 
