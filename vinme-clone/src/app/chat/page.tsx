@@ -4,148 +4,133 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
-type MsgRow = {
-  id: string;
-  match_id: string | null;
-  from_anon: string;
-  to_anon: string;
-  text: string;
+type MatchRow = {
+  id: number; // bigint
+  user_a: string; // uuid
+  user_b: string; // uuid
   created_at: string;
 };
 
-type MatchRow = {
-  id: string;
-  a_anon: string;
-  b_anon: string;
+type MsgRow = {
+  id: string; // uuid
+  match_id: number; // bigint
+  sender_anon: string; // text
+  content: string; // text
   created_at: string;
+  read_at: string | null;
 };
 
 type ProfileRow = {
-  anon_id: string;
+  user_id: string; // uuid
+  anon_id: string; // text
   nickname: string;
   photo1_url: string | null;
 };
 
-function safeUUID() {
-  // Browser crypto
-  if (typeof window !== "undefined" && window.crypto?.randomUUID) {
-    return window.crypto.randomUUID();
-  }
-
-  if (typeof window !== "undefined" && window.crypto?.getRandomValues) {
-    const bytes = new Uint8Array(16);
-    window.crypto.getRandomValues(bytes);
-
-    // RFC 4122 v4
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-
-    const hex = [...bytes]
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
-
-    return (
-      hex.slice(0, 8) +
-      "-" +
-      hex.slice(8, 12) +
-      "-" +
-      hex.slice(12, 16) +
-      "-" +
-      hex.slice(16, 20) +
-      "-" +
-      hex.slice(20)
-    );
-  }
-
-  // last fallback
-  return `anon-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-function getOrCreateAnonId() {
-  if (typeof window === "undefined") return "anon";
-  const KEY = "vinme_anon_id";
-
-  const existing = localStorage.getItem(KEY);
-  if (existing) return existing;
-
-  const id = safeUUID();
-  localStorage.setItem(KEY, id);
-  return id;
-}
-
 export default function ChatPage() {
-  const [loading, setLoading] = useState(true);
-  const [q, setQ] = useState("");
-  const [meId, setMeId] = useState<string>("");
   const router = useRouter();
 
+  const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState("");
+
+  const [meUserId, setMeUserId] = useState<string>("");
+  const [myAnon, setMyAnon] = useState<string>("");
+
   const [matches, setMatches] = useState<MatchRow[]>([]);
-  const [messages, setMessages] = useState<MsgRow[]>([]);
-  const [profilesByAnon, setProfilesByAnon] = useState<Record<string, ProfileRow>>({});
+  const [latestByMatch, setLatestByMatch] = useState<Record<number, MsgRow>>({});
+  const [profilesByUser, setProfilesByUser] = useState<Record<string, ProfileRow>>({});
 
   useEffect(() => {
-    const a = getOrCreateAnonId();
-    setMeId(a);
-
     (async () => {
       setLoading(true);
 
-      // 1) try load matches (optional table)
-      const { data: mData } = await supabase
+      // 0) auth user
+      const { data: udata } = await supabase.auth.getUser();
+      const u = udata.user;
+      if (!u) {
+        setLoading(false);
+        return;
+      }
+      setMeUserId(u.id);
+
+      // 0.1) my profile -> anon_id
+      const { data: meProf, error: meProfErr } = await supabase
+        .from("profiles")
+        .select("user_id, anon_id, nickname, photo1_url")
+        .eq("user_id", u.id)
+        .maybeSingle();
+
+      if (meProfErr) console.error("Me profile load error:", meProfErr);
+      if (meProf?.anon_id) setMyAnon(meProf.anon_id);
+
+      // 1) load matches
+      const { data: mData, error: mErr } = await supabase
         .from("matches")
-        .select("id,a_anon,b_anon,created_at")
-        .or(`a_anon.eq.${a},b_anon.eq.${a}`)
+        .select("id,user_a,user_b,created_at")
+        .or(`user_a.eq.${u.id},user_b.eq.${u.id}`)
         .order("created_at", { ascending: false })
         .limit(30);
 
-      setMatches((mData as any) ?? []);
+      if (mErr) console.error("Matches load error:", mErr);
+      const ms = ((mData as any) ?? []) as MatchRow[];
+      setMatches(ms);
 
-      // 2) try load recent messages (optional table)
-      const { data: msgData } = await supabase
-        .from("messages")
-        .select("id,match_id,from_anon,to_anon,text,created_at")
-        .or(`from_anon.eq.${a},to_anon.eq.${a}`)
-        .order("created_at", { ascending: false })
-        .limit(50);
+      // 2) load latest messages for these matches (for history preview)
+      const matchIds = ms.map((m) => m.id);
+      if (matchIds.length) {
+        const { data: msgData, error: msgErr } = await supabase
+          .from("messages")
+          .select("id,match_id,sender_anon,content,created_at,read_at")
+          .in("match_id", matchIds)
+          .order("created_at", { ascending: false })
+          .limit(200);
 
-      setMessages((msgData as any) ?? []);
+        if (msgErr) console.error("Messages load error:", msgErr);
 
-      // 3) collect other anon_ids to show avatars
-      const otherIds = new Set<string>();
-      (mData as any)?.forEach((m: MatchRow) => {
-        otherIds.add(m.a_anon === a ? m.b_anon : m.a_anon);
-      });
-      (msgData as any)?.forEach((m: MsgRow) => {
-        otherIds.add(m.from_anon === a ? m.to_anon : m.from_anon);
-      });
+        const latest: Record<number, MsgRow> = {};
+        (msgData as any)?.forEach((m: MsgRow) => {
+          // since sorted desc, first encountered per match is latest
+          if (!latest[m.match_id]) latest[m.match_id] = m;
+        });
+        setLatestByMatch(latest);
+      }
 
-      const ids = Array.from(otherIds).filter(Boolean);
-      if (ids.length) {
-        const { data: pData } = await supabase
+      // 3) load other users' profiles for avatars
+      const otherUserIds = Array.from(
+        new Set(
+          ms.map((m) => (m.user_a === u.id ? m.user_b : m.user_a)).filter(Boolean)
+        )
+      );
+
+      if (otherUserIds.length) {
+        const { data: pData, error: pErr } = await supabase
           .from("profiles")
-          .select("anon_id,nickname,photo1_url")
-          .in("anon_id", ids);
+          .select("user_id,anon_id,nickname,photo1_url")
+          .in("user_id", otherUserIds);
+
+        if (pErr) console.error("Profiles load error:", pErr);
 
         const map: Record<string, ProfileRow> = {};
-        (pData as any)?.forEach((p: ProfileRow) => (map[p.anon_id] = p));
-        setProfilesByAnon(map);
+        (pData as any)?.forEach((p: ProfileRow) => (map[p.user_id] = p));
+        setProfilesByUser(map);
       }
 
       setLoading(false);
     })();
   }, []);
 
-  const filteredMessages = useMemo(() => {
-    if (!q.trim()) return messages;
+  const filteredMatches = useMemo(() => {
+    if (!q.trim()) return matches;
     const needle = q.toLowerCase();
-    return messages.filter((m) => {
-      const other = m.from_anon === meId ? m.to_anon : m.from_anon;
-      const name = profilesByAnon[other]?.nickname ?? "";
-      return (
-        name.toLowerCase().includes(needle) ||
-        m.text.toLowerCase().includes(needle)
-      );
+
+    return matches.filter((m) => {
+      const otherId = m.user_a === meUserId ? m.user_b : m.user_a;
+      const p = profilesByUser[otherId];
+      const name = (p?.nickname ?? "").toLowerCase();
+      const last = (latestByMatch[m.id]?.content ?? "").toLowerCase();
+      return name.includes(needle) || last.includes(needle);
     });
-  }, [q, messages, meId, profilesByAnon]);
+  }, [q, matches, meUserId, profilesByUser, latestByMatch]);
 
   return (
     <main className="min-h-[100svh] bg-zinc-950 text-white">
@@ -176,8 +161,9 @@ export default function ChatPage() {
           <div className="mt-4 flex gap-3 overflow-x-auto pb-2">
             <LikeTile />
             {matches.slice(0, 12).map((m) => {
-              const other = m.a_anon === meId ? m.b_anon : m.a_anon;
-              const p = profilesByAnon[other];
+              const otherId = m.user_a === meUserId ? m.user_b : m.user_a;
+              const p = profilesByUser[otherId];
+
               return (
                 <button
                   key={m.id}
@@ -186,10 +172,19 @@ export default function ChatPage() {
                   title={p?.nickname ?? "Match"}
                 >
                   {p?.photo1_url ? (
-                    <img src={p.photo1_url} className="h-full w-full object-cover" alt="" />
+                    <img
+                      src={p.photo1_url}
+                      className="h-full w-full object-cover"
+                      alt=""
+                    />
                   ) : (
                     <div className="h-full w-full bg-zinc-800/40" />
                   )}
+
+                  {/* tiny name strip */}
+                  <div className="absolute inset-x-0 bottom-0 bg-black/50 px-2 py-1 text-xs font-semibold">
+                    {p?.nickname ?? "Match"}
+                  </div>
                 </button>
               );
             })}
@@ -206,21 +201,20 @@ export default function ChatPage() {
                 <div key={i} className="h-16 rounded-2xl bg-white/10 animate-pulse" />
               ))}
             </div>
-          ) : filteredMessages.length === 0 ? (
-            <p className="mt-4 text-white/60">No messages yet 😅</p>
+          ) : filteredMatches.length === 0 ? (
+            <p className="mt-4 text-white/60">No chats yet 😅</p>
           ) : (
             <div className="mt-4 space-y-5">
-              {filteredMessages.slice(0, 20).map((m) => {
-                const other = m.from_anon === meId ? m.to_anon : m.from_anon;
-                const p = profilesByAnon[other];
+              {filteredMatches.slice(0, 30).map((m) => {
+                const otherId = m.user_a === meUserId ? m.user_b : m.user_a;
+                const p = profilesByUser[otherId];
+                const last = latestByMatch[m.id];
+
                 return (
                   <button
                     key={m.id}
                     className="flex w-full items-center gap-4 text-left"
-                    onClick={() => {
-                      if (!m.match_id) return; // უსაფრთხოება
-                      router.push(`/chat/${m.match_id}`);
-                    }}
+                    onClick={() => router.push(`/chat/${m.id}`)}
                   >
                     <div className="h-14 w-14 overflow-hidden rounded-full bg-white/10 ring-1 ring-white/10">
                       {p?.photo1_url ? (
@@ -229,9 +223,16 @@ export default function ChatPage() {
                         <div className="h-full w-full bg-zinc-800/40" />
                       )}
                     </div>
+
                     <div className="flex-1">
-                      <div className="text-xl font-extrabold">{p?.nickname ?? "Unknown"}</div>
-                      <div className="mt-0.5 text-white/65 line-clamp-1">↩ {m.text}</div>
+                      <div className="text-xl font-extrabold">
+                        {p?.nickname ?? "Unknown"}
+                      </div>
+
+                      <div className="mt-0.5 text-white/65 line-clamp-1">
+                        {last ? (last.sender_anon === myAnon ? "You: " : "") + last.content : "No messages yet"}
+                      </div>
+
                       <div className="mt-4 h-px w-full bg-white/10" />
                     </div>
                   </button>
