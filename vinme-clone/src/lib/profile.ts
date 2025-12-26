@@ -116,15 +116,16 @@ export async function getProfileByIdentity(params: {
 // -------------------------
 
 export async function upsertProfile(payload: Partial<Profile> & { anon_id: string }) {
-  const safe: Partial<Profile> & { anon_id: string; age: number } = {
-    ...payload,
-    age: payload.age ?? 18,
-  };
+  const patched: any = { ...payload };
 
-  // ✅ ALWAYS anon_id
-  return supabase.from("profiles").upsert(safe, {
-    onConflict: "anon_id",
-  });
+  // if birthdate present, compute age (if not provided)
+  if (patched.birthdate && (patched.age == null || patched.age === 18)) {
+    const a = calcAgeFromBirthdate(patched.birthdate);
+    if (a != null) patched.age = a;
+  }
+  if (patched.age == null) patched.age = 18;
+
+  return supabase.from("profiles").upsert(patched, { onConflict: "anon_id" });
 }
 
 /**
@@ -137,10 +138,13 @@ export async function upsertProfile(payload: Partial<Profile> & { anon_id: strin
 export async function upsertProfileByIdentity(
   payload: Partial<Profile> & { anon_id: string }
 ) {
-  const safe: any = {
-    ...payload,
-    age: payload.age ?? 18,
-  };
+  const safe: any = { ...payload };
+
+  if (safe.birthdate && (safe.age == null || safe.age === 18)) {
+    const a = calcAgeFromBirthdate(safe.birthdate);
+    if (a != null) safe.age = a;
+  }
+  if (safe.age == null) safe.age = 18;
 
   // 1) Upsert by anon_id always
   const { data: row, error: upErr } = await supabase
@@ -171,31 +175,83 @@ export async function upsertProfileByIdentity(
 // HELPERS
 // -------------------------
 
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function isValidDateYMD(y: number, m: number, d: number) {
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return false;
+  if (y < 1900 || y > 2100) return false;
+  if (m < 1 || m > 12) return false;
+  if (d < 1 || d > 31) return false;
+
+  // validate real calendar date using UTC
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return (
+    dt.getUTCFullYear() === y &&
+    dt.getUTCMonth() === m - 1 &&
+    dt.getUTCDate() === d
+  );
+}
+
+// ✅ Stable age calc (UTC-safe)
 export function calcAgeFromBirthdate(iso: string) {
-  const d = new Date(iso + "T00:00:00");
+  if (!iso) return null;
+
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  if (!isValidDateYMD(y, mo, d)) return null;
+
   const now = new Date();
+  const thisY = now.getUTCFullYear();
+  const thisM = now.getUTCMonth() + 1;
+  const thisD = now.getUTCDate();
 
-  let age = now.getFullYear() - d.getFullYear();
-  const m = now.getMonth() - d.getMonth();
-
-  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) {
-    age--;
-  }
+  let age = thisY - y;
+  const hadBirthday = thisM > mo || (thisM === mo && thisD >= d);
+  if (!hadBirthday) age -= 1;
 
   return age;
 }
 
+/**
+ * ✅ Accepts:
+ * - "DD/MM/YYYY" (your onboarding input)
+ * - "YYYY-MM-DD" (already ISO)
+ * - any string with 8 digits (tries DDMMYYYY then MMDDYYYY)
+ *
+ * Returns "YYYY-MM-DD" or "" if invalid
+ */
 export function formatBirthInputToISO(v: string) {
+  if (!v) return "";
+
+  // If already ISO
+  const isoMatch = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    const y = Number(isoMatch[1]);
+    const m = Number(isoMatch[2]);
+    const d = Number(isoMatch[3]);
+    if (!isValidDateYMD(y, m, d)) return "";
+    return `${y}-${pad2(m)}-${pad2(d)}`;
+  }
+
+  // Strip non-digits
   const cleaned = v.replace(/[^\d]/g, "");
   if (cleaned.length !== 8) return "";
 
-  const dd = cleaned.slice(0, 2);
-  const mm = cleaned.slice(2, 4);
-  const yyyy = cleaned.slice(4, 8);
+  const a = Number(cleaned.slice(0, 2));
+  const b = Number(cleaned.slice(2, 4));
+  const yyyy = Number(cleaned.slice(4, 8));
 
-  const iso = `${yyyy}-${mm}-${dd}`;
-  const dt = new Date(iso + "T00:00:00");
+  // Try DDMMYYYY
+  if (isValidDateYMD(yyyy, b, a)) return `${yyyy}-${pad2(b)}-${pad2(a)}`;
 
-  if (Number.isNaN(dt.getTime())) return "";
-  return iso;
+  // Try MMDDYYYY
+  if (isValidDateYMD(yyyy, a, b)) return `${yyyy}-${pad2(a)}-${pad2(b)}`;
+
+  return "";
 }

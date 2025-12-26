@@ -2,7 +2,6 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getOrCreateAnonId } from "@/lib/guest";
 
 import { supabase } from "@/lib/supabase";
 import TinderCard from "@/components/TinderCard";
@@ -11,9 +10,8 @@ import BottomNav from "@/components/BottomNav";
 type Gender = "" | "male" | "female" | "nonbinary" | "other";
 type Seeking = "everyone" | "male" | "female" | "nonbinary" | "other";
 
-// ✅ DB row shape (profiles table)
 type ProfileRow = {
-  user_id: string; // ✅ auth uid
+  user_id: string;
   anon_id: string | null;
   nickname: string | null;
   age: number | null;
@@ -22,7 +20,6 @@ type ProfileRow = {
   gender: Gender | null;
   seeking: Seeking | null;
 
-  // ⚠️ some DBs have photo_url, some have photo1_url
   photo_url?: string | null;
   photo1_url?: string | null;
 
@@ -35,7 +32,7 @@ type ProfileRow = {
 };
 
 type CardUser = {
-  id: string; // ✅ target user's user_id
+  id: string;
   anon_id?: string | null;
   nickname: string;
   age: number;
@@ -57,86 +54,48 @@ export default function FeedPage() {
   const [err, setErr] = useState<string | null>(null);
 
   // ----------------------------
-  // LOAD ME
+  // LOAD ME (ONLY by user_id)
   // ----------------------------
-const loadMe = useCallback(async () => {
-  setErr(null);
+  const loadMe = useCallback(async () => {
+    setErr(null);
 
-  const {
-    data: { session },
-    error: sessionErr,
-  } = await supabase.auth.getSession();
+    const {
+      data: { session },
+      error: sessionErr,
+    } = await supabase.auth.getSession();
 
-  if (sessionErr) {
-    setErr(sessionErr.message);
-    setMe(null);
-    return null;
-  }
+    if (sessionErr) {
+      setErr(sessionErr.message);
+      setMe(null);
+      return null;
+    }
 
-  if (!session?.user) {
-    router.replace("/");
-    setMe(null);
-    return null;
-  }
+    if (!session?.user) {
+      router.replace("/");
+      setMe(null);
+      return null;
+    }
 
-  const userId = session.user.id;
+    const userId = session.user.id;
 
-  // 1) try by user_id
-  const { data: byUser, error: e1 } = await supabase
-    .from("profiles")
-    .select("user_id, anon_id, nickname, age, city, bio, gender, seeking, photo_url, created_at, onboarding_completed")
-    .eq("user_id", userId)
-    .maybeSingle();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select(
+        "user_id, anon_id, nickname, age, city, bio, gender, seeking, photo_url, photo1_url, created_at, onboarding_completed, onboarding_step, first_name"
+      )
+      .eq("user_id", userId)
+      .maybeSingle();
 
-  if (e1) {
-    setErr(e1.message);
-    setMe(null);
-    return null;
-  }
+    if (error) {
+      setErr(error.message);
+      setMe(null);
+      return null;
+    }
 
-  if (byUser) {
-    setMe(byUser as any);
-    return byUser as any;
-  }
-
-  // 2) fallback by anon_id (phone case)
-  const a = getOrCreateAnonId();
-
-  const { data: byAnon, error: e2 } = await supabase
-    .from("profiles")
-    .select("user_id, anon_id, nickname, age, city, bio, gender, seeking, photo_url, created_at, onboarding_completed")
-    .eq("anon_id", a)
-    .maybeSingle();
-
-  if (e2) {
-    setErr(e2.message);
-    setMe(null);
-    return null;
-  }
-
-  if (!byAnon) {
-    // truly no row
-    setMe(null);
-    return null;
-  }
-
-  // 3) bind user_id -> this row (CRITICAL)
-  const { data: bound, error: e3 } = await supabase
-    .from("profiles")
-    .update({ user_id: userId })
-    .eq("anon_id", a)
-    .select("user_id, anon_id, nickname, age, city, bio, gender, seeking, photo_url, created_at, onboarding_completed")
-    .maybeSingle();
-
-  if (e3) {
-    setErr(e3.message);
-    setMe(null);
-    return null;
-  }
-
-  setMe((bound as any) ?? (byAnon as any));
-  return (bound as any) ?? (byAnon as any);
-}, [router]);
+    const row = (data as ProfileRow | null) ?? null;
+    setMe(row);
+    return row;
+  }, [router]);
 
   // ----------------------------
   // LOAD TOP
@@ -147,7 +106,6 @@ const loadMe = useCallback(async () => {
       setErr(null);
 
       try {
-        // ✅ 1) get ids I already swiped (like/skip)
         const { data: swipedRows, error: swErr } = await supabase
           .from("swipes")
           .select("to_id")
@@ -159,7 +117,6 @@ const loadMe = useCallback(async () => {
           .map((r: any) => r.to_id)
           .filter(Boolean) as string[];
 
-        // ✅ 2) base query: not me
         let q = supabase
           .from("profiles")
           .select(
@@ -167,12 +124,10 @@ const loadMe = useCallback(async () => {
           )
           .neq("user_id", myUserId);
 
-        // ✅ 3) seeking filter
         if (mySeeking && mySeeking !== "everyone") {
           q = q.eq("gender", mySeeking);
         }
 
-        // ✅ 4) exclude already swiped users
         if (swipedIds.length > 0) {
           const inList = `(${swipedIds.map((id) => `"${id}"`).join(",")})`;
           q = q.not("user_id", "in", inList);
@@ -184,7 +139,6 @@ const loadMe = useCallback(async () => {
           .maybeSingle();
 
         if (error) {
-          console.error("Top load error:", error.message);
           setErr(error.message);
           setTop(null);
         } else {
@@ -198,7 +152,7 @@ const loadMe = useCallback(async () => {
   );
 
   // ----------------------------
-  // ✅ INITIAL BOOTSTRAP (THIS WAS MISSING)
+  // INITIAL BOOTSTRAP
   // ----------------------------
   useEffect(() => {
     let alive = true;
@@ -210,19 +164,16 @@ const loadMe = useCallback(async () => {
 
         const my = await loadMe();
 
-        // not logged in -> loadMe already redirected
+        // no profile row yet -> onboarding
         if (!my?.user_id) {
-          // ✅ if profile row doesn't exist -> go onboarding
-          // (this also prevents infinite Loading)
           if (alive) setLoading(false);
           router.replace("/onboarding");
           return;
         }
 
-        // ✅ optional: if you want to force onboarding completion before feed
+        // force onboarding completion
         const completed =
-          my.onboarding_completed === true &&
-          (my.onboarding_step ?? 0) >= 8;
+          my.onboarding_completed === true && (my.onboarding_step ?? 0) >= 8;
 
         if (!completed) {
           if (alive) setLoading(false);
@@ -232,7 +183,6 @@ const loadMe = useCallback(async () => {
 
         await loadTop(my.user_id, my.seeking);
       } catch (e: any) {
-        console.error("FEED INIT ERROR:", e);
         if (alive) setErr(e?.message ?? "Feed init error");
       } finally {
         if (alive) setLoading(false);
@@ -245,13 +195,11 @@ const loadMe = useCallback(async () => {
   }, [loadMe, loadTop, router]);
 
   // ----------------------------
-  // ACTIONS: writeSwipe + tryMakeMatch
+  // ACTIONS
   // ----------------------------
   const writeSwipe = useCallback(
     async (action: "like" | "skip", targetUserId: string) => {
       if (!me?.user_id) return false;
-
-      console.log("SWIPE:", { action, from: me.user_id, to: targetUserId });
 
       const { error } = await supabase.from("swipes").insert({
         from_id: me.user_id,
@@ -259,9 +207,7 @@ const loadMe = useCallback(async () => {
         action,
       });
 
-      console.log("swipe insert:", error ?? "ok");
       if (error) console.warn("swipe insert error:", error.message);
-
       return !error;
     },
     [me?.user_id]
@@ -271,8 +217,6 @@ const loadMe = useCallback(async () => {
     async (targetUserId: string) => {
       if (!me?.user_id) return null;
 
-      console.log("TRY MATCH:", { me: me.user_id, target: targetUserId });
-
       const back = await supabase
         .from("swipes")
         .select("id")
@@ -281,31 +225,19 @@ const loadMe = useCallback(async () => {
         .eq("action", "like")
         .maybeSingle();
 
-      console.log("backLike:", back.data ?? null, back.error ?? null);
-
-      if (back.error) {
-        console.warn("backLike check error:", back.error.message);
-        return null;
-      }
-
+      if (back.error) return null;
       if (!back.data) return null;
 
       const a = me.user_id < targetUserId ? me.user_id : targetUserId;
       const b = me.user_id < targetUserId ? targetUserId : me.user_id;
 
-      const { data: existing, error: findErr } = await supabase
+      const { data: existing } = await supabase
         .from("matches")
         .select("id")
         .eq("user_a", a)
         .eq("user_b", b)
         .maybeSingle();
 
-      console.log("existing match:", existing ?? null, findErr ?? null);
-
-      if (findErr) {
-        console.warn("match find error:", findErr.message);
-        return null;
-      }
       if (existing?.id) return String(existing.id);
 
       const { data: created, error: mErr } = await supabase
@@ -314,32 +246,12 @@ const loadMe = useCallback(async () => {
         .select("id")
         .maybeSingle();
 
-      console.log("match insert:", created ?? null, mErr ?? null);
-
-      if (mErr) {
-        const msg = String(mErr.message || "").toLowerCase();
-        if (msg.includes("duplicate") || msg.includes("unique")) {
-          const { data: again } = await supabase
-            .from("matches")
-            .select("id")
-            .eq("user_a", a)
-            .eq("user_b", b)
-            .maybeSingle();
-          if (again?.id) return String(again.id);
-        }
-
-        console.warn("match insert error:", mErr.message);
-        return null;
-      }
-
+      if (mErr) return null;
       return created?.id ? String(created.id) : null;
     },
     [me?.user_id]
   );
 
-  // ----------------------------
-  // UI handlers for TinderCard
-  // ----------------------------
   const onSkip = useCallback(async () => {
     if (!top || !me?.user_id) return;
     await writeSwipe("skip", top.user_id);
@@ -357,7 +269,6 @@ const loadMe = useCallback(async () => {
 
     const matchId = await tryMakeMatch(top.user_id);
     await loadTop(me.user_id, me.seeking);
-
     return matchId;
   }, [loadTop, me?.seeking, me?.user_id, top, tryMakeMatch, writeSwipe]);
 
@@ -368,9 +279,7 @@ const loadMe = useCallback(async () => {
 
   const cardUser = useMemo<CardUser | null>(() => {
     if (!top) return null;
-
-    const photo =
-      (top.photo_url ?? null) || (top.photo1_url ?? null) || null;
+    const photo = (top.photo_url ?? null) || (top.photo1_url ?? null) || null;
 
     return {
       id: top.user_id,
@@ -396,7 +305,6 @@ const loadMe = useCallback(async () => {
     );
   }
 
-  // ✅ If my profile row doesn't exist yet
   if (!me?.user_id) {
     return (
       <div className="min-h-[100dvh] flex flex-col bg-black text-white">
@@ -408,14 +316,13 @@ const loadMe = useCallback(async () => {
                   Finish your profile 📝
                 </div>
                 <div className="opacity-80 text-sm">
-                  Profiles table-ში შენი user_id ჯერ არ არის ჩაწერილი. შედი
-                  Settings-ში და Save დააჭირე.
+                  Profiles table-ში row ვერ ვიპოვე user_id-ით. შედი Onboarding-ში.
                 </div>
                 <button
                   className="mt-5 w-full px-5 py-3 rounded-2xl bg-white text-black font-semibold active:scale-[0.99]"
-                  onClick={() => router.push("/settings")}
+                  onClick={() => router.push("/onboarding")}
                 >
-                  Go to Settings
+                  Go to Onboarding
                 </button>
               </div>
             </div>

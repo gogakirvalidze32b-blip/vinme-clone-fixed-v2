@@ -81,18 +81,26 @@ function PrimaryButton({
     </button>
   );
 }
-
 function computeNextStep(profile: Profile): Step {
   if (!profile.first_name?.trim()) return "name";
-  if (!profile.birthdate || calcAgeFromBirthdate(profile.birthdate) < 18)
-    return "birth";
+
+  if (!profile.birthdate) return "birth";
+
+  // 🔥 მარტივი ასაკის შემოწმება — NO helper, NO bug
+  const birthYear = Number(profile.birthdate.split("-")[0]);
+  const currentYear = new Date().getFullYear();
+
+  if (currentYear - birthYear < 18) return "birth";
+
   if (!profile.gender) return "gender";
   if (!profile.seeking) return "seeking";
   if (!profile.intent) return "intent";
   if (!profile.distance_km) return "distance";
   if (!profile.photo1_url) return "photos";
+
   return "photos";
 }
+
 
 export default function OnboardingClient() {
   const [mounted, setMounted] = useState(false);
@@ -103,7 +111,7 @@ export default function OnboardingClient() {
 
   const [step, setStep] = useState<Step>("rules");
   const [p, setP] = useState<Profile>(EMPTY_PROFILE);
-  const [birthInput, setBirthInput] = useState(""); // DD/MM/YYYY
+  const [birthInput, setBirthInput] = useState("");
 
   const [userId, setUserId] = useState<string | null>(null);
   const [anonId, setAnonId] = useState<string>("");
@@ -120,7 +128,7 @@ export default function OnboardingClient() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // initial load (never hang)
+  // init
   useEffect(() => {
     let alive = true;
 
@@ -138,13 +146,23 @@ export default function OnboardingClient() {
         const a = getOrCreateAnonId();
         if (alive) setAnonId(a);
 
-        // ensure row exists
-        await upsertProfileByIdentity({
-          anon_id: a,
-          user_id: uid ?? null,
-          age: 18,
-        } as any);
+        // ✅ ensure user row exists if logged in (this is key)
+        if (uid) {
+          await upsertProfileByIdentity({
+            user_id: uid,
+            anon_id: a,
+            age: 18,
+          } as any);
+        } else {
+          // anon-only (guest)
+          await upsertProfileByIdentity({
+            anon_id: a,
+            user_id: null,
+            age: 18,
+          } as any);
+        }
 
+        // ✅ always read by identity (prefers user_id)
         const { data, error: gErr } = await getProfileByIdentity({
           user_id: uid ?? undefined,
           anon_id: a,
@@ -186,16 +204,6 @@ export default function OnboardingClient() {
 
           if (alive) setP(merged);
 
-          // bind user_id if logged
-          if (uid) {
-            await upsertProfileByIdentity({
-              anon_id: a,
-              user_id: uid,
-              age: merged.age ?? 18,
-            } as any);
-          }
-
-          // ✅ already done -> direct FEED
           const shouldSkipOnboarding =
             merged.onboarding_completed === true &&
             (merged.onboarding_step ?? 0) >= 8 &&
@@ -219,19 +227,6 @@ export default function OnboardingClient() {
             const [yyyy, mm, dd] = merged.birthdate.split("-");
             if (yyyy && mm && dd && alive) setBirthInput(`${dd}/${mm}/${yyyy}`);
           }
-        } else {
-          // no profile yet
-          if (alive) {
-            setP((prev) => ({
-              ...prev,
-              anon_id: a,
-              user_id: uid,
-              nickname: generateAnonName(),
-              age: 18,
-              distance_km: 50,
-            }));
-            setStep("rules");
-          }
         }
       } catch (e: any) {
         console.error("ONBOARDING INIT ERROR:", e);
@@ -247,13 +242,22 @@ export default function OnboardingClient() {
   }, []);
 
   const canNext = useMemo(() => {
-    if (step === "rules") return true;
-    if (step === "name") return p.first_name.trim().length >= 2;
-    if (step === "birth") {
-      const iso = formatBirthInputToISO(birthInput);
-      if (!iso) return false;
-      return calcAgeFromBirthdate(iso) >= 18;
-    }
+  if (step === "birth") {
+  const iso = formatBirthInputToISO(birthInput);
+  if (!iso) return false;
+
+  const birthYear = Number(iso.split("-")[0]);
+  const now = new Date();
+
+  const age =
+    now.getFullYear() -
+    birthYear -
+    (now < new Date(`${iso.slice(0, 4)}-${iso.slice(5, 7)}-${iso.slice(8, 10)}`) ? 1 : 0);
+
+  return age >= 18;
+}
+
+    
     if (step === "gender") return Boolean(p.gender);
     if (step === "seeking") return Boolean(p.seeking);
     if (step === "intent") return Boolean(p.intent);
@@ -267,39 +271,18 @@ export default function OnboardingClient() {
     setSaving(true);
     setMsg("");
 
-setMsg("");
-
-const uid = userId ?? null; // state-დან, სანდო გზა ✅
-
-const base: any = {
-  anon_id: anonId || p.anon_id,
-  user_id: uid,
-  ...payload,
-};
-
+    const uid = userId ?? null;
+    const base: any = {
+      anon_id: anonId || p.anon_id,
+      user_id: uid,
+      ...payload,
+    };
 
     try {
-      // try update by user_id first
-      if (uid) {
-        const { data, error } = await supabase
-          .from("profiles")
-          .update(base)
-          .eq("user_id", uid)
-          .select()
-          .maybeSingle();
-
-        if (error) throw error;
-
-        if (data) {
-          setP((prev) => ({ ...prev, ...data } as any));
-          return;
-        }
-        // 0 rows -> fallback upsert
-      }
-
-      const { data: up, error: upErr } = await upsertProfileByIdentity(base);
-      if (upErr) throw upErr;
-      if (up) setP((prev) => ({ ...prev, ...up } as any));
+      // ✅ one reliable write path: upsert by identity
+      const { data, error } = await upsertProfileByIdentity(base);
+      if (error) throw error;
+      if (data) setP((prev) => ({ ...prev, ...data } as any));
     } catch (e: any) {
       console.error("savePartial error:", e);
       setMsg("DB ERROR: " + (e?.message ?? "Unknown error"));
@@ -340,9 +323,7 @@ const base: any = {
 
       const key = `photo${slot}_url` as const;
 
-      // UI update
       setP((prev) => ({ ...prev, [key]: publicUrl } as any));
-      // DB save
       await savePartial({ [key]: publicUrl } as any);
 
       setMsg(`Photo ${slot} saved ✅`);
@@ -371,17 +352,16 @@ const base: any = {
 
       return setStep("birth");
     }
+if (step === "birth") {
+  const iso = formatBirthInputToISO(birthInput);
+  if (!iso) return false;
 
-    if (step === "birth") {
-      const iso = formatBirthInputToISO(birthInput);
-      if (!iso) return;
+  const birthYear = Number(iso.split("-")[0]);
+  const currentYear = new Date().getFullYear();
 
-      const age = calcAgeFromBirthdate(iso);
-      if (age < 18) return setMsg("18+ უნდა იყო 🙂");
+  return currentYear - birthYear >= 18;
+}
 
-      await savePartial({ birthdate: iso, age, onboarding_step: 3 });
-      return setStep("gender");
-    }
 
     if (step === "gender") {
       await savePartial({
@@ -407,57 +387,53 @@ const base: any = {
       return setStep("photos");
     }
 
-    // ✅ STEP 8 finish: anon_id update + fallback upsert + verify
-if (step === "photos") {
-  if (!p.photo1_url) {
-    setMsg("Photo 1 აუცილებელია ✅");
-    return;
-  }
+    // ✅ STEP 8 finish: WRITE TO user_id row (prevents feed/onboarding loop)
+    if (step === "photos") {
+      if (!p.photo1_url) {
+        setMsg("Photo 1 აუცილებელია ✅");
+        return;
+      }
 
-  setSaving(true);
-  setMsg("");
+      setSaving(true);
+      setMsg("");
 
-  try {
-    const { data: sess } = await supabase.auth.getSession();
-    const uid = sess?.session?.user?.id;
+      try {
+        const { data: sess, error: sErr } = await supabase.auth.getSession();
+        if (sErr) throw sErr;
 
-    if (!uid) {
-      setMsg("Auth session missing ❌");
-      return;
+        const uid = sess.session?.user?.id ?? null;
+        if (!uid) {
+          setMsg("Auth session missing ❌ (გაიარე Google login თავიდან)");
+          return;
+        }
+
+        const { data, error } = await upsertProfileByIdentity({
+          user_id: uid,
+          anon_id: anonId || p.anon_id,
+          photo1_url: p.photo1_url,
+          photo2_url: p.photo2_url,
+          photo3_url: p.photo3_url,
+          photo4_url: p.photo4_url,
+          photo5_url: p.photo5_url,
+          photo6_url: p.photo6_url,
+          onboarding_step: 8,
+          onboarding_completed: true,
+        } as any);
+
+        if (error) throw error;
+        if (data) setP((prev) => ({ ...prev, ...data } as any));
+
+        window.location.replace("/feed");
+        return;
+      } catch (e: any) {
+        console.error("finish onboarding error:", e);
+        setMsg(e?.message ?? "Finish failed");
+      } finally {
+        setSaving(false);
+      }
     }
-
-    // 🔒 აქ არის მთავარი FIX
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        photo1_url: p.photo1_url,
-        photo2_url: p.photo2_url,
-        photo3_url: p.photo3_url,
-        photo4_url: p.photo4_url,
-        photo5_url: p.photo5_url,
-        photo6_url: p.photo6_url,
-        onboarding_step: 8,
-        onboarding_completed: true,
-        user_id: uid, // ❗ აუცილებელია
-      })
-      .eq("anon_id", anonId);
-
-    if (error) throw error;
-
-    // ✅ დასრულების შემდეგ — პირდაპირ feed
-    window.location.replace("/feed");
-    return;
-  } catch (e: any) {
-    console.error("finish onboarding error:", e);
-    setMsg(e?.message ?? "Finish failed");
-  } finally {
-    setSaving(false);
-  }
-}
-
   }
 
-  // hydration guard
   if (!mounted) return null;
 
   if (loading) {
@@ -470,7 +446,7 @@ if (step === "photos") {
   }
 
   // ----------------------------
-  // ✅ STEP UI (8 steps)
+  // UI STEPS (your existing UI)
   // ----------------------------
 
   if (step === "rules") {
