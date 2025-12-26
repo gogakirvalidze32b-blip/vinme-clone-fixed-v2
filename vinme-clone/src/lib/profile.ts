@@ -36,11 +36,10 @@ export type Profile = {
   photo5_url: string;
   photo6_url: string;
 
-  // ✅ ONBOARDING FLAGS (ეს აკლდა)
+  // ✅ ONBOARDING FLAGS
   onboarding_step: number;
   onboarding_completed: boolean;
 };
-
 
 export const EMPTY_PROFILE: Profile = {
   anon_id: "",
@@ -68,7 +67,6 @@ export const EMPTY_PROFILE: Profile = {
   photo5_url: "",
   photo6_url: "",
 
-  // ✅ ONBOARDING FLAGS
   onboarding_step: 1,
   onboarding_completed: false,
 };
@@ -78,25 +76,34 @@ export const EMPTY_PROFILE: Profile = {
 // -------------------------
 
 export async function getProfile(anon_id: string) {
-  return supabase
-    .from("profiles")
-    .select("*")
-    .eq("anon_id", anon_id)
-    .maybeSingle();
+  return supabase.from("profiles").select("*").eq("anon_id", anon_id).maybeSingle();
 }
 
 export async function getProfileByIdentity(params: {
   user_id?: string;
   anon_id?: string;
 }) {
+  // 1) try by user_id first
   if (params.user_id) {
-    return supabase
+    const res = await supabase
       .from("profiles")
       .select("*")
       .eq("user_id", params.user_id)
       .maybeSingle();
+
+    // ✅ fallback anon_id-ზე თუ user_id-ით ვერ მოიძებნა
+    if (!res.data && params.anon_id) {
+      return supabase
+        .from("profiles")
+        .select("*")
+        .eq("anon_id", params.anon_id)
+        .maybeSingle();
+    }
+
+    return res;
   }
 
+  // 2) anon fallback
   return supabase
     .from("profiles")
     .select("*")
@@ -105,38 +112,61 @@ export async function getProfileByIdentity(params: {
 }
 
 // -------------------------
-// UPSERT (✅ FIXED)
+// UPSERT
 // -------------------------
 
-export async function upsertProfile(
-  payload: Partial<Profile> & { anon_id: string }
-) {
+export async function upsertProfile(payload: Partial<Profile> & { anon_id: string }) {
   const safe: Partial<Profile> & { anon_id: string; age: number } = {
     ...payload,
     age: payload.age ?? 18,
   };
 
-  return supabase
-    .from("profiles")
-    .upsert(safe, {
-      onConflict: "anon_id", // ✅ ALWAYS anon_id
-    });
+  // ✅ ALWAYS anon_id
+  return supabase.from("profiles").upsert(safe, {
+    onConflict: "anon_id",
+  });
 }
 
-// identity wrapper (kept for API compatibility)
-export async function upsertProfileByIdentity(payload: any) {
-  const hasUserId = Boolean(payload.user_id);
+/**
+ * ✅ FIXED Identity upsert strategy:
+ * - Always upsert by anon_id (guest row is source of truth)
+ * - If user_id exists -> bind it to the same row via update
+ *
+ * This prevents "two rows" problems that break feed queries by user_id.
+ */
+export async function upsertProfileByIdentity(
+  payload: Partial<Profile> & { anon_id: string }
+) {
+  const safe: any = {
+    ...payload,
+    age: payload.age ?? 18,
+  };
 
-  const onConflict = hasUserId ? "user_id" : "anon_id";
-
-  const { data, error } = await supabase
+  // 1) Upsert by anon_id always
+  const { data: row, error: upErr } = await supabase
     .from("profiles")
-    .upsert(payload, { onConflict })
-    .select()
+    .upsert(safe, { onConflict: "anon_id" })
+    .select("*")
     .maybeSingle();
 
-  return { data, error };
+  if (upErr) return { data: null, error: upErr };
+
+  // 2) If logged in -> bind user_id to THIS row (anon_id)
+  if (safe.user_id) {
+    const { data: bound, error: bindErr } = await supabase
+      .from("profiles")
+      .update({ user_id: safe.user_id })
+      .eq("anon_id", safe.anon_id)
+      .select("*")
+      .maybeSingle();
+
+    if (bindErr) return { data: row ?? null, error: bindErr };
+    return { data: bound ?? row ?? null, error: null };
+  }
+
+  return { data: row ?? null, error: null };
 }
+
 // -------------------------
 // HELPERS
 // -------------------------
@@ -169,4 +199,3 @@ export function formatBirthInputToISO(v: string) {
   if (Number.isNaN(dt.getTime())) return "";
   return iso;
 }
-

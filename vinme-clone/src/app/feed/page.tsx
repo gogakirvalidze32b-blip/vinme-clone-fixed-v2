@@ -2,13 +2,14 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { getOrCreateAnonId } from "@/lib/guest";
 
 import { supabase } from "@/lib/supabase";
 import TinderCard from "@/components/TinderCard";
 import BottomNav from "@/components/BottomNav";
 
-type Gender = "" | "male" | "female" | "other";
-type Seeking = "everyone" | "male" | "female" | "other";
+type Gender = "" | "male" | "female" | "nonbinary" | "other";
+type Seeking = "everyone" | "male" | "female" | "nonbinary" | "other";
 
 // ✅ DB row shape (profiles table)
 type ProfileRow = {
@@ -20,7 +21,16 @@ type ProfileRow = {
   bio: string | null;
   gender: Gender | null;
   seeking: Seeking | null;
-  photo_url: string | null;
+
+  // ⚠️ some DBs have photo_url, some have photo1_url
+  photo_url?: string | null;
+  photo1_url?: string | null;
+
+  onboarding_completed?: boolean | null;
+  onboarding_step?: number | null;
+
+  first_name?: string | null;
+
   created_at: string | null;
 };
 
@@ -49,106 +59,190 @@ export default function FeedPage() {
   // ----------------------------
   // LOAD ME
   // ----------------------------
-  const loadMe = useCallback(async () => {
-    setErr(null);
+const loadMe = useCallback(async () => {
+  setErr(null);
 
-    const {
-      data: { session },
-      error: sessionErr,
-    } = await supabase.auth.getSession();
+  const {
+    data: { session },
+    error: sessionErr,
+  } = await supabase.auth.getSession();
 
-    if (sessionErr) {
-      setErr(sessionErr.message);
-      setMe(null);
-      return null;
-    }
+  if (sessionErr) {
+    setErr(sessionErr.message);
+    setMe(null);
+    return null;
+  }
 
-    if (!session?.user) {
-      router.replace("/");
-      setMe(null);
-      return null;
-    }
+  if (!session?.user) {
+    router.replace("/");
+    setMe(null);
+    return null;
+  }
 
-    const userId = session.user.id;
+  const userId = session.user.id;
 
-    const { data, error } = await supabase
-      .from("profiles")
-      .select(
-        "user_id, anon_id, nickname, age, city, bio, gender, seeking, photo_url, created_at"
-      )
-      .eq("user_id", userId)
-      .maybeSingle();
+  // 1) try by user_id
+  const { data: byUser, error: e1 } = await supabase
+    .from("profiles")
+    .select("user_id, anon_id, nickname, age, city, bio, gender, seeking, photo_url, created_at, onboarding_completed")
+    .eq("user_id", userId)
+    .maybeSingle();
 
-    console.log("=== LOAD ME ===");
-    console.log("SESSION USER ID:", userId);
-    console.log("ME DATA:", data);
-    console.log("ME ERROR:", error);
+  if (e1) {
+    setErr(e1.message);
+    setMe(null);
+    return null;
+  }
 
-    if (error) {
-      console.error("Profile load error:", error.message);
-      setErr(error.message);
-      setMe(null);
-      return null;
-    }
+  if (byUser) {
+    setMe(byUser as any);
+    return byUser as any;
+  }
 
-    const row = (data as ProfileRow | null) ?? null;
-    setMe(row);
-    return row;
-  }, [router]);
+  // 2) fallback by anon_id (phone case)
+  const a = getOrCreateAnonId();
+
+  const { data: byAnon, error: e2 } = await supabase
+    .from("profiles")
+    .select("user_id, anon_id, nickname, age, city, bio, gender, seeking, photo_url, created_at, onboarding_completed")
+    .eq("anon_id", a)
+    .maybeSingle();
+
+  if (e2) {
+    setErr(e2.message);
+    setMe(null);
+    return null;
+  }
+
+  if (!byAnon) {
+    // truly no row
+    setMe(null);
+    return null;
+  }
+
+  // 3) bind user_id -> this row (CRITICAL)
+  const { data: bound, error: e3 } = await supabase
+    .from("profiles")
+    .update({ user_id: userId })
+    .eq("anon_id", a)
+    .select("user_id, anon_id, nickname, age, city, bio, gender, seeking, photo_url, created_at, onboarding_completed")
+    .maybeSingle();
+
+  if (e3) {
+    setErr(e3.message);
+    setMe(null);
+    return null;
+  }
+
+  setMe((bound as any) ?? (byAnon as any));
+  return (bound as any) ?? (byAnon as any);
+}, [router]);
+
+  // ----------------------------
+  // LOAD TOP
+  // ----------------------------
   const loadTop = useCallback(
     async (myUserId: string, mySeeking?: Seeking | null) => {
       setLoadingTop(true);
       setErr(null);
 
-      // ✅ 1) get ids I already swiped (like/skip)
-      const { data: swipedRows, error: swErr } = await supabase
-        .from("swipes")
-        .select("to_id")
-        .eq("from_id", myUserId);
+      try {
+        // ✅ 1) get ids I already swiped (like/skip)
+        const { data: swipedRows, error: swErr } = await supabase
+          .from("swipes")
+          .select("to_id")
+          .eq("from_id", myUserId);
 
-      if (swErr) console.warn("Failed to load swipes:", swErr.message);
+        if (swErr) console.warn("Failed to load swipes:", swErr.message);
 
-      const swipedIds = (swipedRows ?? [])
-        .map((r: any) => r.to_id)
-        .filter(Boolean) as string[];
+        const swipedIds = (swipedRows ?? [])
+          .map((r: any) => r.to_id)
+          .filter(Boolean) as string[];
 
-      // ✅ 2) base query: not me
-      let q = supabase
-        .from("profiles")
-        .select(
-          "user_id, anon_id, nickname, age, city, bio, gender, seeking, photo_url, created_at"
-        )
-        .neq("user_id", myUserId);
+        // ✅ 2) base query: not me
+        let q = supabase
+          .from("profiles")
+          .select(
+            "user_id, anon_id, nickname, age, city, bio, gender, seeking, photo_url, photo1_url, created_at"
+          )
+          .neq("user_id", myUserId);
 
-      // ✅ 3) seeking filter
-      if (mySeeking && mySeeking !== "everyone") {
-        q = q.eq("gender", mySeeking);
+        // ✅ 3) seeking filter
+        if (mySeeking && mySeeking !== "everyone") {
+          q = q.eq("gender", mySeeking);
+        }
+
+        // ✅ 4) exclude already swiped users
+        if (swipedIds.length > 0) {
+          const inList = `(${swipedIds.map((id) => `"${id}"`).join(",")})`;
+          q = q.not("user_id", "in", inList);
+        }
+
+        const { data, error } = await q
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (error) {
+          console.error("Top load error:", error.message);
+          setErr(error.message);
+          setTop(null);
+        } else {
+          setTop((data as ProfileRow | null) ?? null);
+        }
+      } finally {
+        setLoadingTop(false);
       }
-
-      // ✅ 4) exclude already swiped users
-      if (swipedIds.length > 0) {
-        const inList = `(${swipedIds.map((id) => `"${id}"`).join(",")})`;
-        q = q.not("user_id", "in", inList);
-      }
-
-      const { data, error } = await q
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (error) {
-        console.error("Top load error:", error.message);
-        setErr(error.message);
-        setTop(null);
-      } else {
-        setTop((data as ProfileRow | null) ?? null);
-      }
-
-      setLoadingTop(false);
     },
     []
   );
 
+  // ----------------------------
+  // ✅ INITIAL BOOTSTRAP (THIS WAS MISSING)
+  // ----------------------------
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      try {
+        setLoading(true);
+        setErr(null);
+
+        const my = await loadMe();
+
+        // not logged in -> loadMe already redirected
+        if (!my?.user_id) {
+          // ✅ if profile row doesn't exist -> go onboarding
+          // (this also prevents infinite Loading)
+          if (alive) setLoading(false);
+          router.replace("/onboarding");
+          return;
+        }
+
+        // ✅ optional: if you want to force onboarding completion before feed
+        const completed =
+          my.onboarding_completed === true &&
+          (my.onboarding_step ?? 0) >= 8;
+
+        if (!completed) {
+          if (alive) setLoading(false);
+          router.replace("/onboarding");
+          return;
+        }
+
+        await loadTop(my.user_id, my.seeking);
+      } catch (e: any) {
+        console.error("FEED INIT ERROR:", e);
+        if (alive) setErr(e?.message ?? "Feed init error");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [loadMe, loadTop, router]);
 
   // ----------------------------
   // ACTIONS: writeSwipe + tryMakeMatch
@@ -179,7 +273,6 @@ export default function FeedPage() {
 
       console.log("TRY MATCH:", { me: me.user_id, target: targetUserId });
 
-      // ✅ 1) check if target already liked me (target -> me)
       const back = await supabase
         .from("swipes")
         .select("id")
@@ -195,13 +288,11 @@ export default function FeedPage() {
         return null;
       }
 
-      if (!back.data) return null; // not mutual yet
+      if (!back.data) return null;
 
-      // ✅ 2) canonical pair (min/max) to prevent duplicates
       const a = me.user_id < targetUserId ? me.user_id : targetUserId;
       const b = me.user_id < targetUserId ? targetUserId : me.user_id;
 
-      // ✅ 3) find existing match
       const { data: existing, error: findErr } = await supabase
         .from("matches")
         .select("id")
@@ -217,7 +308,6 @@ export default function FeedPage() {
       }
       if (existing?.id) return String(existing.id);
 
-      // ✅ 4) create match
       const { data: created, error: mErr } = await supabase
         .from("matches")
         .insert({ user_a: a, user_b: b })
@@ -227,7 +317,6 @@ export default function FeedPage() {
       console.log("match insert:", created ?? null, mErr ?? null);
 
       if (mErr) {
-        // duplicate/unique -> already exists (ok)
         const msg = String(mErr.message || "").toLowerCase();
         if (msg.includes("duplicate") || msg.includes("unique")) {
           const { data: again } = await supabase
@@ -257,21 +346,16 @@ export default function FeedPage() {
     await loadTop(me.user_id, me.seeking);
   }, [loadTop, me?.seeking, me?.user_id, top, writeSwipe]);
 
-  // NOTE: returns matchId (string|null) so TinderCard can open the modal
   const onLike = useCallback(async (): Promise<string | null> => {
     if (!top || !me?.user_id) return null;
 
-    // ✅ 0) write MY like first (me -> target)
     const ok = await writeSwipe("like", top.user_id);
     if (!ok) {
       await loadTop(me.user_id, me.seeking);
       return null;
     }
 
-    // ✅ 1) then try mutual match
     const matchId = await tryMakeMatch(top.user_id);
-
-    // ✅ 2) load next (optional: you can skip this when matchId exists)
     await loadTop(me.user_id, me.seeking);
 
     return matchId;
@@ -285,6 +369,9 @@ export default function FeedPage() {
   const cardUser = useMemo<CardUser | null>(() => {
     if (!top) return null;
 
+    const photo =
+      (top.photo_url ?? null) || (top.photo1_url ?? null) || null;
+
     return {
       id: top.user_id,
       anon_id: top.anon_id,
@@ -294,7 +381,7 @@ export default function FeedPage() {
       bio: top.bio ?? "",
       gender: (top.gender ?? "") as Gender,
       seeking: (top.seeking ?? "everyone") as Seeking,
-      photo_url: top.photo_url ?? null,
+      photo_url: photo,
     };
   }, [top]);
 
@@ -381,9 +468,9 @@ export default function FeedPage() {
         ) : (
           <TinderCard
             user={cardUser as any}
-            otherUserId={cardUser.id} // ✅ target user_id
+            otherUserId={cardUser.id}
             loading={loadingTop}
-            onLike={onLike} // ✅ returns matchId, TinderCard will open modal
+            onLike={onLike}
             onSkip={onSkip}
             onOpenProfile={onOpenProfile}
           />

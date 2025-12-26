@@ -11,8 +11,6 @@ import {
   formatBirthInputToISO,
   getProfileByIdentity,
   upsertProfileByIdentity,
-  Gender,
-  Seeking,
   Intent,
 } from "@/lib/profile";
 
@@ -46,6 +44,7 @@ function Pill({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
         active
@@ -69,6 +68,7 @@ function PrimaryButton({
 }) {
   return (
     <button
+      type="button"
       disabled={disabled}
       onClick={onClick}
       className={`w-full rounded-full px-5 py-4 text-lg font-semibold transition ${
@@ -95,14 +95,8 @@ function computeNextStep(profile: Profile): Step {
 }
 
 export default function OnboardingClient() {
+  const [mounted, setMounted] = useState(false);
 
-  
-  
- const [mounted, setMounted] = useState(false);
-
-useEffect(() => {
-  setMounted(true);
-}, []);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
@@ -114,129 +108,142 @@ useEffect(() => {
   const [userId, setUserId] = useState<string | null>(null);
   const [anonId, setAnonId] = useState<string>("");
 
-  // ✅ keep userId synced (google auth sometimes arrives after first render)
+  useEffect(() => setMounted(true), []);
+
+  // keep userId synced
   useEffect(() => {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUserId(session?.user?.id ?? null);
     });
-
     return () => subscription.unsubscribe();
   }, []);
 
+  // initial load (never hang)
   useEffect(() => {
-    setMounted(true);
+    let alive = true;
 
     (async () => {
-   // 1) session/user
-const { data: sess } = await supabase.auth.getSession();
-const uid = sess.session?.user?.id ?? null;
-setUserId(uid);
+      try {
+        setLoading(true);
+        setMsg("");
 
-// 2) anon id
-const a = getOrCreateAnonId();
-setAnonId(a);
+        const { data: sess, error: sErr } = await supabase.auth.getSession();
+        if (sErr) throw sErr;
 
-// ✅ 3) ENSURE ROW EXISTS (და თუ uid არის, მაშინვე bind)
-await upsertProfileByIdentity({
-  anon_id: a,
-  user_id: uid ?? null,
-  age: 18,
-} as any);
+        const uid = sess.session?.user?.id ?? null;
+        if (alive) setUserId(uid);
 
-// 4) ახლა უკვე წაიკითხე profile
-const { data } = await getProfileByIdentity({
-  user_id: uid ?? undefined,
-  anon_id: a,
-      });
+        const a = getOrCreateAnonId();
+        if (alive) setAnonId(a);
 
-      if (data) {
-        const merged: Profile = {
-          ...EMPTY_PROFILE,
-          ...data,
-
-          // 🔑 identities
-          anon_id: data.anon_id ?? a,
-          user_id: (data.user_id ?? uid ?? null) as any,
-
-          // 👤 basic info
-          nickname: data.nickname ?? generateAnonName(),
-          first_name: data.first_name ?? "",
-          birthdate: data.birthdate ?? "",
-          age: ((data.age ?? 18) as number) ?? 18,
-          city: data.city ?? "",
-          bio: data.bio ?? "",
-
-          // 🧬 preferences
-          gender: (data.gender as any) ?? "",
-          show_gender: Boolean(data.show_gender),
-          seeking: (data.seeking as any) ?? "everyone",
-          intent: (data.intent as any) ?? "",
-
-          // 📍 distance
-          distance_km: data.distance_km ?? 50,
-
-          // 🖼 photos
-          photo1_url: data.photo1_url ?? "",
-          photo2_url: data.photo2_url ?? "",
-          photo3_url: data.photo3_url ?? "",
-          photo4_url: data.photo4_url ?? "",
-          photo5_url: data.photo5_url ?? "",
-          photo6_url: data.photo6_url ?? "",
-
-          // ✅ flags
-          onboarding_step: data.onboarding_step ?? 1,
-          onboarding_completed: Boolean(data.onboarding_completed),
-        };
-
-        setP(merged);
-
-        // ✅ თუ user უკვე logined-ია და ეს პროფილი anon-ზე იყო → მივაბათ user_id
-      if (uid) {
-  await upsertProfileByIdentity({
-    anon_id: a,
-    user_id: uid,
-    age: merged.age ?? 18,
-  } as any);
-        }
-
-        // ✅ მეორე შესვლაზე: დასრულებულია + photo1 აქვს -> პირდაპირ PROFILE (არა feed)
-      const shouldSkipOnboarding =
-  merged.onboarding_completed === true &&
-  (merged.onboarding_step ?? 0) >= 8 &&
-  Boolean(merged.photo1_url) &&
-  Boolean(merged.first_name?.trim()) &&
-  Boolean(merged.birthdate) &&
-  Boolean(merged.gender) &&
-  Boolean(merged.seeking) &&
-  Boolean(merged.intent) &&
-  Boolean(merged.distance_km);
-
-
-
-        const next = computeNextStep(merged);
-        setStep(next);
-
-        if (merged.birthdate) {
-          const [yyyy, mm, dd] = merged.birthdate.split("-");
-          if (yyyy && mm && dd) setBirthInput(`${dd}/${mm}/${yyyy}`);
-        }
-      } else {
-        // ჯერ არ აქვს პროფილი — ლოკალურად ვამზადებთ
-        setP((prev) => ({
-          ...prev,
+        // ensure row exists
+        await upsertProfileByIdentity({
           anon_id: a,
-          user_id: uid,
-          nickname: generateAnonName(),
+          user_id: uid ?? null,
           age: 18,
-          distance_km: 50,
-        }));
-        setStep("rules");
-      }
+        } as any);
 
-      setLoading(false);
+        const { data, error: gErr } = await getProfileByIdentity({
+          user_id: uid ?? undefined,
+          anon_id: a,
+        });
+        if (gErr) throw gErr;
+
+        if (data) {
+          const merged: Profile = {
+            ...EMPTY_PROFILE,
+            ...data,
+
+            anon_id: data.anon_id ?? a,
+            user_id: (data.user_id ?? uid ?? null) as any,
+
+            nickname: data.nickname ?? generateAnonName(),
+            first_name: data.first_name ?? "",
+            birthdate: data.birthdate ?? "",
+            age: ((data.age ?? 18) as number) ?? 18,
+            city: data.city ?? "",
+            bio: data.bio ?? "",
+
+            gender: (data.gender as any) ?? "",
+            show_gender: Boolean(data.show_gender),
+            seeking: (data.seeking as any) ?? "everyone",
+            intent: (data.intent as any) ?? "",
+
+            distance_km: data.distance_km ?? 50,
+
+            photo1_url: data.photo1_url ?? "",
+            photo2_url: data.photo2_url ?? "",
+            photo3_url: data.photo3_url ?? "",
+            photo4_url: data.photo4_url ?? "",
+            photo5_url: data.photo5_url ?? "",
+            photo6_url: data.photo6_url ?? "",
+
+            onboarding_step: data.onboarding_step ?? 1,
+            onboarding_completed: Boolean(data.onboarding_completed),
+          };
+
+          if (alive) setP(merged);
+
+          // bind user_id if logged
+          if (uid) {
+            await upsertProfileByIdentity({
+              anon_id: a,
+              user_id: uid,
+              age: merged.age ?? 18,
+            } as any);
+          }
+
+          // ✅ already done -> direct FEED
+          const shouldSkipOnboarding =
+            merged.onboarding_completed === true &&
+            (merged.onboarding_step ?? 0) >= 8 &&
+            Boolean(merged.photo1_url) &&
+            Boolean(merged.first_name?.trim()) &&
+            Boolean(merged.birthdate) &&
+            Boolean(merged.gender) &&
+            Boolean(merged.seeking) &&
+            Boolean(merged.intent) &&
+            Boolean(merged.distance_km);
+
+          if (shouldSkipOnboarding) {
+            window.location.replace("/feed");
+            return;
+          }
+
+          const next = computeNextStep(merged);
+          if (alive) setStep(next);
+
+          if (merged.birthdate) {
+            const [yyyy, mm, dd] = merged.birthdate.split("-");
+            if (yyyy && mm && dd && alive) setBirthInput(`${dd}/${mm}/${yyyy}`);
+          }
+        } else {
+          // no profile yet
+          if (alive) {
+            setP((prev) => ({
+              ...prev,
+              anon_id: a,
+              user_id: uid,
+              nickname: generateAnonName(),
+              age: 18,
+              distance_km: 50,
+            }));
+            setStep("rules");
+          }
+        }
+      } catch (e: any) {
+        console.error("ONBOARDING INIT ERROR:", e);
+        if (alive) setMsg(e?.message ?? "Init failed");
+      } finally {
+        if (alive) setLoading(false);
+      }
     })();
+
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const canNext = useMemo(() => {
@@ -255,60 +262,52 @@ const { data } = await getProfileByIdentity({
     if (step === "photos") return Boolean(p.photo1_url);
     return true;
   }, [step, p, birthInput]);
-async function savePartial(payload: Partial<Profile>) {
-  setSaving(true);
-  setMsg("");
 
-  const { data: gu, error: guErr } = await supabase.auth.getUser();
-  const uid = gu?.user?.id ?? null;
+  async function savePartial(payload: Partial<Profile>) {
+    setSaving(true);
+    setMsg("");
 
-  if (guErr) console.error("getUser error:", guErr);
+setMsg("");
 
-  const base: any = {
-    anon_id: anonId || p.anon_id,
-    user_id: uid,
-    ...payload,
-  };
+const uid = userId ?? null; // state-დან, სანდო გზა ✅
 
-  try {
-    // ✅ თუ uid გვაქვს, ყველაზე სანდოა UPDATE by user_id
-    if (uid) {
-      const { data, error } = await supabase
-        .from("profiles")
-        .update(base)
-        .eq("user_id", uid)
-        .select()
-        .maybeSingle();
+const base: any = {
+  anon_id: anonId || p.anon_id,
+  user_id: uid,
+  ...payload,
+};
 
-      if (error) throw error;
-      if (!data) throw new Error("Update matched 0 rows (profile not found)");
 
-      setP((prev) => ({ ...prev, ...data } as any));
-      return;
+    try {
+      // try update by user_id first
+      if (uid) {
+        const { data, error } = await supabase
+          .from("profiles")
+          .update(base)
+          .eq("user_id", uid)
+          .select()
+          .maybeSingle();
+
+        if (error) throw error;
+
+        if (data) {
+          setP((prev) => ({ ...prev, ...data } as any));
+          return;
+        }
+        // 0 rows -> fallback upsert
+      }
+
+      const { data: up, error: upErr } = await upsertProfileByIdentity(base);
+      if (upErr) throw upErr;
+      if (up) setP((prev) => ({ ...prev, ...up } as any));
+    } catch (e: any) {
+      console.error("savePartial error:", e);
+      setMsg("DB ERROR: " + (e?.message ?? "Unknown error"));
+    } finally {
+      setSaving(false);
     }
+  }
 
-    // ✅ თუ uid არ გვაქვს, fallback: upsert by anon_id
-    const { data, error } = await upsertProfileByIdentity(base);
-    if (error) throw error;
-
-    if (data) setP((prev) => ({ ...prev, ...data } as any));
-  } catch (e: any) {
-  const msg =
-    typeof e === "string"
-      ? e
-      : e?.message || e?.error_description || e?.hint || e?.details || null;
-
-  console.error("savePartial error:", e);
-  console.error("savePartial error (stringified):", JSON.stringify(e, null, 2));
-
-  setMsg("DB ERROR: " + (msg ?? "Unknown error"));
-} finally {
-  setSaving(false);
-}
-}
-
-
-  // ✅ Upload helper: 6 slot, Storage -> public URL -> save DB
   async function uploadToStorage(file: File, slot: 1 | 2 | 3 | 4 | 5 | 6) {
     if (!file) return;
 
@@ -326,7 +325,7 @@ async function savePartial(payload: Partial<Profile>) {
       const path = `${owner}/photo${slot}-${Date.now()}.${ext}`;
 
       const { error: upErr } = await supabase.storage
-        .from("photos") // bucket name
+        .from("photos")
         .upload(path, file, {
           upsert: true,
           contentType: file.type,
@@ -343,8 +342,7 @@ async function savePartial(payload: Partial<Profile>) {
 
       // UI update
       setP((prev) => ({ ...prev, [key]: publicUrl } as any));
-
-      // DB save immediately
+      // DB save
       await savePartial({ [key]: publicUrl } as any);
 
       setMsg(`Photo ${slot} saved ✅`);
@@ -360,22 +358,24 @@ async function savePartial(payload: Partial<Profile>) {
     setMsg("");
 
     if (step === "rules") return setStep("name");
-if (step === "name") {
-  const first_name = p.first_name.trim();
-  if (first_name.length < 2) return;
 
-  await savePartial({
-    first_name,
-    nickname: first_name, // ✅ ზუსტად user-ის შეყვანილი სახელი
-    onboarding_step: 2,
-  });
+    if (step === "name") {
+      const first_name = p.first_name.trim();
+      if (first_name.length < 2) return;
 
-  return setStep("birth");
-}
+      await savePartial({
+        first_name,
+        nickname: first_name,
+        onboarding_step: 2,
+      });
+
+      return setStep("birth");
+    }
 
     if (step === "birth") {
       const iso = formatBirthInputToISO(birthInput);
       if (!iso) return;
+
       const age = calcAgeFromBirthdate(iso);
       if (age < 18) return setMsg("18+ უნდა იყო 🙂");
 
@@ -407,91 +407,351 @@ if (step === "name") {
       return setStep("photos");
     }
 
-// ... ზემოთ step === "intent" / "distance" უცვლელია
-
-
-
+    // ✅ STEP 8 finish: anon_id update + fallback upsert + verify
 if (step === "photos") {
   if (!p.photo1_url) {
     setMsg("Photo 1 აუცილებელია ✅");
     return;
   }
 
-  // ✅ ერთჯერადი save: ფოტოები + დასრულება
-  await savePartial({
-    photo1_url: p.photo1_url,
-    photo2_url: p.photo2_url,
-    photo3_url: p.photo3_url,
-    photo4_url: p.photo4_url,
-    photo5_url: p.photo5_url,
-    photo6_url: p.photo6_url,
-    onboarding_step: 8,
-    onboarding_completed: true,
-  });
+  setSaving(true);
+  setMsg("");
 
-  // ✅ დასრულების შემდეგ პირდაპირ FEED
-  window.location.replace("/feed");
-  return;
+  try {
+    const { data: sess } = await supabase.auth.getSession();
+    const uid = sess?.session?.user?.id;
+
+    if (!uid) {
+      setMsg("Auth session missing ❌");
+      return;
+    }
+
+    // 🔒 აქ არის მთავარი FIX
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        photo1_url: p.photo1_url,
+        photo2_url: p.photo2_url,
+        photo3_url: p.photo3_url,
+        photo4_url: p.photo4_url,
+        photo5_url: p.photo5_url,
+        photo6_url: p.photo6_url,
+        onboarding_step: 8,
+        onboarding_completed: true,
+        user_id: uid, // ❗ აუცილებელია
+      })
+      .eq("anon_id", anonId);
+
+    if (error) throw error;
+
+    // ✅ დასრულების შემდეგ — პირდაპირ feed
+    window.location.replace("/feed");
+    return;
+  } catch (e: any) {
+    console.error("finish onboarding error:", e);
+    setMsg(e?.message ?? "Finish failed");
+  } finally {
+    setSaving(false);
+  }
 }
-
-// ... ქვემოთ render ნაწილი უცვლელია
-
-// photos UI
-return (
-  <OnboardingShell
-    title="Add your recent pics"
-    subtitle="Photo 1 is required. Add more to stand out."
-  >
-    <div className="grid grid-cols-3 gap-3">
-      {([1, 2, 3, 4, 5, 6] as const).map((i) => {
-        const key = `photo${i}_url` as const;
-        const url = (p as any)[key] as string;
-
-        return (
-          <label
-            key={i}
-            className={`relative aspect-[3/4] rounded-2xl border cursor-pointer overflow-hidden ${
-              i === 1 && !p.photo1_url
-                ? "border-pink-500/70"
-                : "border-zinc-800"
-            } bg-zinc-900/30`}
-            title={`Upload Photo ${i}`}
-          >
-            {url ? (
-              <img src={url} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex h-full items-center justify-center text-zinc-500">
-                <span className="text-2xl">＋</span>
-              </div>
-            )}
-
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) uploadToStorage(f, i);
-                e.currentTarget.value = "";
-              }}
-            />
-
-            <div className="absolute bottom-2 left-2 rounded-full bg-black/50 px-2 py-1 text-[10px] text-white">
-              {i === 1 ? "Photo 1 (required)" : `Photo ${i}`}
-            </div>
-          </label>
-        );
-      })}
-    </div>
-
-    <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
-      Finish & Go to Feed 🔥
-    </PrimaryButton>
-
-    {msg && <p className="text-sm text-zinc-300">{msg}</p>}
-  </OnboardingShell>
-);
 
   }
 
+  // hydration guard
+  if (!mounted) return null;
+
+  if (loading) {
+    return (
+      <OnboardingShell title="Loading..." subtitle="Please wait 🙏">
+        <div className="text-center text-zinc-400">Loading…</div>
+        {msg && <p className="mt-3 text-sm text-zinc-300">{msg}</p>}
+      </OnboardingShell>
+    );
+  }
+
+  // ----------------------------
+  // ✅ STEP UI (8 steps)
+  // ----------------------------
+
+  if (step === "rules") {
+    return (
+      <OnboardingShell
+        title="Quick rules"
+        subtitle="Be respectful, no spam, and stay safe 🙂"
+      >
+        <div className="space-y-3 text-sm text-zinc-300">
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+            ✅ No hate / harassment <br />
+            ✅ No scams / spam <br />
+            ✅ Use recent photos
+          </div>
+
+          <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
+            I agree ✅
+          </PrimaryButton>
+
+          {msg && <p className="text-sm text-zinc-300">{msg}</p>}
+        </div>
+      </OnboardingShell>
+    );
+  }
+
+  if (step === "name") {
+    return (
+      <OnboardingShell title="Your name" subtitle="What should we call you?">
+        <div className="space-y-4">
+          <input
+            value={p.first_name}
+            onChange={(e) =>
+              setP((prev) => ({ ...prev, first_name: e.target.value } as any))
+            }
+            placeholder="Enter your name"
+            className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/40 px-4 py-4 text-white outline-none"
+          />
+
+          <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
+            Continue →
+          </PrimaryButton>
+
+          {msg && <p className="text-sm text-zinc-300">{msg}</p>}
+        </div>
+      </OnboardingShell>
+    );
+  }
+
+  if (step === "birth") {
+    return (
+      <OnboardingShell
+        title="Your birthday"
+        subtitle="You must be 18+ (DD/MM/YYYY)"
+      >
+        <div className="space-y-4">
+          <input
+            value={birthInput}
+            onChange={(e) => setBirthInput(e.target.value)}
+            placeholder="DD/MM/YYYY"
+            className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/40 px-4 py-4 text-white outline-none"
+          />
+
+          <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
+            Continue →
+          </PrimaryButton>
+
+          {msg && <p className="text-sm text-zinc-300">{msg}</p>}
+        </div>
+      </OnboardingShell>
+    );
+  }
+
+  if (step === "gender") {
+    return (
+      <OnboardingShell title="Your gender" subtitle="Choose what fits you">
+        <div className="space-y-3">
+          <Pill
+            active={p.gender === "male"}
+            onClick={() => setP((prev) => ({ ...prev, gender: "male" } as any))}
+          >
+            👨 Male
+          </Pill>
+          <Pill
+            active={p.gender === "female"}
+            onClick={() =>
+              setP((prev) => ({ ...prev, gender: "female" } as any))
+            }
+          >
+            👩 Female
+          </Pill>
+          <Pill
+            active={p.gender === "nonbinary"}
+            onClick={() =>
+              setP((prev) => ({ ...prev, gender: "nonbinary" } as any))
+            }
+          >
+            🌈 Non-binary
+          </Pill>
+
+          <div className="flex items-center gap-2 text-sm text-zinc-300">
+            <input
+              type="checkbox"
+              checked={Boolean(p.show_gender)}
+              onChange={(e) =>
+                setP((prev) => ({
+                  ...prev,
+                  show_gender: e.target.checked,
+                }))
+              }
+            />
+            Show gender on profile
+          </div>
+
+          <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
+            Continue →
+          </PrimaryButton>
+
+          {msg && <p className="text-sm text-zinc-300">{msg}</p>}
+        </div>
+      </OnboardingShell>
+    );
+  }
+
+  if (step === "seeking") {
+    return (
+      <OnboardingShell title="Looking for" subtitle="Who do you want to see?">
+        <div className="space-y-3">
+          <Pill
+            active={p.seeking === "everyone"}
+            onClick={() =>
+              setP((prev) => ({ ...prev, seeking: "everyone" } as any))
+            }
+          >
+            🌍 Everyone
+          </Pill>
+          <Pill
+            active={p.seeking === "male"}
+            onClick={() => setP((prev) => ({ ...prev, seeking: "male" } as any))}
+          >
+            👨 Men
+          </Pill>
+          <Pill
+            active={p.seeking === "female"}
+            onClick={() =>
+              setP((prev) => ({ ...prev, seeking: "female" } as any))
+            }
+          >
+            👩 Women
+          </Pill>
+          <Pill
+            active={p.seeking === "nonbinary"}
+            onClick={() =>
+              setP((prev) => ({ ...prev, seeking: "nonbinary" } as any))
+            }
+          >
+            🌈 Non-binary
+          </Pill>
+
+          <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
+            Continue →
+          </PrimaryButton>
+
+          {msg && <p className="text-sm text-zinc-300">{msg}</p>}
+        </div>
+      </OnboardingShell>
+    );
+  }
+
+  if (step === "intent") {
+    return (
+      <OnboardingShell title="Intent" subtitle="What are you here for?">
+        <div className="space-y-3">
+          {intents.map((it) => (
+            <Pill
+              key={it.id}
+              active={p.intent === it.id}
+              onClick={() => setP((prev) => ({ ...prev, intent: it.id } as any))}
+            >
+              <div className="text-base font-semibold">
+                {it.emoji} {it.label}
+              </div>
+            </Pill>
+          ))}
+
+          <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
+            Continue →
+          </PrimaryButton>
+
+          {msg && <p className="text-sm text-zinc-300">{msg}</p>}
+        </div>
+      </OnboardingShell>
+    );
+  }
+
+  if (step === "distance") {
+    return (
+      <OnboardingShell title="Distance" subtitle="How far should we search?">
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+            <div className="text-sm text-zinc-300 mb-2">
+              Distance: <span className="font-semibold">{p.distance_km} km</span>
+            </div>
+
+            <input
+              type="range"
+              min={5}
+              max={200}
+              value={p.distance_km ?? 50}
+              onChange={(e) =>
+                setP((prev) => ({
+                  ...prev,
+                  distance_km: Number(e.target.value),
+                }))
+              }
+              className="w-full"
+            />
+          </div>
+
+          <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
+            Continue →
+          </PrimaryButton>
+
+          {msg && <p className="text-sm text-zinc-300">{msg}</p>}
+        </div>
+      </OnboardingShell>
+    );
+  }
+
+  // photos
+  return (
+    <OnboardingShell
+      title="Add your recent pics"
+      subtitle="Photo 1 is required. Add more to stand out."
+    >
+      <div className="grid grid-cols-3 gap-3">
+        {([1, 2, 3, 4, 5, 6] as const).map((i) => {
+          const key = `photo${i}_url` as const;
+          const url = (p as any)[key] as string;
+
+          return (
+            <label
+              key={i}
+              className={`relative aspect-[3/4] rounded-2xl border cursor-pointer overflow-hidden ${
+                i === 1 && !p.photo1_url
+                  ? "border-pink-500/70"
+                  : "border-zinc-800"
+              } bg-zinc-900/30`}
+              title={`Upload Photo ${i}`}
+            >
+              {url ? (
+                <img src={url} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full items-center justify-center text-zinc-500">
+                  <span className="text-2xl">＋</span>
+                </div>
+              )}
+
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) uploadToStorage(f, i);
+                  e.currentTarget.value = "";
+                }}
+              />
+
+              <div className="absolute bottom-2 left-2 rounded-full bg-black/50 px-2 py-1 text-[10px] text-white">
+                {i === 1 ? "Photo 1 (required)" : `Photo ${i}`}
+              </div>
+            </label>
+          );
+        })}
+      </div>
+
+      <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
+        Finish &amp; Go to Feed 🔥
+      </PrimaryButton>
+
+      {msg && <p className="text-sm text-zinc-300">{msg}</p>}
+    </OnboardingShell>
+  );
 }

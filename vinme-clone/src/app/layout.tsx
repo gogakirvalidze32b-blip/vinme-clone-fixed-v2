@@ -9,10 +9,11 @@ export default function RootLayout({
   
 }) {
   return (
-    <html lang="en">
-      <body className="min-h-screen bg-black text-white">{children}</body>
-      
-    </html>
+   <html lang="en" suppressHydrationWarning>
+  <body className="min-h-screen bg-black text-white">
+    {children}
+  </body>
+</html>
 
     
   );
