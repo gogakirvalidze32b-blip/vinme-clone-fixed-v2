@@ -17,20 +17,64 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [p, setP] = useState<Profile | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      const anonId = getOrCreateAnonId();
+useEffect(() => {
+  let cancelled = false;
 
-      const { data } = await supabase
-        .from("profiles")
-        .select("anon_id,nickname,age,city,bio,photo1_url")
-        .eq("anon_id", anonId)
-        .maybeSingle();
+  (async () => {
+    const anonId = getOrCreateAnonId();
 
-      if (data) setP(data);
+    const { data, error } = await supabase
+      .from("profiles")
+      .select(
+        `
+        anon_id,
+        nickname,
+        age,
+        city,
+        bio,
+        photo1_url,
+        onboarding_step,
+        onboarding_completed
+        `
+      )
+      .eq("anon_id", anonId)
+      .maybeSingle();
+
+    if (cancelled) return;
+
+    if (error) {
+      console.error("Profile load error:", error);
       setLoading(false);
-    })();
-  }, []);
+      return;
+    }
+
+    // ✅ თუ პროფილი არ არსებობს → onboarding სუფთად დაიწყოს
+    if (!data) {
+      setLoading(false);
+      return;
+    }
+
+    // 🚫 onboarding გვერდზე NEVER ვხტებით პროფილზე
+    // უბრალოდ ვტვირთავთ რაც უკვე შევსებულია
+    setP((prev: any) => ({
+      ...prev,
+      anon_id: data.anon_id,
+      nickname: data.nickname ?? prev.nickname,
+      age: data.age ?? prev.age,
+      city: data.city ?? "",
+      bio: data.bio ?? "",
+      photo1_url: data.photo1_url ?? "",
+      onboarding_step: data.onboarding_step ?? 1,
+      onboarding_completed: Boolean(data.onboarding_completed),
+    }));
+
+    setLoading(false);
+  })();
+
+  return () => {
+    cancelled = true;
+  };
+}, []);
 
   if (loading) {
     return (

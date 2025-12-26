@@ -95,6 +95,9 @@ function computeNextStep(profile: Profile): Step {
 }
 
 export default function OnboardingClient() {
+
+  
+  
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -107,22 +110,41 @@ export default function OnboardingClient() {
   const [userId, setUserId] = useState<string | null>(null);
   const [anonId, setAnonId] = useState<string>("");
 
+  // ✅ keep userId synced (google auth sometimes arrives after first render)
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserId(session?.user?.id ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   useEffect(() => {
     setMounted(true);
+
     (async () => {
-      // 1) session (google user თუ არის)
-      const { data: sess } = await supabase.auth.getSession();
-      const uid = sess.session?.user?.id ?? null;
-      setUserId(uid);
+   // 1) session/user
+const { data: sess } = await supabase.auth.getSession();
+const uid = sess.session?.user?.id ?? null;
+setUserId(uid);
 
-      // 2) anon id ყოველთვის გვაქვს
-      const a = getOrCreateAnonId();
-      setAnonId(a);
+// 2) anon id
+const a = getOrCreateAnonId();
+setAnonId(a);
 
-      // 3) ჯერ ვცდილობთ user_id-ით ვიპოვოთ, თუ არა — anon_id-ით
-      const { data } = await getProfileByIdentity({
-        user_id: uid ?? undefined,
-        anon_id: a,
+// ✅ 3) ENSURE ROW EXISTS (და თუ uid არის, მაშინვე bind)
+await upsertProfileByIdentity({
+  anon_id: a,
+  user_id: uid ?? null,
+  age: 18,
+} as any);
+
+// 4) ახლა უკვე წაიკითხე profile
+const { data } = await getProfileByIdentity({
+  user_id: uid ?? undefined,
+  anon_id: a,
       });
 
       if (data) {
@@ -130,15 +152,15 @@ export default function OnboardingClient() {
           ...EMPTY_PROFILE,
           ...data,
 
-          // 🔑 იდენტობები
+          // 🔑 identities
           anon_id: data.anon_id ?? a,
-          user_id: data.user_id ?? uid ?? null,
+          user_id: (data.user_id ?? uid ?? null) as any,
 
           // 👤 basic info
           nickname: data.nickname ?? generateAnonName(),
           first_name: data.first_name ?? "",
           birthdate: data.birthdate ?? "",
-          age: (data.age ?? 18) as number, // ✅ age never null
+          age: ((data.age ?? 18) as number) ?? 18,
           city: data.city ?? "",
           bio: data.bio ?? "",
 
@@ -159,28 +181,45 @@ export default function OnboardingClient() {
           photo5_url: data.photo5_url ?? "",
           photo6_url: data.photo6_url ?? "",
 
-          // ✅ ONBOARDING FLAGS
+          // ✅ flags
           onboarding_step: data.onboarding_step ?? 1,
           onboarding_completed: Boolean(data.onboarding_completed),
         };
 
         setP(merged);
 
-        // ✅ მეორე შესვლისას: თუ უკვე დასრულებულია + photo1 აქვს -> პირდაპირ feed
-        if (merged.onboarding_completed && merged.photo1_url) {
-          window.location.replace("/feed");
-          return;
+        // ✅ თუ user უკვე logined-ია და ეს პროფილი anon-ზე იყო → მივაბათ user_id
+      if (uid) {
+  await upsertProfileByIdentity({
+    anon_id: a,
+    user_id: uid,
+    age: merged.age ?? 18,
+  } as any);
         }
+
+        // ✅ მეორე შესვლაზე: დასრულებულია + photo1 აქვს -> პირდაპირ PROFILE (არა feed)
+      const shouldSkipOnboarding =
+  merged.onboarding_completed === true &&
+  (merged.onboarding_step ?? 0) >= 8 &&
+  Boolean(merged.photo1_url) &&
+  Boolean(merged.first_name?.trim()) &&
+  Boolean(merged.birthdate) &&
+  Boolean(merged.gender) &&
+  Boolean(merged.seeking) &&
+  Boolean(merged.intent) &&
+  Boolean(merged.distance_km);
+
+
 
         const next = computeNextStep(merged);
         setStep(next);
 
         if (merged.birthdate) {
           const [yyyy, mm, dd] = merged.birthdate.split("-");
-          setBirthInput(`${dd}/${mm}/${yyyy}`);
+          if (yyyy && mm && dd) setBirthInput(`${dd}/${mm}/${yyyy}`);
         }
       } else {
-        // ჯერ არ აქვს პროფილი — ვქმნით ლოკალურად (DB-ში ჯერ არ ვწერთ)
+        // ჯერ არ აქვს პროფილი — ლოკალურად ვამზადებთ
         setP((prev) => ({
           ...prev,
           anon_id: a,
@@ -208,37 +247,37 @@ export default function OnboardingClient() {
     if (step === "seeking") return Boolean(p.seeking);
     if (step === "intent") return Boolean(p.intent);
     if (step === "distance")
-      return p.distance_km >= 5 && p.distance_km <= 200;
-    if (step === "photos") return Boolean(p.photo1_url); // ✅ Photo1 required
+      return (p.distance_km ?? 0) >= 5 && (p.distance_km ?? 0) <= 200;
+    if (step === "photos") return Boolean(p.photo1_url);
     return true;
   }, [step, p, birthInput]);
-
- async function savePartial(payload: Partial<Profile>) {
+async function savePartial(payload: Partial<Profile>) {
   setSaving(true);
   setMsg("");
 
-  // 🔑 ყოველთვის ავიღოთ რეალური auth user
-  const { data: gu } = await supabase.auth.getUser();
-  const uid = gu.user?.id ?? null;
-
-  const safeAge = payload.age ?? p.age ?? 18;
+  const { data: gu, error: guErr } = await supabase.auth.getUser();
+  const uid = gu?.user?.id ?? null;
 
   const base: any = {
     anon_id: anonId || p.anon_id,
-    user_id: uid, // ✅ აღარ იქნება null Google login-ზე
-    age: safeAge,
+    user_id: uid,
     ...payload,
   };
 
-  const { error } = await upsertProfileByIdentity(base);
+  console.log("SAVE_PARTIAL payload:", base);
+  if (guErr) console.log("getUser error:", guErr);
+
+  const { data, error } = await upsertProfileByIdentity(base);
+
+  console.log("UPSERT result:", { data, error });
+
   if (error) {
     console.error(error);
-    setMsg("შეცდომა: " + error.message);
+    setMsg("DB ERROR: " + error.message);
   }
 
   setSaving(false);
-}
-
+  }
 
   // ✅ Upload helper: 6 slot, Storage -> public URL -> save DB
   async function uploadToStorage(file: File, slot: 1 | 2 | 3 | 4 | 5 | 6) {
@@ -258,7 +297,7 @@ export default function OnboardingClient() {
       const path = `${owner}/photo${slot}-${Date.now()}.${ext}`;
 
       const { error: upErr } = await supabase.storage
-        .from("photos") // 🔧 bucket name თუ სხვაა, აქ შეცვალე
+        .from("photos") // bucket name
         .upload(path, file, {
           upsert: true,
           contentType: file.type,
@@ -299,6 +338,7 @@ export default function OnboardingClient() {
       await savePartial({
         first_name,
         nickname: p.nickname || generateAnonName(),
+        onboarding_step: 2,
       });
       return setStep("birth");
     }
@@ -309,53 +349,123 @@ export default function OnboardingClient() {
       const age = calcAgeFromBirthdate(iso);
       if (age < 18) return setMsg("18+ უნდა იყო 🙂");
 
-      setP((prev) => ({ ...prev, birthdate: iso, age }));
-      await savePartial({ birthdate: iso, age });
+      await savePartial({ birthdate: iso, age, onboarding_step: 3 });
       return setStep("gender");
     }
 
     if (step === "gender") {
-      await savePartial({ gender: p.gender as any, show_gender: p.show_gender });
+      await savePartial({
+        gender: p.gender as any,
+        show_gender: p.show_gender,
+        onboarding_step: 4,
+      });
       return setStep("seeking");
     }
 
     if (step === "seeking") {
-      await savePartial({ seeking: p.seeking });
+      await savePartial({ seeking: p.seeking, onboarding_step: 5 });
       return setStep("intent");
     }
 
     if (step === "intent") {
-      await savePartial({ intent: p.intent as any });
+      await savePartial({ intent: p.intent as any, onboarding_step: 6 });
       return setStep("distance");
     }
 
     if (step === "distance") {
-      await savePartial({ distance_km: p.distance_km });
+      await savePartial({ distance_km: p.distance_km, onboarding_step: 7 });
       return setStep("photos");
     }
 
-    if (step === "photos") {
-      if (!p.photo1_url) return setMsg("Photo 1 აუცილებელია ✅");
+if (step === "photos") {
+  if (!p.photo1_url) {
+    setMsg("Photo 1 აუცილებელია ✅");
+    return;
+  }
 
-      await savePartial({
-        photo1_url: p.photo1_url,
-        photo2_url: p.photo2_url,
-        photo3_url: p.photo3_url,
-        photo4_url: p.photo4_url,
-        photo5_url: p.photo5_url,
-        photo6_url: p.photo6_url,
 
-        onboarding_step: 8,
-        onboarding_completed: true,
-      });
 
-      window.location.replace("/feed");
+
+
+
+
+
+
+  
+
+  // 1️⃣ ჯერ ჩვეულებრივი save (როგორც უკვე გაქვს)
+  await savePartial({
+    photo1_url: p.photo1_url,
+    photo2_url: p.photo2_url,
+    photo3_url: p.photo3_url,
+    photo4_url: p.photo4_url,
+    photo5_url: p.photo5_url,
+    photo6_url: p.photo6_url,
+    onboarding_step: 8,
+    onboarding_completed: true,
+  });
+// 2️⃣ FORCE UPDATE — reliable + debuggable ✅
+const { data: gu, error: guErr } = await supabase.auth.getUser();
+if (guErr) console.error("getUser error:", guErr);
+
+const uid = gu?.user?.id ?? null;
+
+const patch = {
+  onboarding_step: 8,
+  onboarding_completed: true,
+  ...(uid ? { user_id: uid } : {}),
+};
+
+// 1) try by anon_id first
+let q = supabase.from("profiles").update(patch).eq("anon_id", anonId).select().maybeSingle();
+let { data: updData, error: updErr } = await q;
+
+console.log("FORCE UPDATE by anon_id:", { updData, updErr, anonId, uid });
+
+if (updErr) {
+  setMsg("Update error: " + updErr.message);
+  return;
+}
+
+// 2) if matched 0 rows and we have uid, try by user_id
+if (!updData && uid) {
+  const retry = await supabase
+    .from("profiles")
+    .update({ onboarding_step: 8, onboarding_completed: true })
+    .eq("user_id", uid)
+    .select()
+    .maybeSingle();
+
+  updData = retry.data;
+  updErr = retry.error;
+
+  console.log("FORCE UPDATE by user_id:", { updData, updErr, uid });
+
+  if (updErr) {
+    setMsg("Update error: " + updErr.message);
+    return;
+  }
+}
+
+if (!updData) {
+  setMsg("Update matched 0 rows ❗ (anon_id/user_id mismatch ან RLS)");
+  return;
+}
+
+
+  // 3️⃣ მერე გადავდივართ პროფილზე
+  window.location.replace("/profile");
     }
   }
 
   if (!mounted) return null;
 
-  if (loading) {
+  if (loading) {const [mounted, setMounted] = useState(false);
+
+useEffect(() => {
+  setMounted(true);
+}, []);
+
     return (
       <main className="min-h-[100svh] bg-zinc-950 text-white">
         <div className="mx-auto max-w-md px-5 py-8">
@@ -593,7 +703,9 @@ export default function OnboardingClient() {
             <label
               key={i}
               className={`relative aspect-[3/4] rounded-2xl border cursor-pointer overflow-hidden ${
-                i === 1 && !p.photo1_url ? "border-pink-500/70" : "border-zinc-800"
+                i === 1 && !p.photo1_url
+                  ? "border-pink-500/70"
+                  : "border-zinc-800"
               } bg-zinc-900/30`}
               title={`Upload Photo ${i}`}
             >
@@ -625,7 +737,7 @@ export default function OnboardingClient() {
       </div>
 
       <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
-        Finish & Go to Feed 🔥
+        Finish & Go to Profile 🔥
       </PrimaryButton>
       {msg && <p className="text-sm text-zinc-300">{msg}</p>}
     </OnboardingShell>

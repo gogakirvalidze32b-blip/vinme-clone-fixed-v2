@@ -124,12 +124,19 @@ export async function upsertProfile(
 }
 
 // identity wrapper (kept for API compatibility)
-export async function upsertProfileByIdentity(
-  payload: Partial<Profile> & { anon_id: string; user_id?: string | null }
-) {
-  return upsertProfile(payload);
-}
+export async function upsertProfileByIdentity(payload: any) {
+  const hasUserId = Boolean(payload.user_id);
 
+  const onConflict = hasUserId ? "user_id" : "anon_id";
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .upsert(payload, { onConflict })
+    .select()
+    .maybeSingle();
+
+  return { data, error };
+}
 // -------------------------
 // HELPERS
 // -------------------------
