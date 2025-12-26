@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import TinderCard from "@/components/TinderCard";
 import BottomNav from "@/components/BottomNav";
 
+
 type Gender = "" | "male" | "female" | "other";
 type Seeking = "everyone" | "male" | "female" | "other";
 

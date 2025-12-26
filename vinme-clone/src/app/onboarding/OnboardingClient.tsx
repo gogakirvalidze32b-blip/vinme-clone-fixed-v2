@@ -98,7 +98,11 @@ export default function OnboardingClient() {
 
   
   
-  const [mounted, setMounted] = useState(false);
+ const [mounted, setMounted] = useState(false);
+
+useEffect(() => {
+  setMounted(true);
+}, []);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
@@ -258,26 +262,44 @@ async function savePartial(payload: Partial<Profile>) {
   const { data: gu, error: guErr } = await supabase.auth.getUser();
   const uid = gu?.user?.id ?? null;
 
+  if (guErr) console.error("getUser error:", guErr);
+
   const base: any = {
     anon_id: anonId || p.anon_id,
     user_id: uid,
     ...payload,
   };
 
-  console.log("SAVE_PARTIAL payload:", base);
-  if (guErr) console.log("getUser error:", guErr);
+  try {
+    // ✅ თუ uid გვაქვს, ყველაზე სანდოა UPDATE by user_id
+    if (uid) {
+      const { data, error } = await supabase
+        .from("profiles")
+        .update(base)
+        .eq("user_id", uid)
+        .select()
+        .maybeSingle();
 
-  const { data, error } = await upsertProfileByIdentity(base);
+      if (error) throw error;
+      if (!data) throw new Error("Update matched 0 rows (profile not found)");
 
-  console.log("UPSERT result:", { data, error });
+      setP((prev) => ({ ...prev, ...data } as any));
+      return;
+    }
 
-  if (error) {
-    console.error(error);
-    setMsg("DB ERROR: " + error.message);
+    // ✅ თუ uid არ გვაქვს, fallback: upsert by anon_id
+    const { data, error } = await upsertProfileByIdentity(base);
+    if (error) throw error;
+
+    if (data) setP((prev) => ({ ...prev, ...data } as any));
+  } catch (e: any) {
+    console.error("savePartial error:", e);
+    setMsg("DB ERROR: " + (e?.message ?? "Unknown error"));
+  } finally {
+    setSaving(false);
   }
+}
 
-  setSaving(false);
-  }
 
   // ✅ Upload helper: 6 slot, Storage -> public URL -> save DB
   async function uploadToStorage(file: File, slot: 1 | 2 | 3 | 4 | 5 | 6) {
@@ -460,19 +482,14 @@ if (!updData) {
 
   if (!mounted) return null;
 
-  if (loading) {const [mounted, setMounted] = useState(false);
-
-useEffect(() => {
-  setMounted(true);
-}, []);
-
-    return (
-      <main className="min-h-[100svh] bg-zinc-950 text-white">
-        <div className="mx-auto max-w-md px-5 py-8">
-          <div className="h-7 w-44 animate-pulse rounded bg-zinc-800" />
-          <div className="mt-6 h-40 animate-pulse rounded-2xl bg-zinc-900" />
-        </div>
-      </main>
+if (loading) {
+  return (
+    <main className="min-h-[100svh] bg-zinc-950 text-white">
+      <div className="mx-auto max-w-md px-5 py-8">
+        <div className="h-7 w-44 animate-pulse rounded bg-zinc-800" />
+        <div className="mt-6 h-40 animate-pulse rounded-2xl bg-zinc-900" />
+      </div>
+    </main>
     );
   }
 

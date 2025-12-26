@@ -7,18 +7,34 @@ import { supabase } from "@/lib/supabase";
 export default function AuthCallbackPage() {
   const router = useRouter();
 
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase.auth.getSession();
+useEffect(() => {
+  (async () => {
+    const { data } = await supabase.auth.getSession();
 
-      // თუ session უკვე არსებობს → გააგრძელე
-      if (data.session) {
-        router.replace("/feed"); // ან "/onboarding" თუ ეგ გინდა პირველად
-      } else {
-        router.replace("/login");
-      }
-    })();
-  }, [router]);
+    if (!data.session) {
+      router.replace("/login");
+      return;
+    }
+
+    const uid = data.session.user.id;
+
+    // 🔍 ვამოწმებთ პროფილს
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("onboarding_completed")
+      .eq("user_id", uid)
+      .maybeSingle();
+
+    if (!profile || !profile.onboarding_completed) {
+      // ❗ onboarding ჯერ არ დასრულებულა
+      router.replace("/onboarding");
+    } else {
+      // ✅ დასრულებულია
+      router.replace("/feed");
+    }
+  })();
+}, [router]);
+
 
   return (
     <main className="fixed inset-0 flex items-center justify-center bg-black text-white">
