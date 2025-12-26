@@ -293,11 +293,18 @@ async function savePartial(payload: Partial<Profile>) {
 
     if (data) setP((prev) => ({ ...prev, ...data } as any));
   } catch (e: any) {
-    console.error("savePartial error:", e);
-    setMsg("DB ERROR: " + (e?.message ?? "Unknown error"));
-  } finally {
-    setSaving(false);
-  }
+  const msg =
+    typeof e === "string"
+      ? e
+      : e?.message || e?.error_description || e?.hint || e?.details || null;
+
+  console.error("savePartial error:", e);
+  console.error("savePartial error (stringified):", JSON.stringify(e, null, 2));
+
+  setMsg("DB ERROR: " + (msg ?? "Unknown error"));
+} finally {
+  setSaving(false);
+}
 }
 
 
@@ -353,17 +360,18 @@ async function savePartial(payload: Partial<Profile>) {
     setMsg("");
 
     if (step === "rules") return setStep("name");
+if (step === "name") {
+  const first_name = p.first_name.trim();
+  if (first_name.length < 2) return;
 
-    if (step === "name") {
-      const first_name = p.first_name.trim();
-      if (first_name.length < 2) return;
-      await savePartial({
-        first_name,
-        nickname: p.nickname || generateAnonName(),
-        onboarding_step: 2,
-      });
-      return setStep("birth");
-    }
+  await savePartial({
+    first_name,
+    nickname: first_name, // ✅ ზუსტად user-ის შეყვანილი სახელი
+    onboarding_step: 2,
+  });
+
+  return setStep("birth");
+}
 
     if (step === "birth") {
       const iso = formatBirthInputToISO(birthInput);
@@ -399,23 +407,17 @@ async function savePartial(payload: Partial<Profile>) {
       return setStep("photos");
     }
 
+// ... ზემოთ step === "intent" / "distance" უცვლელია
+
+
+
 if (step === "photos") {
   if (!p.photo1_url) {
     setMsg("Photo 1 აუცილებელია ✅");
     return;
   }
 
-
-
-
-
-
-
-
-
-  
-
-  // 1️⃣ ჯერ ჩვეულებრივი save (როგორც უკვე გაქვს)
+  // ✅ ერთჯერადი save: ფოტოები + დასრულება
   await savePartial({
     photo1_url: p.photo1_url,
     photo2_url: p.photo2_url,
@@ -426,337 +428,70 @@ if (step === "photos") {
     onboarding_step: 8,
     onboarding_completed: true,
   });
-// 2️⃣ FORCE UPDATE — reliable + debuggable ✅
-const { data: gu, error: guErr } = await supabase.auth.getUser();
-if (guErr) console.error("getUser error:", guErr);
 
-const uid = gu?.user?.id ?? null;
-
-const patch = {
-  onboarding_step: 8,
-  onboarding_completed: true,
-  ...(uid ? { user_id: uid } : {}),
-};
-
-// 1) try by anon_id first
-let q = supabase.from("profiles").update(patch).eq("anon_id", anonId).select().maybeSingle();
-let { data: updData, error: updErr } = await q;
-
-console.log("FORCE UPDATE by anon_id:", { updData, updErr, anonId, uid });
-
-if (updErr) {
-  setMsg("Update error: " + updErr.message);
+  // ✅ დასრულების შემდეგ პირდაპირ FEED
+  window.location.replace("/feed");
   return;
 }
 
-// 2) if matched 0 rows and we have uid, try by user_id
-if (!updData && uid) {
-  const retry = await supabase
-    .from("profiles")
-    .update({ onboarding_step: 8, onboarding_completed: true })
-    .eq("user_id", uid)
-    .select()
-    .maybeSingle();
+// ... ქვემოთ render ნაწილი უცვლელია
 
-  updData = retry.data;
-  updErr = retry.error;
+// photos UI
+return (
+  <OnboardingShell
+    title="Add your recent pics"
+    subtitle="Photo 1 is required. Add more to stand out."
+  >
+    <div className="grid grid-cols-3 gap-3">
+      {([1, 2, 3, 4, 5, 6] as const).map((i) => {
+        const key = `photo${i}_url` as const;
+        const url = (p as any)[key] as string;
 
-  console.log("FORCE UPDATE by user_id:", { updData, updErr, uid });
-
-  if (updErr) {
-    setMsg("Update error: " + updErr.message);
-    return;
-  }
-}
-
-if (!updData) {
-  setMsg("Update matched 0 rows ❗ (anon_id/user_id mismatch ან RLS)");
-  return;
-}
-
-
-  // 3️⃣ მერე გადავდივართ პროფილზე
-  window.location.replace("/profile");
-    }
-  }
-
-  if (!mounted) return null;
-
-if (loading) {
-  return (
-    <main className="min-h-[100svh] bg-zinc-950 text-white">
-      <div className="mx-auto max-w-md px-5 py-8">
-        <div className="h-7 w-44 animate-pulse rounded bg-zinc-800" />
-        <div className="mt-6 h-40 animate-pulse rounded-2xl bg-zinc-900" />
-      </div>
-    </main>
-    );
-  }
-
-  if (step === "rules") {
-    return (
-      <OnboardingShell
-        title="Welcome 👋"
-        subtitle="Please follow these House Rules."
-        footer={
-          <PrimaryButton disabled={saving} onClick={goNext}>
-            I agree
-          </PrimaryButton>
-        }
-      >
-        <div className="space-y-4 text-zinc-300">
-          <div>
-            <div className="font-semibold text-white">Be yourself.</div>
-            <div className="text-sm text-zinc-400">
-              Make sure your profile is true to who you are.
-            </div>
-          </div>
-          <div>
-            <div className="font-semibold text-white">Stay safe.</div>
-            <div className="text-sm text-zinc-400">
-              Don’t be too quick to share personal info.
-            </div>
-          </div>
-          <div>
-            <div className="font-semibold text-white">Play it cool.</div>
-            <div className="text-sm text-zinc-400">Respect others.</div>
-          </div>
-          <div>
-            <div className="font-semibold text-white">Be proactive.</div>
-            <div className="text-sm text-zinc-400">Report bad behavior.</div>
-          </div>
-        </div>
-      </OnboardingShell>
-    );
-  }
-
-  if (step === "name") {
-    return (
-      <OnboardingShell
-        title="What’s your first name?"
-        subtitle="This is how it’ll appear on your profile."
-      >
-        <input
-          className="w-full rounded-xl bg-zinc-900/60 p-4 ring-1 ring-zinc-800 outline-none focus:ring-zinc-600"
-          placeholder="Enter first name"
-          value={p.first_name}
-          onChange={(e) => setP({ ...p, first_name: e.target.value })}
-        />
-        <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
-          Next
-        </PrimaryButton>
-        {msg && <p className="text-sm text-zinc-300">{msg}</p>}
-      </OnboardingShell>
-    );
-  }
-
-  if (step === "birth") {
-    return (
-      <OnboardingShell
-        title="Your b-day?"
-        subtitle="Your profile shows your age, not your birth date."
-      >
-        <input
-          inputMode="numeric"
-          className="w-full rounded-xl bg-zinc-900/60 p-4 ring-1 ring-zinc-800 outline-none focus:ring-zinc-600"
-          placeholder="DD/MM/YYYY"
-          value={birthInput}
-          onChange={(e) => setBirthInput(e.target.value)}
-        />
-        <div className="text-xs text-zinc-400">
-          {(() => {
-            const iso = formatBirthInputToISO(birthInput);
-            if (!iso) return "Format: 12/03/2002";
-            const a = calcAgeFromBirthdate(iso);
-            return a < 18 ? "18+ აუცილებელია 🙂" : `Age: ${a}`;
-          })()}
-        </div>
-        <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
-          Next
-        </PrimaryButton>
-        {msg && <p className="text-sm text-zinc-300">{msg}</p>}
-      </OnboardingShell>
-    );
-  }
-
-  if (step === "gender") {
-    return (
-      <OnboardingShell
-        title="What’s your gender?"
-        subtitle="Select one to help us show you to the right people."
-      >
-        <div className="space-y-3">
-          {(["male", "female", "nonbinary"] as Gender[]).map((g) => (
-            <Pill
-              key={g}
-              active={p.gender === g}
-              onClick={() => setP({ ...p, gender: g })}
-            >
-              <div className="text-lg font-semibold capitalize">{g}</div>
-            </Pill>
-          ))}
-        </div>
-
-        <label className="flex items-center gap-2 text-sm text-zinc-300">
-          <input
-            type="checkbox"
-            checked={p.show_gender}
-            onChange={(e) => setP({ ...p, show_gender: e.target.checked })}
-          />
-          Show gender on profile
-        </label>
-
-        <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
-          Next
-        </PrimaryButton>
-        {msg && <p className="text-sm text-zinc-300">{msg}</p>}
-      </OnboardingShell>
-    );
-  }
-
-  if (step === "seeking") {
-    return (
-      <OnboardingShell
-        title="Who are you interested in seeing?"
-        subtitle="This controls your feed filter."
-      >
-        <div className="space-y-3">
-          {(["male", "female", "nonbinary", "everyone"] as Seeking[]).map(
-            (s) => (
-              <Pill
-                key={s}
-                active={p.seeking === s}
-                onClick={() => setP({ ...p, seeking: s })}
-              >
-                <div className="text-lg font-semibold capitalize">{s}</div>
-              </Pill>
-            )
-          )}
-        </div>
-        <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
-          Next
-        </PrimaryButton>
-        {msg && <p className="text-sm text-zinc-300">{msg}</p>}
-      </OnboardingShell>
-    );
-  }
-
-  if (step === "intent") {
-    return (
-      <OnboardingShell
-        title="What are you looking for?"
-        subtitle="Pick one (you can change later)."
-      >
-        <div className="grid grid-cols-2 gap-3">
-          {intents.map((it) => (
-            <button
-              key={it.id}
-              onClick={() => setP({ ...p, intent: it.id })}
-              className={`rounded-2xl border p-4 text-left transition ${
-                p.intent === it.id
-                  ? "border-pink-500 bg-pink-500/10"
-                  : "border-zinc-800 bg-zinc-900/40 hover:bg-zinc-900/70"
-              }`}
-            >
-              <div className="text-2xl">{it.emoji}</div>
-              <div className="mt-2 text-sm font-semibold">{it.label}</div>
-            </button>
-          ))}
-        </div>
-        <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
-          Next
-        </PrimaryButton>
-        {msg && <p className="text-sm text-zinc-300">{msg}</p>}
-      </OnboardingShell>
-    );
-  }
-
-  if (step === "distance") {
-    return (
-      <OnboardingShell
-        title="Your distance preference?"
-        subtitle="Set the maximum distance for matches."
-      >
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
-          <div className="flex items-center justify-between text-sm text-zinc-300">
-            <span>Distance Preference</span>
-            <span className="text-white">{p.distance_km} km</span>
-          </div>
-          <input
-            type="range"
-            min={5}
-            max={200}
-            value={p.distance_km}
-            onChange={(e) =>
-              setP({ ...p, distance_km: Number(e.target.value) })
-            }
-            className="mt-4 w-full"
-          />
-          <div className="mt-2 text-center text-xs text-zinc-500">
-            You can change preferences later in Settings
-          </div>
-        </div>
-
-        <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
-          Next
-        </PrimaryButton>
-        {msg && <p className="text-sm text-zinc-300">{msg}</p>}
-      </OnboardingShell>
-    );
-  }
-
-  // photos
-  return (
-    <OnboardingShell
-      title="Add your recent pics"
-      subtitle="Photo 1 is required. Add more to stand out."
-    >
-      <div className="grid grid-cols-3 gap-3">
-        {([1, 2, 3, 4, 5, 6] as const).map((i) => {
-          const key = `photo${i}_url` as const;
-          const url = (p as any)[key] as string;
-
-          return (
-            <label
-              key={i}
-              className={`relative aspect-[3/4] rounded-2xl border cursor-pointer overflow-hidden ${
-                i === 1 && !p.photo1_url
-                  ? "border-pink-500/70"
-                  : "border-zinc-800"
-              } bg-zinc-900/30`}
-              title={`Upload Photo ${i}`}
-            >
-              {url ? (
-                <img src={url} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full items-center justify-center text-zinc-500">
-                  <span className="text-2xl">＋</span>
-                </div>
-              )}
-
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) uploadToStorage(f, i);
-                  e.currentTarget.value = "";
-                }}
-              />
-
-              <div className="absolute bottom-2 left-2 rounded-full bg-black/50 px-2 py-1 text-[10px] text-white">
-                {i === 1 ? "Photo 1 (required)" : `Photo ${i}`}
+        return (
+          <label
+            key={i}
+            className={`relative aspect-[3/4] rounded-2xl border cursor-pointer overflow-hidden ${
+              i === 1 && !p.photo1_url
+                ? "border-pink-500/70"
+                : "border-zinc-800"
+            } bg-zinc-900/30`}
+            title={`Upload Photo ${i}`}
+          >
+            {url ? (
+              <img src={url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full items-center justify-center text-zinc-500">
+                <span className="text-2xl">＋</span>
               </div>
-            </label>
-          );
-        })}
-      </div>
+            )}
 
-      <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
-        Finish & Go to Profile 🔥
-      </PrimaryButton>
-      {msg && <p className="text-sm text-zinc-300">{msg}</p>}
-    </OnboardingShell>
-  );
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) uploadToStorage(f, i);
+                e.currentTarget.value = "";
+              }}
+            />
+
+            <div className="absolute bottom-2 left-2 rounded-full bg-black/50 px-2 py-1 text-[10px] text-white">
+              {i === 1 ? "Photo 1 (required)" : `Photo ${i}`}
+            </div>
+          </label>
+        );
+      })}
+    </div>
+
+    <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
+      Finish & Go to Feed 🔥
+    </PrimaryButton>
+
+    {msg && <p className="text-sm text-zinc-300">{msg}</p>}
+  </OnboardingShell>
+);
+
+  }
+
 }

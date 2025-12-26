@@ -24,14 +24,12 @@ useEffect(() => {
       .select("onboarding_completed")
       .eq("user_id", uid)
       .maybeSingle();
+if (!profile || !profile.onboarding_completed) {
+  router.replace("/onboarding");
+} else {
+  router.replace("/feed");
+}
 
-    if (!profile || !profile.onboarding_completed) {
-      // ❗ onboarding ჯერ არ დასრულებულა
-      router.replace("/onboarding");
-    } else {
-      // ✅ დასრულებულია
-      router.replace("/feed");
-    }
   })();
 }, [router]);
 
