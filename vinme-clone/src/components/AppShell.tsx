@@ -6,17 +6,16 @@ import BottomNav from "@/components/BottomNav";
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
-  // აქ ჩაწერე ყველა auth გვერდი სადაც არ გინდა BottomNav
-  const hide =
-    pathname === "/" ||
+  // ✅ აქ დაამატე ყველა გვერდი სადაც პანელი არ გინდა
+  const hideNav =
+    pathname === "/login" ||
     pathname.startsWith("/auth") ||
-    pathname.startsWith("/login") ||
-    pathname.startsWith("/signup");
+    pathname.startsWith("/onboarding");
 
   return (
-    <>
-      <main className={hide ? "" : "pb-20"}>{children}</main>
-      {!hide && <BottomNav />}
-    </>
+    <div className="min-h-[100dvh] bg-black text-white">
+      <div className={hideNav ? "" : "pb-20"}>{children}</div>
+      {!hideNav && <BottomNav />}
+    </div>
   );
 }

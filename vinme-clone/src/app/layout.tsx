@@ -1,20 +1,23 @@
-// src/app/(app)/layout.tsx
-"use client";
+import "./globals.css";
+import { Noto_Sans_Georgian } from "next/font/google";
+import AppShell from "@/components/AppShell";
 
-import BottomNav from "@/components/BottomNav";
+const notoGeo = Noto_Sans_Georgian({
+  subsets: ["georgian"],
+  weight: ["400", "600", "700"],
+  variable: "--font-brand",
+});
 
-export default function AppLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-[100dvh] bg-black text-white">
-      {/* Page content */}
-      <div className="pb-20">{children}</div>
-
-      {/* ✅ ALWAYS VISIBLE */}
-      <BottomNav />
-    </div>
+    <html lang="ka" className={notoGeo.variable}>
+      <body>
+        <AppShell>{children}</AppShell>
+      </body>
+    </html>
   );
 }
