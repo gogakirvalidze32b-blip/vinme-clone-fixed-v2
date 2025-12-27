@@ -12,7 +12,9 @@ type Gender = "" | "male" | "female" | "nonbinary" | "other";
 type Seeking = "everyone" | "male" | "female" | "nonbinary" | "other";
 
 type ProfileRow = {
-  user_id: string;
+  id: string;            // ✅ profiles.id (row id)
+  user_id: string;       // ✅ auth uuid
+
   anon_id: string | null;
   nickname: string | null;
   age: number | null;
@@ -32,8 +34,10 @@ type ProfileRow = {
   created_at: string | null;
 };
 
+
 type CardUser = {
-  id: string;
+  id: string;          // profiles.id (row id)
+  user_id: string;     // ✅ profiles.user_id (auth uuid)
   anon_id?: string | null;
   nickname: string;
   age: number;
@@ -53,6 +57,7 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true);
   const [loadingTop, setLoadingTop] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  
 
   // ----------------------------
   // LOAD ME (ONLY by user_id)
@@ -278,7 +283,6 @@ export default function FeedPage() {
     if (!top) return;
     router.push(`/profile/${top.user_id}`);
   }, [router, top]);
-
 // ✅ აქ ხდება PATH -> URL
 const cardUser = useMemo<CardUser | null>(() => {
   if (!top) return null;
@@ -286,20 +290,20 @@ const cardUser = useMemo<CardUser | null>(() => {
   const raw = top.photo_url ?? top.photo1_url ?? null;
   const photo = photoSrc(raw); // ✅ PATH -> URL
 
+  return {
+    id: top.id,               // ✅ profiles row id
+    user_id: top.user_id,     // ✅ auth uuid (ეს გჭირდება match-სთვის)
+    anon_id: top.anon_id ?? null,
+    nickname: top.nickname ?? "Anonymous",
+    age: top.age ?? 18,
+    city: top.city ?? "",
+    bio: top.bio ?? "",
+    gender: (top.gender ?? "") as any,
+    seeking: (top.seeking ?? "everyone") as any,
+    photo_url: photo, // ✅ აქ უკვე URL მიდის TinderCard-ში
+  };
+}, [top]);
 
-return {
-  id: top.user_id,
-  anon_id: top.anon_id,
-  nickname: top.nickname ?? "Anonymous",
-  age: top.age ?? 18,
-  city: top.city ?? "",
-  bio: top.bio ?? "",
-  gender: (top.gender ?? "") as any,
-  seeking: (top.seeking ?? "everyone") as any,
-  photo_url: photo, // ✅ აქ უკვე URL მიდის TinderCard-ში
-};
-
-  }, [top]);
 
   // ----------------------------
   // UI
@@ -382,7 +386,7 @@ return {
         ) : (
           <TinderCard
             user={cardUser as any}
-            otherUserId={cardUser.id}
+  otherUserId={cardUser.user_id}   // ✅ ესაა სწორი (auth uuid)
             loading={loadingTop}
             onLike={onLike}
             onSkip={onSkip}

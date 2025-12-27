@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { photoSrc } from "@/lib/photos";
+import { photoSrc } from "@/lib/photos"; // ✅ ეს აკლდა
 
 type DbMessage = {
   id: string;
@@ -34,10 +34,7 @@ type DbProfile = {
  * - Otherwise assume it's a storage path -> convert to public URL from bucket
  * ⚠️ IMPORTANT: change "avatars" to your real bucket name in Supabase Storage
  */
-function resolveAvatarUrl(
-  photo_url?: string | null,
-  photo1_url?: string | null
-) {
+function resolveAvatarUrl(photo_url?: string | null, photo1_url?: string | null) {
   const raw = photo_url ?? photo1_url ?? null;
   if (!raw) return null;
 
@@ -75,12 +72,11 @@ export default function ChatThreadPage() {
     return match.user_a === meUserId ? match.user_b : match.user_a;
   }, [meUserId, match]);
 
-
-
-const otherAvatar = useMemo(() => {
-  const raw = otherProfile?.photo_url ?? otherProfile?.photo1_url ?? null;
-  return photoSrc(raw);
-}, [otherProfile?.photo_url, otherProfile?.photo1_url]);
+  // ✅ PATH/URL -> public URL helper (TS-safe)
+  const otherAvatar = useMemo(() => {
+    const raw = otherProfile?.photo1_url ?? otherProfile?.photo_url ?? null;
+    return photoSrc(raw);
+  }, [otherProfile?.photo_url, otherProfile?.photo1_url]);
 
   // ✅ init: get auth user + my anon_id from profiles
   useEffect(() => {
@@ -259,37 +255,41 @@ const otherAvatar = useMemo(() => {
           alignItems: "center",
         }}
       >
-        <button onClick={() => router.push("/chat")} style={{ padding: "6px 10px", borderRadius: 10 }}>
+        <button
+          onClick={() => router.push("/chat")}
+          style={{ padding: "6px 10px", borderRadius: 10 }}
+        >
           ← Back
         </button>
-        {otherAvatar ? (
-  <img
-    src={otherAvatar}
-    alt="avatar"
-    style={{ width: 36, height: 36, borderRadius: 999, objectFit: "cover" }}
-  />
-) : (
-  <div
-    style={{
-      width: 36,
-      height: 36,
-      borderRadius: 999,
-      background: "rgba(255,255,255,0.12)",
-    }}
-  />
-)}
-
 
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-         {otherProfile?.photo1_url ? (
-  <img
-    src={otherProfile.photo1_url}
-    alt="avatar"
-    style={{ width: 36, height: 36, borderRadius: 999, objectFit: "cover" }}
-  />
-) : (
-  <div style={{ width: 36, height: 36, borderRadius: 999, background: "rgba(255,255,255,0.12)" }} />
-)}
+          {/* Avatar */}
+          {otherAvatar ? (
+            <img
+              src={otherAvatar}
+              alt=""
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+              }}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 999,
+                objectFit: "cover",
+                flexShrink: 0,
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 999,
+                background: "rgba(255,255,255,0.12)",
+                flexShrink: 0,
+              }}
+            />
+          )}
 
           <div style={{ fontWeight: 700 }}>
             {otherProfile?.nickname ?? (loading ? "Loading…" : "Chat")}
@@ -329,7 +329,14 @@ const otherAvatar = useMemo(() => {
       </div>
 
       {/* Input */}
-      <div style={{ padding: 12, borderTop: "1px solid rgba(255,255,255,0.12)", display: "flex", gap: 8 }}>
+      <div
+        style={{
+          padding: 12,
+          borderTop: "1px solid rgba(255,255,255,0.12)",
+          display: "flex",
+          gap: 8,
+        }}
+      >
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -347,6 +354,7 @@ const otherAvatar = useMemo(() => {
             border: "1px solid rgba(255,255,255,0.10)",
           }}
         />
+
         <button
           onClick={send}
           style={{

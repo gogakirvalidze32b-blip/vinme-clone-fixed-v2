@@ -1,12 +1,19 @@
 "use client";
 
-import React, { useMemo, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { photoSrc } from "@/lib/photos";
 
+import MatchModal from "./MatchModal";
+
+
+
+// ✅ ჩასვი სადაც გაქვს რეალურად
+
+// ⚠️ თუ path სხვანაირია, შეცვალე: "@/components/MatchModal" -> "@/app/..." ან "@/components/modals/..."
 
 type CardUser = {
+  user_id: string; // ✅ ესაა target uuid
   nickname: string;
   age: number;
   city: string;
@@ -17,9 +24,11 @@ type CardUser = {
 
 type Props = {
   user: CardUser | null;
-  otherUserId?: string; // ✅ target user's auth id (uuid)
+  otherUserId?: string;
+  myPhoto?: string | null;          // ✅ დაამატე
+  myName?: string;                  // სურვილისამებრ
   loading?: boolean;
-onLike?: () => string | null | Promise<string | null>;
+  onLike?: () => string | null | Promise<string | null>;
   onSkip?: () => void | Promise<void>;
   onOpenProfile?: () => void;
   showTopTabs?: boolean;
@@ -53,7 +62,8 @@ export default function TinderCard({
   const progress = Math.min(Math.abs(x) / threshold, 1);
   const dir = x > 10 ? "right" : x < -10 ? "left" : "none";
 
-  const photoSrc =
+  // ✅ აქ იყო კონფლიქტი photoSrc სახელზე — ვტოვებ იგივე ლოგიკას, უბრალოდ ვუცვლი სახელს
+  const cardPhoto =
     typeof user?.photo_url === "string" &&
     user.photo_url.trim() &&
     !user.photo_url.includes("google.com/search")
@@ -123,16 +133,15 @@ export default function TinderCard({
     await new Promise((r) => setTimeout(r, 220));
 
     try {
-   if (action === "like") {
-  const id = await onLike?.();
-  if (id) {
-    setMatchId(String(id));
-    setShowMatch(true);
-  }
-} else {
-  await onSkip?.();
-}
-
+      if (action === "like") {
+        const id = await onLike?.();
+        if (id) {
+          setMatchId(String(id));
+          setShowMatch(true);
+        }
+      } else {
+        await onSkip?.();
+      }
     } finally {
       setX(0);
       setRot(0);
@@ -156,16 +165,16 @@ export default function TinderCard({
   }
 
   return (
-<div className="relative min-h-[100dvh] bg-black text-white overflow-x-hidden pb-28">
-  {/* ✅ CARD WRAPPER (stick to bottom above BottomNav) */}
-  <div className="relative z-10 flex w-full justify-center items-end px-0 pt-0">
-    <div
-      className="
-        relative z-10 w-full max-w-[420px]
-h-[calc(100dvh-12px)]
-        overflow-hidden
-        bg-black shadow-[0_20px_60px_rgba(0,0,0,0.55)]
-      "
+    <div className="relative min-h-[100dvh] bg-black text-white overflow-x-hidden pb-28">
+      {/* ✅ CARD WRAPPER (stick to bottom above BottomNav) */}
+      <div className="relative z-10 flex w-full justify-center items-end px-0 pt-0">
+        <div
+          className="
+            relative z-10 w-full max-w-[420px]
+            h-[calc(100dvh-12px)]
+            overflow-hidden
+            bg-black shadow-[0_20px_60px_rgba(0,0,0,0.55)]
+          "
           style={{
             transform: `translateX(${x}px) rotate(${rot}deg)`,
             transition: dragging ? "none" : "transform 180ms ease-out",
@@ -179,12 +188,12 @@ h-[calc(100dvh-12px)]
         >
           {/* ✅ IMAGE (z-0) */}
           <img
-            src={photoSrc}
+            src={cardPhoto}
             alt={user?.nickname ?? "photo"}
             className="absolute inset-0 h-full w-full object-cover object-center z-0"
             draggable={false}
-            onLoad={() => console.log("IMG LOADED ✅", photoSrc)}
-            onError={(e) => console.log("IMG ERROR ❌", photoSrc, e)}
+            onLoad={() => console.log("IMG LOADED ✅", cardPhoto)}
+            onError={(e) => console.log("IMG ERROR ❌", cardPhoto, e)}
           />
 
           {/* ✅ GRADIENT (z-10) */}
@@ -208,13 +217,11 @@ h-[calc(100dvh-12px)]
             onClick={async (e) => {
               e.stopPropagation();
 
-
-if (!otherUserId) {
-  console.warn("Missing otherUserId, skipping match create"); // optional
-  setShowMatch(true); // თუ გინდა მაინც გამოჩნდეს modal
-  return;
-}
-
+              if (!otherUserId) {
+                console.warn("Missing otherUserId, skipping match create");
+                setShowMatch(true); // თუ გინდა მაინც გამოჩნდეს modal
+                return;
+              }
 
               try {
                 const id = await getOrCreateMatch(otherUserId);
@@ -362,6 +369,23 @@ if (!otherUserId) {
         </div>
       </div>
 
+      {/* ✅ MATCH MODAL (External file) */}
+{showMatch && (
+  <MatchModal
+    onClose={closeMatch}
+    onOpenChat={() => {
+      closeMatch();
+      if (matchId) router.push(`/chat?matchId=${encodeURIComponent(matchId)}`);
+      else router.push("/chat");
+    }}
+    meName="მე"
+    matchName={user.nickname ?? "ვიღაც"}
+    myPhoto={null}
+    theirPhoto={user.photo_url ?? null}
+  />
+
+      )}
+
       {/* ✅ BOTTOM PANEL */}
       <nav className="fixed bottom-0 left-0 right-0 z-[9999]">
         <div className="w-full bg-black/60 backdrop-blur-md">
@@ -408,21 +432,6 @@ if (!otherUserId) {
           </div>
         </div>
       </nav>
-
-{showMatch && (
-  <MatchModal
-    onClose={closeMatch}
-    onOpenChat={() => {
-      if (!matchId) return;
-      router.push(`/chat/${matchId}`);
-    }}
-    meName="მე"
-    matchName="ვიღაც"
-    myPhoto="/avatar-placeholder.png"
-    theirPhoto="/avatar-placeholder.png"
-  />
-)}
-
     </div>
   );
 }
@@ -492,84 +501,3 @@ function CircleBtn({
   );
 }
 
-
-
-type PersonMini = {
-  name?: string | null;
-  photo?: string | null;
-};
-
-function MatchModal({
-  onClose,
-  onOpenChat,
-  meName = "მე",
-  matchName = "ვიღაც",
-  myPhoto = "/avatar-placeholder.png",
-  theirPhoto = "/avatar-placeholder.png",
-}: {
-  onClose: () => void;
-  onOpenChat: () => void;
-  meName?: string;
-  matchName?: string;
-  myPhoto?: string;
-  theirPhoto?: string;
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-[360px] rounded-3xl bg-zinc-950/85 px-6 py-8 ring-1 ring-white/10 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="text-center">
-          <div className="text-4xl font-extrabold tracking-tight text-orange-300">
-            შეხვვდით 🎉
-          </div>
-
-          <div className="mt-2 text-sm text-white/70">
-            <span className="font-semibold text-white/90">{meName}</span>
-            <span className="mx-2 text-white/40">და</span>
-            <span className="font-semibold text-white/90">{matchName}</span>
-          </div>
-
-          <div className="mt-1 text-sm text-white/65">
-            ყველაფერი შეხვედრით იწყება ✨
-          </div>
-        </div>
-
-        <div className="mt-6 flex items-center justify-center gap-5">
-          <img
-            src={myPhoto}
-            alt={meName}
-            className="h-20 w-20 rounded-full object-cover ring-2 ring-white/15"
-          />
-          <img
-            src={theirPhoto}
-            alt={matchName}
-            className="h-20 w-20 rounded-full object-cover ring-2 ring-white/15"
-          />
-        </div>
-
-        <div className="mt-7 space-y-3">
-          <button
-            type="button"
-            onClick={onOpenChat}
-            className="w-full rounded-2xl bg-orange-400 px-4 py-3 text-sm font-semibold text-black hover:bg-orange-300 active:scale-[0.99]"
-          >
-            მიწერა 💬
-          </button>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-full rounded-2xl px-4 py-3 text-sm font-semibold text-white/90 ring-1 ring-white/15 hover:bg-white/5 active:scale-[0.99]"
-          >
-            გაგრძელება →
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
