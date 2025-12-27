@@ -26,14 +26,15 @@ type DbProfile = {
   anon_id: string; // text
   nickname: string | null;
   photo1_url?: string | null; // PATH or URL
-  photo_url?: string | null;  // optional if you have it
+  photo_url?: string | null; // optional if you have it
 };
 
 export default function ChatThreadPage() {
-const params = useParams();
-const matchIdStr = String((params as any)?.matchId ?? "");
-const matchId = Number(matchIdStr);
-
+  const params = useParams<{ matchId: string }>();
+  const matchIdStr = params?.matchId ?? "";
+  const matchId = Number(matchIdStr);
+  console.log("params:", params);
+  console.log("matchIdStr:", matchIdStr);
 
   const router = useRouter();
 
@@ -55,33 +56,39 @@ const matchId = Number(matchIdStr);
   }, [meUserId, match]);
 
   // -------- init: get auth user + my anon_id --------
-  useEffect(() => {
-    let alive = true;
+useEffect(() => {
+  let alive = true;
 
-    (async () => {
-      const { data, error } = await supabase.auth.getUser();
-      if (error) console.error("auth.getUser error:", error);
-const u = data.user;
-if (!u || !alive) {
-  router.replace("/auth"); // ან "/"
-  return; 
-}
-      setMeUserId(u.id);
+  (async () => {
+    const { data, error } = await supabase.auth.getUser();
+    if (error) console.error("auth.getUser error:", error);
 
-      const { data: meProf, error: meProfErr } = await supabase
-        .from("profiles")
-        .select("user_id, anon_id")
-        .eq("user_id", u.id)
-        .maybeSingle();
+    const u = data.user;
+    if (!alive) return;
 
-      if (meProfErr) console.error("Me profile load error:", meProfErr);
-      if (meProf?.anon_id && alive) setMyAnon(meProf.anon_id);
-    })();
+    if (!u) {
+      setAuthChecked(true);
+      return;
+    }
 
-    return () => {
-      alive = false;
-    };
-  }, []);
+    setMeUserId(u.id);
+
+    const { data: meProf } = await supabase
+      .from("profiles")
+      .select("user_id, anon_id")
+      .eq("user_id", u.id)
+      .maybeSingle();
+
+    if (meProf?.anon_id && alive) setMyAnon(meProf.anon_id);
+
+    setAuthChecked(true); // ✅ ეს აუცილებლად უნდა შესრულდეს როცა u არსებობს
+  })();
+
+  return () => {
+    alive = false;
+  };
+}, []);
+
 
   // -------- load match + other profile --------
   useEffect(() => {
@@ -167,7 +174,9 @@ if (!u || !alive) {
         },
         (payload) => {
           const m = payload.new as DbMessage;
-          setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
+          setMessages((prev) =>
+            prev.some((x) => x.id === m.id) ? prev : [...prev, m]
+          );
         }
       )
       .subscribe();
@@ -204,167 +213,241 @@ if (!u || !alive) {
       return;
     }
 
-    setMessages((prev) => (prev.some((x) => x.id === data.id) ? prev : [...prev, data as any]));
+    setMessages((prev) =>
+      prev.some((x) => x.id === data.id) ? prev : [...prev, data as any]
+    );
   }
 
   if (!matchIdStr) return null;
 
-const NAV_H = 72;      // BottomNav სიმაღლე (თუ სხვანაირია შეცვალე)
-const INPUT_H = 76;    // input ზონის სიმაღლე (დაახლოებით)
-const HEADER_H = 56;   // header სიმაღლე
+  const NAV_H = 72; // BottomNav სიმაღლე (თუ სხვანაირია შეცვალე)
+  const INPUT_H = 76; // input ზონის სიმაღლე (დაახლოებით)
+  const HEADER_H = 56; // header სიმაღლე
 
-const titleName = otherProfile?.nickname ?? (loading ? "Loading…" : "Chat");
-const avatarPath = otherProfile?.photo1_url ?? otherProfile?.photo_url ?? null;
-const avatar = photoSrc(avatarPath);
+  const titleName = otherProfile?.nickname ?? (loading ? "Loading…" : "Chat");
+  const avatarPath = otherProfile?.photo1_url ?? otherProfile?.photo_url ?? null;
+  const avatar = photoSrc(avatarPath);
+const [avatarOk, setAvatarOk] = useState(true);
+const [authChecked, setAuthChecked] = useState(false);
 
-return (
-  <div
-    style={{
-      height: "100dvh",
-      background: "#09090b",
-      color: "white",
-      overflow: "hidden",
-    }}
-  >
-    {/* HEADER */}
+
+  const otherAnon = otherProfile?.anon_id ?? null;
+  
+
+function openOtherProfile() {
+  if (otherAnon) {
+    router.push(`/profile/${otherAnon}`);
+    return;
+  }
+  if (otherUserId) {
+    router.push(`/profile?user=${otherUserId}`);
+  }
+}
+
+if (!authChecked) return null;
+
+if (!meUserId) {
+  router.replace("/login");
+  return null;
+}
+
+  return (
     <div
       style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        height: HEADER_H,
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        padding: "0 12px",
+        height: "100dvh",
         background: "#09090b",
-        borderBottom: "1px solid rgba(255,255,255,0.12)",
-        zIndex: 50,
+        color: "white",
+        overflow: "hidden",
       }}
     >
-     <button
-  onClick={() => router.back()}
-  style={{ padding: "6px 10px", borderRadius: 10 }}
->
-  ← Back
-</button>
+      {/* HEADER */}
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: HEADER_H,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "0 12px",
+          background: "#09090b",
+          borderBottom: "1px solid rgba(255,255,255,0.12)",
+          zIndex: 50,
+        }}
+      >
+        {/* ✅ Back + Avatar + Profile pill ერთ ხაზზე */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button
+            onClick={() => router.back()}
+            style={{ padding: "10px 15px", borderRadius: 15 }}
+          >
+           ← უკან
+          </button>
+
+          {/* ✅ მრგვალი სურათი შუაში */}
+{avatar && avatarOk ? (
+  <img
+    src={avatar}
+    alt=""
+    onClick={openOtherProfile}
+    onError={() => setAvatarOk(false)}
+    style={{
+      width: 40,
+      height: 40,
+      borderRadius: "50%",
+      objectFit: "cover",
+      cursor: "pointer",
+      border: "1px solid rgba(255,255,255,0.25)",
+    }}
+  />
+) : (
+  <div
+    onClick={openOtherProfile}
+    style={{
+      width: 40,
+      height: 40,
+      borderRadius: "50%",
+      background: "rgba(255,255,255,0.18)",
+      cursor: "pointer",
+      border: "1px solid rgba(255,255,255,0.15)",
+    }}
+  />
+)}
 
 
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        {avatar ? (
-          <img
-            src={avatar}
-            alt=""
-            onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = "none")}
-            style={{ width: 36, height: 36, borderRadius: 999, objectFit: "cover" }}
-          />
-        ) : (
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 999,
-              background: "rgba(255,255,255,0.12)",
-            }}
-          />
-        )}
-        <div style={{ fontWeight: 700 }}>{titleName}</div>
-      </div>
-    </div>
-
-    {/* MESSAGES (ზუსტად შუაში, აღარ იქნება ზედა ცარიელი შავი) */}
-    <div
-      style={{
-        position: "fixed",
-        top: HEADER_H,
-        left: 0,
-        right: 0,
-        bottom: NAV_H + INPUT_H,
-        overflowY: "auto",
-        padding: 12,
-      }}
-    >
-      {messages.map((m) => {
-        const mine = m.sender_anon === myAnon;
-        return (
-          <div
-            key={m.id}
+          {/* ✅ Profile pill მარჯვნივ */}
+          <button
+            type="button"
+            onClick={openOtherProfile}
             style={{
               display: "flex",
-              justifyContent: mine ? "flex-end" : "flex-start",
-              marginBottom: 8,
+              alignItems: "center",
+              gap: 12,
+              padding: "6px 12px",
+              borderRadius: 999,
+              background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              cursor: "pointer",
             }}
           >
             <div
               style={{
-                maxWidth: "78%",
-                padding: "10px 12px",
-                borderRadius: 16,
-                background: mine ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.08)",
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
+                display: "flex",
+                flexDirection: "column",
+                lineHeight: 1.15,
               }}
             >
-              {m.content}
+              <div style={{ fontWeight: 800, fontSize: 15 }}>{titleName}</div>
+              <div style={{ fontSize: 12, opacity: 0.65 }}>View profile</div>
             </div>
-          </div>
-        );
-      })}
-      <div ref={bottomRef} />
-    </div>
+          </button>
+        </div>
+      </div>
 
-    {/* INPUT (BottomNav-ზე ზემოთ) */}
-    <div
-      style={{
-        position: "fixed",
-        left: 0,
-        right: 0,
-        bottom: NAV_H,
-        height: INPUT_H,
-        padding: 12,
-        borderTop: "1px solid rgba(255,255,255,0.12)",
-        background: "#09090b",
-        display: "flex",
-        gap: 8,
-        alignItems: "center",
-        zIndex: 60,
-      }}
-    >
-      <input
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder="Type a message…"
-        onKeyDown={(e) => e.key === "Enter" && send()}
+      {/* MESSAGES */}
+      <div
         style={{
-          flex: 1,
-          padding: "12px 12px",
-          borderRadius: 14,
-          outline: "none",
-          background: "rgba(255,255,255,0.06)",
-          color: "white",
-          border: "1px solid rgba(255,255,255,0.10)",
-        }}
-      />
-      <button
-        onClick={send}
-        style={{
-          padding: "10px 14px",
-          borderRadius: 14,
-          fontWeight: 700,
-          background: "rgba(255,255,255,0.12)",
-          border: "1px solid rgba(255,255,255,0.10)",
-          color: "white",
+          position: "fixed",
+          top: HEADER_H,
+          left: 0,
+          right: 0,
+          bottom: NAV_H + INPUT_H,
+          overflowY: "auto",
+          padding: 12,
         }}
       >
-        Send
-      </button>
-    </div>
+        {messages.map((m) => {
+          const mine = m.sender_anon === myAnon;
+          return (
+            <div
+              key={m.id}
+              style={{
+                display: "flex",
+                justifyContent: mine ? "flex-end" : "flex-start",
+                marginBottom: 8,
+              }}
+            >
+              <div
+                style={{
+                  maxWidth: "78%",
+                  padding: "10px 12px",
+                  borderRadius: 16,
+                  background: mine
+                    ? "rgba(255,255,255,0.16)"
+                    : "rgba(255,255,255,0.08)",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}
+              >
+                {m.content}
+              </div>
+            </div>
+          );
+        })}
+        <div ref={bottomRef} />
+      </div>
 
-    {/* BottomNav */}
-    <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, height: NAV_H, zIndex: 70 }}>
-      <BottomNav />
+      {/* INPUT */}
+      <div
+        style={{
+          position: "fixed",
+          left: 0,
+          right: 0,
+          bottom: NAV_H,
+          height: INPUT_H,
+          padding: 12,
+          borderTop: "1px solid rgba(255,255,255,0.12)",
+          background: "#09090b",
+          display: "flex",
+          gap: 8,
+          alignItems: "center",
+          zIndex: 60,
+        }}
+      >
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Type a message…"
+          onKeyDown={(e) => e.key === "Enter" && send()}
+          style={{
+            flex: 1,
+            padding: "12px 12px",
+            borderRadius: 14,
+            outline: "none",
+            background: "rgba(255,255,255,0.06)",
+            color: "white",
+            border: "1px solid rgba(255,255,255,0.10)",
+          }}
+        />
+        <button
+          onClick={send}
+          style={{
+            padding: "10px 14px",
+            borderRadius: 14,
+            background: "rgba(255,255,255,0.12)",
+            border: "1px solid rgba(255,255,255,0.10)",
+            color: "white",
+          }}
+        >
+          Send
+        </button>
+      </div>
+
+      {/* BottomNav */}
+      <div
+        style={{
+          position: "fixed",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: NAV_H,
+          zIndex: 70,
+        }}
+      >
+        <BottomNav />
+      </div>
     </div>
-  </div>
   );
 }
