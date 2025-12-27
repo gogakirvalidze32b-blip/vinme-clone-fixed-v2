@@ -33,8 +33,7 @@ export default function ChatThreadPage() {
   const params = useParams<{ matchId: string }>();
   const matchIdStr = params?.matchId ?? "";
   const matchId = Number(matchIdStr);
-  console.log("params:", params);
-  console.log("matchIdStr:", matchIdStr);
+
 
   const router = useRouter();
 
@@ -251,219 +250,215 @@ if (!meUserId) {
   return null;
 }
 
-  return (
+  // ✅ avatarSrc გამოთვალე RETURN-მდე (აუცილებელია!)
+const avatarSrc = photoSrc(
+  (top as any)?.photo1_url ?? (top as any)?.photo_url
+);
+
+return (
+  <div
+    style={{
+      height: "100dvh",
+      background: "#09090b",
+      color: "white",
+      overflow: "hidden",
+    }}
+  >
+    {/* HEADER */}
     <div
       style={{
-        height: "100dvh",
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        height: HEADER_H,
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: "0 12px",
         background: "#09090b",
-        color: "white",
-        overflow: "hidden",
+        borderBottom: "1px solid rgba(255,255,255,0.12)",
+        zIndex: 50,
       }}
     >
-      {/* HEADER */}
-      <div
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: HEADER_H,
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          padding: "0 12px",
-          background: "#09090b",
-          borderBottom: "1px solid rgba(255,255,255,0.12)",
-          zIndex: 50,
-        }}
-      >
-        {/* ✅ Back + Avatar + Profile pill ერთ ხაზზე */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button
-            onClick={() => router.back()}
-            style={{ padding: "10px 15px", borderRadius: 15 }}
-          >
-           ← უკან
-          </button>
+      {/* Back + Avatar + Profile pill ერთ ხაზზე */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <button
+          onClick={() => router.back()}
+          style={{ padding: "10px 15px", borderRadius: 15 }}
+        >
+          ← უკან
+        </button>
 
-          {/* ✅ მრგვალი სურათი შუაში */}
-{avatar && avatarOk ? (
-  <img
-    src={avatar}
-    alt=""
-    onClick={openOtherProfile}
-    onError={() => setAvatarOk(false)}
-    style={{
-      width: 40,
-      height: 40,
-      borderRadius: "50%",
-      objectFit: "cover",
-      cursor: "pointer",
-      border: "1px solid rgba(255,255,255,0.25)",
-    }}
-  />
-) : (
-  <div
-    onClick={openOtherProfile}
-    style={{
-      width: 40,
-      height: 40,
-      borderRadius: "50%",
-      background: "rgba(255,255,255,0.18)",
-      cursor: "pointer",
-      border: "1px solid rgba(255,255,255,0.15)",
-    }}
-  />
-)}
-
-
-          {/* ✅ Profile pill მარჯვნივ */}
-          <button
-            type="button"
+        {/* ✅ Header Avatar */}
+        {avatar && avatarOk ? (
+          <img
+            src={avatar}
+            alt=""
+            onClick={openOtherProfile}
+            onError={() => setAvatarOk(false)}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
+              objectFit: "cover",
+              cursor: "pointer",
+              border: "1px solid rgba(255,255,255,0.25)",
+            }}
+          />
+        ) : (
+          <div
             onClick={openOtherProfile}
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              padding: "6px 12px",
-              borderRadius: 999,
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.12)",
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
+              background: "rgba(255,255,255,0.18)",
               cursor: "pointer",
+              border: "1px solid rgba(255,255,255,0.15)",
             }}
-          >
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                lineHeight: 1.15,
-              }}
-            >
-              <div style={{ fontWeight: 800, fontSize: 15 }}>{titleName}</div>
-              <div style={{ fontSize: 12, opacity: 0.65 }}>View profile</div>
-            </div>
-          </button>
-        </div>
-      </div>
+          />
+        )}
 
-      {/* MESSAGES */}
-      <div
-        style={{
-          position: "fixed",
-          top: HEADER_H,
-          left: 0,
-          right: 0,
-          bottom: NAV_H + INPUT_H,
-          overflowY: "auto",
-          padding: 12,
-        }}
-      >
-      {messages.map((m) => {
-  const mine = m.sender_anon === myAnon;
-  return (
-    <div
-      key={m.id}
-      style={{
-        display: "flex",
-        justifyContent: mine ? "flex-end" : "flex-start",
-        marginBottom: 8,
-      }}
-    >
-      {/* IMAGE */}
-      <img
-        src={photoSrc(row.photo1_url ?? row.photo_url)}
-        alt=""
-        onLoad={() =>
-          console.log("✅ loaded:", photoSrc(row.photo1_url ?? row.photo_url))
-        }
-        onError={() =>
-          console.log("❌ failed:", photoSrc(row.photo1_url ?? row.photo_url))
-        }
-        style={{
-          width: 120,
-          height: 120,
-          objectFit: "cover",
-        }}
-      />
-
-      <div
-        style={{
-          maxWidth: "78%",
-          padding: "10px 12px",
-          borderRadius: 16,
-          background: mine
-            ? "rgba(255,255,255,0.16)"
-            : "rgba(255,255,255,0.08)",
-        }}
-      >
-        {m.content}
-      </div>
-    </div>
-  );
-        
-        })}
-        <div ref={bottomRef} />
-      </div>
-
-      {/* INPUT */}
-      <div
-        style={{
-          position: "fixed",
-          left: 0,
-          right: 0,
-          bottom: NAV_H,
-          height: INPUT_H,
-          padding: 12,
-          borderTop: "1px solid rgba(255,255,255,0.12)",
-          background: "#09090b",
-          display: "flex",
-          gap: 8,
-          alignItems: "center",
-          zIndex: 60,
-        }}
-      >
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Type a message…"
-          onKeyDown={(e) => e.key === "Enter" && send()}
-          style={{
-            flex: 1,
-            padding: "12px 12px",
-            borderRadius: 14,
-            outline: "none",
-            background: "rgba(255,255,255,0.06)",
-            color: "white",
-            border: "1px solid rgba(255,255,255,0.10)",
-          }}
-        />
+        {/* Profile pill */}
         <button
-          onClick={send}
+          type="button"
+          onClick={openOtherProfile}
           style={{
-            padding: "10px 14px",
-            borderRadius: 14,
-            background: "rgba(255,255,255,0.12)",
-            border: "1px solid rgba(255,255,255,0.10)",
-            color: "white",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "6px 12px",
+            borderRadius: 999,
+            background: "rgba(255,255,255,0.06)",
+            border: "1px solid rgba(255,255,255,0.12)",
+            cursor: "pointer",
           }}
         >
-          Send
+          <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.15 }}>
+            <div style={{ fontWeight: 800, fontSize: 15 }}>{titleName}</div>
+            <div style={{ fontSize: 12, opacity: 0.65 }}>View profile</div>
+          </div>
         </button>
       </div>
+    </div>
 
-      {/* BottomNav */}
-      <div
+    {/* MESSAGES */}
+    <div
+      style={{
+        position: "fixed",
+        top: HEADER_H,
+        left: 0,
+        right: 0,
+        bottom: NAV_H + INPUT_H,
+        overflowY: "auto",
+        padding: 12,
+      }}
+    >
+      {(messages ?? []).map((m: any) => {
+        const mine = m.sender_anon === myAnon;
+
+        return (
+          <div
+            key={m.id}
+            style={{
+              display: "flex",
+              justifyContent: mine ? "flex-end" : "flex-start",
+              gap: 10,
+              marginBottom: 8,
+              alignItems: "flex-end",
+            }}
+          >
+            {/* ✅ left avatar only for other person */}
+            {!mine &&
+              (avatarSrc ? (
+                <img
+                  src={avatarSrc}
+                  alt=""
+                  className="h-10 w-10 rounded-full object-cover"
+                />
+              ) : (
+                <div className="h-10 w-10 rounded-full bg-zinc-800" />
+              ))}
+
+            <div
+              style={{
+                maxWidth: "78%",
+                padding: "10px 12px",
+                borderRadius: 16,
+                background: mine
+                  ? "rgba(255,255,255,0.16)"
+                  : "rgba(255,255,255,0.08)",
+              }}
+            >
+              {m.content}
+            </div>
+          </div>
+        );
+      })}
+
+      <div ref={bottomRef} />
+    </div>
+
+    {/* INPUT */}
+    <div
+      style={{
+        position: "fixed",
+        left: 0,
+        right: 0,
+        bottom: NAV_H,
+        height: INPUT_H,
+        padding: 12,
+        borderTop: "1px solid rgba(255,255,255,0.12)",
+        background: "#09090b",
+        display: "flex",
+        gap: 8,
+        alignItems: "center",
+        zIndex: 60,
+      }}
+    >
+      <input
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Type a message…"
+        onKeyDown={(e) => e.key === "Enter" && send()}
         style={{
-          position: "fixed",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: NAV_H,
-          zIndex: 70,
+          flex: 1,
+          padding: "12px 12px",
+          borderRadius: 14,
+          outline: "none",
+          background: "rgba(255,255,255,0.06)",
+          color: "white",
+          border: "1px solid rgba(255,255,255,0.10)",
+        }}
+      />
+      <button
+        onClick={send}
+        style={{
+          padding: "10px 14px",
+          borderRadius: 14,
+          background: "rgba(255,255,255,0.12)",
+          border: "1px solid rgba(255,255,255,0.10)",
+          color: "white",
         }}
       >
-        <BottomNav />
-      </div>
+        Send
+      </button>
     </div>
-  );
+
+    {/* BottomNav */}
+    <div
+      style={{
+        position: "fixed",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: NAV_H,
+        zIndex: 70,
+      }}
+    >
+      <BottomNav />
+    </div>
+  </div>
+);
 }

@@ -48,7 +48,7 @@ export default function MatchesPage() {
 
       const { data: profs } = await supabase
         .from("profiles")
-.select("user_id, nickname, age, city, photo_url")
+.select("user_id, anon_id, nickname, birthdate, city, bio, photo1_url")
         .in("user_id", otherIds);
 
       const map = new Map<string, ProfileLite>();

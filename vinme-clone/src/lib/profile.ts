@@ -198,28 +198,38 @@ function isValidDateYMD(y: number, m: number, d: number) {
 }
 
 // ✅ Stable age calc (UTC-safe) — ONLY ONCE (no duplicates)
-export function calcAgeFromBirthdate(iso?: string | null) {
+export function calcAgeFromBirthdate(iso?: string | null): number | null {
   if (!iso) return null;
 
+  // Expect YYYY-MM-DD
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return null;
 
-  const y = Number(m[1]);
-  const mo = Number(m[2]);
-  const d = Number(m[3]);
-  if (!isValidDateYMD(y, mo, d)) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]); // 1–12
+  const day = Number(m[3]);   // 1–31
 
+  if (!isValidDateYMD(year, month, day)) return null;
+
+  // UTC-safe "today"
   const now = new Date();
-  const thisY = now.getUTCFullYear();
-  const thisM = now.getUTCMonth() + 1;
-  const thisD = now.getUTCDate();
+  const nowY = now.getUTCFullYear();
+  const nowM = now.getUTCMonth() + 1;
+  const nowD = now.getUTCDate();
 
-  let age = thisY - y;
-  const hadBirthday = thisM > mo || (thisM === mo && thisD >= d);
-  if (!hadBirthday) age -= 1;
+  let age = nowY - year;
+
+  // Check if birthday already happened this year
+  if (nowM < month || (nowM === month && nowD < day)) {
+    age -= 1;
+  }
+
+  // Safety guard (no negatives)
+  if (age < 0) return null;
 
   return age;
 }
+
 
 /**
  * ✅ Accepts:

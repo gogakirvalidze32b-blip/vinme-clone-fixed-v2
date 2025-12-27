@@ -122,11 +122,7 @@ export default function OnboardingClient() {
   const [userId, setUserId] = useState<string | null>(null);
   const [anonId, setAnonId] = useState<string>("");
 
-  // ✅ Debug Photo1 (ახლა p უკვე არსებობს)
-  useEffect(() => {
-    console.log("PHOTO1 RAW:", p.photo1_url);
-    console.log("PHOTO1 FINAL:", photoSrc(p.photo1_url));
-  }, [p.photo1_url]);
+
 
   useEffect(() => setMounted(true), []);
 
@@ -291,6 +287,9 @@ export default function OnboardingClient() {
       setSaving(false);
     }
   }
+
+
+
 async function uploadToStorage(file: File, slot: 1 | 2 | 3 | 4 | 5 | 6) {
   if (!file) return;
 
@@ -298,36 +297,29 @@ async function uploadToStorage(file: File, slot: 1 | 2 | 3 | 4 | 5 | 6) {
   setMsg("");
 
   try {
-    const uid =
-      userId ?? (await supabase.auth.getUser()).data.user?.id ?? null;
-
+    const uid = userId ?? (await supabase.auth.getUser()).data.user?.id ?? null;
     const owner = uid ?? anonId;
     if (!owner) throw new Error("No user/anon id");
 
+    const bucket = "photos";
     const ext = file.name.split(".").pop() || "jpg";
-    const path = `${owner}/photo${slot}-${Date.now()}.${ext}`;
+    const stamp = Date.now();
 
+    const key = `photo${slot}_url` as const;
+    const objectKey = `${owner}/photo${slot}-${stamp}.${ext}`;
+    const path = `${bucket}/${objectKey}`; // ✅ DB-ში ეს ინახება
+
+    // ✅ upload: key უნდა იყოს bucket-ის შიგნით (არავითარი "photos/" წინ)
     const { error: upErr } = await supabase.storage
-      .from("photos")
-      .upload(path, file, {
-        upsert: true,
-        contentType: file.type,
-        cacheControl: "3600",
-      });
+      .from(bucket)
+      .upload(objectKey, file, { upsert: true });
 
     if (upErr) throw upErr;
 
-    // ✅ DB-ში ვინახავთ PATH-ს (არა publicUrl-ს)
-    const key = `photo${slot}_url` as const;
+    const cleanPath = path.replace(/\r?\n/g, "").trim();
 
-    // ლოკალურ state-შიც PATH შევინახოთ (სჯობს, რომ ყველგან ერთნაირად იმუშაოს)
-    setP((prev) => ({ ...prev, [key]: path } as any));
-    await savePartial({ [key]: path } as any);
-
-    // ✅ სურვილისამებრ: თუ ამ გვერდზე preview გჭირდება მაშინ აქვე ააწყობ publicUrl-ს
-    // (preview-ს გამოიყენებ მხოლოდ UI-ში, DB-ში მაინც path ინახება)
-    // const { data } = supabase.storage.from("photos").getPublicUrl(path);
-    // const previewUrl = data?.publicUrl ?? null;
+    setP((prev) => ({ ...prev, [key]: cleanPath } as any));
+    await savePartial({ [key]: cleanPath } as any);
   } catch (e: any) {
     console.error("upload error:", e);
     setMsg(e?.message ?? "Upload failed");
@@ -335,7 +327,6 @@ async function uploadToStorage(file: File, slot: 1 | 2 | 3 | 4 | 5 | 6) {
     setSaving(false);
   }
 }
-
 
  
 
@@ -365,7 +356,10 @@ async function uploadToStorage(file: File, slot: 1 | 2 | 3 | 4 | 5 | 6) {
       if (age == null) return;
       if (age < 18) return setMsg("18+ უნდა იყო 🙂");
 
-      await savePartial({ birthdate: iso, age, onboarding_step: 3 });
+    await savePartial({
+  birthdate: iso,
+  onboarding_step: 3,
+});
       return setStep("gender");
     }
 
@@ -689,28 +683,41 @@ async function uploadToStorage(file: File, slot: 1 | 2 | 3 | 4 | 5 | 6) {
       title="Add your recent pics"
       subtitle="Photo 1 is required. Add more to stand out."
     >
-      <div className="grid grid-cols-3 gap-3">
-        {([1, 2, 3, 4, 5, 6] as const).map((i) => {
-          const key = `photo${i}_url` as const;
-          const url = (p as any)[key] as string;
 
-          return (
-            <label
-              key={i}
-              className={`relative aspect-[3/4] rounded-2xl border cursor-pointer overflow-hidden ${
-                i === 1 && !p.photo1_url
-                  ? "border-pink-500/70"
-                  : "border-zinc-800"
-              } bg-zinc-900/30`}
-              title={`Upload Photo ${i}`}
-            >
-              {url ? (
-                <img src={url} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full items-center justify-center text-zinc-500">
-                  <span className="text-2xl">＋</span>
-                </div>
-              )}
+      <div className="grid grid-cols-3 gap-3">
+  {([1, 2, 3, 4, 5, 6] as const).map((i) => {
+    const key = `photo${i}_url` as const;
+    
+   const raw = (p as any)[key] as string | null | undefined;
+const src = photoSrc(raw);
+
+// ✅ ეს ლოგები გვაჩვენებს უხილავ სიმბოლოებს (\n, space, etc)
+
+
+
+    return (
+      <label
+        key={i}
+        className={`relative aspect-[3/4] rounded-2xl border cursor-pointer overflow-hidden ${
+          i === 1 && !p.photo1_url ? "border-pink-500/70" : "border-zinc-800"
+        } bg-zinc-900/30`}
+        title={`Upload Photo ${i}`}
+      >
+  {src ? (
+  <img
+    src={src}
+    alt=""
+    className="h-full w-full object-cover"
+    onError={(e) => {
+      (e.currentTarget as HTMLImageElement).src = "";
+    }}
+  />
+) : (
+  <div className="flex h-full items-center justify-center text-zinc-500">
+    <span className="text-2xl">＋</span>
+  </div>
+)}
+
 
               <input
                 type="file"

@@ -5,13 +5,12 @@ import { supabase } from "@/lib/supabase";
 import { getOrCreateAnonId } from "@/lib/guest";
 import { photoSrc } from "@/lib/photos";
 import { calcAgeFromBirthdate } from "@/lib/profile";
-"@/lib/profile";
-
 
 type Profile = {
   anon_id: string;
   nickname: string;
-  age: number;
+  birthdate: string | null;      // ✅ დავამატეთ
+  age: number | null;            // ✅ null-იც შეიძლება (თუ birthdate არ არის)
   city: string;
   bio: string | null;
   photo1_url?: string | null;
@@ -36,7 +35,7 @@ export default function ProfilePage() {
           `
           anon_id,
           nickname,
-          age,
+          birthdate,
           city,
           bio,
           photo1_url,
@@ -60,15 +59,19 @@ export default function ProfilePage() {
         return;
       }
 
+      // ✅ age ყოველთვის birthdate-იდან ითვლება (DB age-ს საერთოდ არ ვიყენებთ)
+      const age = calcAgeFromBirthdate(data.birthdate ?? null);
+
       setP({
         anon_id: data.anon_id,
         nickname: data.nickname ?? "Anonymous",
-        age: calcAgeFromBirthdate(top.birthdate) ?? 18,
+        birthdate: data.birthdate ?? null,
+        age,
         city: data.city ?? "",
-        bio: data.bio ?? "",
+        bio: data.bio ?? null,
         photo1_url: data.photo1_url ?? null,
-        onboarding_step: data.onboarding_step ?? 1,
-        onboarding_completed: Boolean(data.onboarding_completed),
+        onboarding_step: data.onboarding_step ?? null,
+        onboarding_completed: data.onboarding_completed ?? null,
       });
 
       setLoading(false);
@@ -85,7 +88,6 @@ export default function ProfilePage() {
   }, [p?.photo1_url]);
 
   useEffect(() => {
-    // როცა avatarUrl შეიცვლება, თავიდან ვცადოთ
     setImgOk(true);
   }, [avatarUrl]);
 
@@ -113,8 +115,8 @@ export default function ProfilePage() {
           {avatarUrl && imgOk ? (
             <img
               src={avatarUrl}
-              alt="" // ✅ აღარ გამოჩნდება "avatar"
-              onError={() => setImgOk(false)} // ✅ თუ ვერ ჩაიტვირთა -> fallback
+              alt=""
+              onError={() => setImgOk(false)}
               className="h-24 w-24 rounded-full object-cover"
               draggable={false}
             />
@@ -122,7 +124,6 @@ export default function ProfilePage() {
             <div className="h-24 w-24 rounded-full bg-white/10" />
           )}
 
-          {/* progress badge */}
           <div className="absolute -left-1 bottom-2 rounded-full bg-pink-500 px-3 py-1 text-xs font-bold text-white">
             50%
           </div>
@@ -130,17 +131,17 @@ export default function ProfilePage() {
 
         <div>
           <h1 className="text-2xl font-bold">
-            {p.nickname}, {p.age}
+            {p.nickname}
+            {p.age != null ? `, ${p.age}` : ""} {/* ✅ თუ age null-ია, არ გამოჩნდება */}
           </h1>
+
           <p className="text-white/70">{p.city}</p>
 
           <button className="mt-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black active:scale-[0.99]">
             ✏️ Edit profile
-            
           </button>
         </div>
       </div>
-      
 
       {/* Bio */}
       {p.bio ? (
@@ -149,7 +150,7 @@ export default function ProfilePage() {
         </div>
       ) : null}
 
-      {/* Tinder-style cards */}
+      {/* Cards */}
       <div className="mt-6 grid grid-cols-3 gap-3">
         <div className="rounded-2xl bg-zinc-900 p-4 text-center">
           ⭐
@@ -165,7 +166,6 @@ export default function ProfilePage() {
           🔥
           <p className="mt-2 text-sm text-white/70">Subscriptions</p>
         </div>
-        
       </div>
     </div>
   );

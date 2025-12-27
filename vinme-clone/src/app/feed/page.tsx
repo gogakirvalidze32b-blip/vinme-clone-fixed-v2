@@ -7,6 +7,8 @@ import { calcAgeFromBirthdate } from "@/lib/profile";
 import { supabase } from "@/lib/supabase";
 import TinderCard from "@/components/TinderCard";
 import BottomNav from "@/components/BottomNav";
+import { useSearchParams } from "next/navigation";
+
 
 type Gender = "" | "male" | "female" | "nonbinary" | "other";
 type Seeking = "everyone" | "male" | "female" | "nonbinary" | "other";
@@ -122,35 +124,45 @@ export default function FeedPage() {
         const swipedIds = (swipedRows ?? [])
           .map((r: any) => r.to_id)
           .filter(Boolean) as string[];
-const { data, error } = await supabase
+
+          
+// ✅ base query (declare ONCE)
+let q = supabase
   .from("profiles")
   .select(
     "user_id, anon_id, nickname, birthdate, age, city, bio, gender, seeking, photo_url, photo1_url, created_at"
-  )
-  .neq("user_id", myUserId);
+  );
 
-        if (mySeeking && mySeeking !== "everyone") {
-          q = q.eq("gender", mySeeking);
-        }
+// ✅ exclude me (only if myUserId exists)
+if (myUserId) {
+  q = q.neq("user_id", myUserId);
+}
 
-        if (swipedIds.length > 0) {
-          // supabase "in" expects "(...)" as a string when using .not("col","in", value)
-          const inList = `(${swipedIds.map((id) => `"${id}"`).join(",")})`;
-          q = q.not("user_id", "in", inList);
-        }
+// ✅ filter by seeking (skip "everyone")
+if (mySeeking && mySeeking !== "everyone") {
+  q = q.eq("gender", mySeeking);
+}
 
-       const { data: topRows, error: topErr } = await q
+// ✅ exclude already swiped
+if (swipedIds.length > 0) {
+  const inList = `(${swipedIds.map((id) => `"${id}"`).join(",")})`;
+  q = q.not("user_id", "in", inList);
+}
+
+// ✅ get top profile
+const { data: topRow, error } = await q
   .order("created_at", { ascending: false })
   .limit(1)
   .maybeSingle();
 
+if (error) {
+  setErr(error.message);
+  setTop(null);
+} else {
+  setErr("");
+  setTop((topRow as ProfileRow | null) ?? null);
+}
 
-        if (error) {
-          setErr(error.message);
-          setTop(null);
-        } else {
-          setTop((data as ProfileRow | null) ?? null);
-        }
       } finally {
         setLoadingTop(false);
       }
@@ -289,20 +301,24 @@ const cardUser = useMemo<CardUser | null>(() => {
 
   const raw = top.photo_url ?? top.photo1_url ?? null;
   const photo = photoSrc(raw); // ✅ PATH -> URL
+return {
+  id: top.id,               // ✅ profiles row id
+  user_id: top.user_id,     // ✅ auth uuid (match-სთვის)
+  anon_id: top.anon_id ?? null,
+  nickname: top.nickname ?? "Anonymous",
 
-  return {
-    id: top.id,               // ✅ profiles row id
-    user_id: top.user_id,     // ✅ auth uuid (ეს გჭირდება match-სთვის)
-    anon_id: top.anon_id ?? null,
-    nickname: top.nickname ?? "Anonymous",
-age: calcAgeFromBirthdate(top.birthdate) ?? 18,
-    city: top.city ?? "",
-    bio: top.bio ?? "",
-    gender: (top.gender ?? "") as any,
-    seeking: (top.seeking ?? "everyone") as any,
-    photo_url: photo, // ✅ აქ უკვე URL მიდის TinderCard-ში
-  };
+  // ✅ age ითვლება birthdate-იდან (არანაირი "?? 18" fallback)
+  age: calcAgeFromBirthdate(top.birthdate),
+
+  city: top.city ?? "",
+  bio: top.bio ?? "",
+  gender: (top.gender ?? "") as any,
+  seeking: (top.seeking ?? "everyone") as any,
+
+  photo_url: photo, // ✅ აქ უკვე URL მიდის TinderCard-ში
+};
 }, [top]);
+
 
 
   // ----------------------------
