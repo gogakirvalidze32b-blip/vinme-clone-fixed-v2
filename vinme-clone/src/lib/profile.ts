@@ -118,12 +118,14 @@ export async function getProfileByIdentity(params: {
 export async function upsertProfile(payload: Partial<Profile> & { anon_id: string }) {
   const patched: any = { ...payload };
 
-  // if birthdate present, compute age (if not provided)
+  // ✅ if birthdate present, compute age (if not provided or defaulted)
   if (patched.birthdate && (patched.age == null || patched.age === 18)) {
     const a = calcAgeFromBirthdate(patched.birthdate);
     if (a != null) patched.age = a;
   }
-  if (patched.age == null) patched.age = 18;
+
+  // ✅ Don't force-write 18 unless caller explicitly sends no age and no birthdate
+  if (patched.age == null && !patched.birthdate) patched.age = 18;
 
   return supabase.from("profiles").upsert(patched, { onConflict: "anon_id" });
 }
@@ -144,7 +146,8 @@ export async function upsertProfileByIdentity(
     const a = calcAgeFromBirthdate(safe.birthdate);
     if (a != null) safe.age = a;
   }
-  if (safe.age == null) safe.age = 18;
+
+  if (safe.age == null && !safe.birthdate) safe.age = 18;
 
   // 1) Upsert by anon_id always
   const { data: row, error: upErr } = await supabase
@@ -194,8 +197,8 @@ function isValidDateYMD(y: number, m: number, d: number) {
   );
 }
 
-// ✅ Stable age calc (UTC-safe)
-export function calcAgeFromBirthdate(iso: string) {
+// ✅ Stable age calc (UTC-safe) — ONLY ONCE (no duplicates)
+export function calcAgeFromBirthdate(iso?: string | null) {
   if (!iso) return null;
 
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);

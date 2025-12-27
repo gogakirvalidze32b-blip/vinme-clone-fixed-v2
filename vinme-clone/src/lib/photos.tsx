@@ -1,11 +1,11 @@
-// src/lib/photos.ts
 export function photoSrc(path?: string | null) {
-  if (!path) return ""; // <img src> არ უნდა იყოს null
+  if (!path) return "";
   if (path.startsWith("http")) return path;
 
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!base) return ""; // თუ env არ გაქვს, არ გავტეხოთ UI
+  if (!base) return "";
 
-  // აქ path უნდა იყოს შენს bucket-ის public path, მაგალითად: "avatars/abc.jpg"
-  return `${base}/storage/v1/object/public/${path}`;
+  // ✅ შენი bucket არის "photos"
+  // path უნდა იყოს მაგალითად: "photos/abc.jpg"  ან "profiles/123/photo1.jpg"
+  return `${base}/storage/v1/object/public/photos/${path.replace(/^photos\//, "")}`;
 }

@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { photoSrc } from "@/lib/photos";
-
+import { calcAgeFromBirthdate } from "@/lib/profile";
 import { supabase } from "@/lib/supabase";
 import TinderCard from "@/components/TinderCard";
 import BottomNav from "@/components/BottomNav";
@@ -122,13 +122,12 @@ export default function FeedPage() {
         const swipedIds = (swipedRows ?? [])
           .map((r: any) => r.to_id)
           .filter(Boolean) as string[];
-
-        let q = supabase
-          .from("profiles")
-          .select(
-            "user_id, anon_id, nickname, age, city, bio, gender, seeking, photo_url, photo1_url, created_at"
-          )
-          .neq("user_id", myUserId);
+const { data, error } = await supabase
+  .from("profiles")
+  .select(
+    "user_id, anon_id, nickname, birthdate, age, city, bio, gender, seeking, photo_url, photo1_url, created_at"
+  )
+  .neq("user_id", myUserId);
 
         if (mySeeking && mySeeking !== "everyone") {
           q = q.eq("gender", mySeeking);
@@ -140,10 +139,11 @@ export default function FeedPage() {
           q = q.not("user_id", "in", inList);
         }
 
-        const { data, error } = await q
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+       const { data: topRows, error: topErr } = await q
+  .order("created_at", { ascending: false })
+  .limit(1)
+  .maybeSingle();
+
 
         if (error) {
           setErr(error.message);
@@ -295,7 +295,7 @@ const cardUser = useMemo<CardUser | null>(() => {
     user_id: top.user_id,     // ✅ auth uuid (ეს გჭირდება match-სთვის)
     anon_id: top.anon_id ?? null,
     nickname: top.nickname ?? "Anonymous",
-    age: top.age ?? 18,
+age: calcAgeFromBirthdate(top.birthdate) ?? 18,
     city: top.city ?? "",
     bio: top.bio ?? "",
     gender: (top.gender ?? "") as any,

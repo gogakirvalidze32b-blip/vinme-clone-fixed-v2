@@ -188,13 +188,30 @@ export default function TinderCard({
         >
           {/* ✅ IMAGE (z-0) */}
           <img
-            src={cardPhoto}
-            alt={user?.nickname ?? "photo"}
-            className="absolute inset-0 h-full w-full object-cover object-center z-0"
-            draggable={false}
-            onLoad={() => console.log("IMG LOADED ✅", cardPhoto)}
-            onError={(e) => console.log("IMG ERROR ❌", cardPhoto, e)}
-          />
+  src={photoSrc(row.photo1_url ?? row.photo_url)}
+  alt=""
+  onLoad={() => {
+    console.log("✅ loaded:", photoSrc(row.photo1_url ?? row.photo_url));
+  }}
+  onError={() => {
+    console.log("❌ failed:", photoSrc(row.photo1_url ?? row.photo_url));
+  }}
+/>
+return (
+  <div>
+    {/* IMAGE */}
+    <img
+      src={photoSrc(row.photo1_url ?? row.photo_url)}
+      alt=""
+      style={{
+        width: "100%",
+        height: "100%",
+        objectFit: "cover",
+      }}
+    />
+  </div>
+);
+
 
           {/* ✅ GRADIENT (z-10) */}
           <div className="absolute inset-0 z-10 bg-gradient-to-b from-black/30 via-transparent to-black/70" />

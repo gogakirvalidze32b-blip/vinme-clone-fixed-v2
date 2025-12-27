@@ -358,33 +358,49 @@ if (!meUserId) {
           padding: 12,
         }}
       >
-        {messages.map((m) => {
-          const mine = m.sender_anon === myAnon;
-          return (
-            <div
-              key={m.id}
-              style={{
-                display: "flex",
-                justifyContent: mine ? "flex-end" : "flex-start",
-                marginBottom: 8,
-              }}
-            >
-              <div
-                style={{
-                  maxWidth: "78%",
-                  padding: "10px 12px",
-                  borderRadius: 16,
-                  background: mine
-                    ? "rgba(255,255,255,0.16)"
-                    : "rgba(255,255,255,0.08)",
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                }}
-              >
-                {m.content}
-              </div>
-            </div>
-          );
+      {messages.map((m) => {
+  const mine = m.sender_anon === myAnon;
+  return (
+    <div
+      key={m.id}
+      style={{
+        display: "flex",
+        justifyContent: mine ? "flex-end" : "flex-start",
+        marginBottom: 8,
+      }}
+    >
+      {/* IMAGE */}
+      <img
+        src={photoSrc(row.photo1_url ?? row.photo_url)}
+        alt=""
+        onLoad={() =>
+          console.log("✅ loaded:", photoSrc(row.photo1_url ?? row.photo_url))
+        }
+        onError={() =>
+          console.log("❌ failed:", photoSrc(row.photo1_url ?? row.photo_url))
+        }
+        style={{
+          width: 120,
+          height: 120,
+          objectFit: "cover",
+        }}
+      />
+
+      <div
+        style={{
+          maxWidth: "78%",
+          padding: "10px 12px",
+          borderRadius: 16,
+          background: mine
+            ? "rgba(255,255,255,0.16)"
+            : "rgba(255,255,255,0.08)",
+        }}
+      >
+        {m.content}
+      </div>
+    </div>
+  );
+        
         })}
         <div ref={bottomRef} />
       </div>

@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import OnboardingShell from "@/components/OnboardingShell";
 import { photoSrc } from "@/lib/photos";
-
 import { getOrCreateAnonId, generateAnonName } from "@/lib/guest";
 import { supabase } from "@/lib/supabase";
 import {
@@ -110,10 +109,8 @@ function computeNextStep(profile: Profile): Step {
   if (!profile.photo1_url) return "photos";
   return "photos";
 }
-
 export default function OnboardingClient() {
   const [mounted, setMounted] = useState(false);
-
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
@@ -124,6 +121,12 @@ export default function OnboardingClient() {
 
   const [userId, setUserId] = useState<string | null>(null);
   const [anonId, setAnonId] = useState<string>("");
+
+  // ✅ Debug Photo1 (ახლა p უკვე არსებობს)
+  useEffect(() => {
+    console.log("PHOTO1 RAW:", p.photo1_url);
+    console.log("PHOTO1 FINAL:", photoSrc(p.photo1_url));
+  }, [p.photo1_url]);
 
   useEffect(() => setMounted(true), []);
 
@@ -187,8 +190,7 @@ export default function OnboardingClient() {
             nickname: data.nickname ?? generateAnonName(),
             first_name: data.first_name ?? "",
             birthdate: data.birthdate ?? "",
-            age: ((data.age ?? 18) as number) ?? 18,
-            city: data.city ?? "",
+            age: calcAgeFromBirthdate(top.birthdate ?? null),
             bio: data.bio ?? "",
 
             gender: (data.gender as any) ?? "",

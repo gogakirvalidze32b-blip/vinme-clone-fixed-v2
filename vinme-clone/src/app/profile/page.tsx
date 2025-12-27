@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getOrCreateAnonId } from "@/lib/guest";
 import { photoSrc } from "@/lib/photos";
+import { calcAgeFromBirthdate } from "@/lib/profile";
+"@/lib/profile";
+
 
 type Profile = {
   anon_id: string;
@@ -60,7 +63,7 @@ export default function ProfilePage() {
       setP({
         anon_id: data.anon_id,
         nickname: data.nickname ?? "Anonymous",
-        age: data.age ?? 18,
+        age: calcAgeFromBirthdate(top.birthdate) ?? 18,
         city: data.city ?? "",
         bio: data.bio ?? "",
         photo1_url: data.photo1_url ?? null,
@@ -133,9 +136,11 @@ export default function ProfilePage() {
 
           <button className="mt-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black active:scale-[0.99]">
             ✏️ Edit profile
+            
           </button>
         </div>
       </div>
+      
 
       {/* Bio */}
       {p.bio ? (
@@ -160,6 +165,7 @@ export default function ProfilePage() {
           🔥
           <p className="mt-2 text-sm text-white/70">Subscriptions</p>
         </div>
+        
       </div>
     </div>
   );
