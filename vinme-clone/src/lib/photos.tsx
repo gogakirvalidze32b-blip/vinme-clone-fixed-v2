@@ -1,12 +1,11 @@
-import { supabase } from "@/lib/supabase";
+// src/lib/photos.ts
+export function photoSrc(path?: string | null) {
+  if (!path) return ""; // <img src> არ უნდა იყოს null
+  if (path.startsWith("http")) return path;
 
-export function photoSrc(v?: string | null) {
-  if (!v) return null;
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!base) return ""; // თუ env არ გაქვს, არ გავტეხოთ UI
 
-  // თუ უკვე სრული URL-ია (ძველი მონაცემები)
-  if (v.startsWith("http://") || v.startsWith("https://")) return v;
-
-  // PATH → Public URL (შენი bucket = photos)
-  const { data } = supabase.storage.from("photos").getPublicUrl(v);
-  return data?.publicUrl ?? null;
+  // აქ path უნდა იყოს შენს bucket-ის public path, მაგალითად: "avatars/abc.jpg"
+  return `${base}/storage/v1/object/public/${path}`;
 }

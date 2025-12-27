@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { photoSrc } from "@/lib/photos";
 
-
 type MatchRow = {
   id: number; // bigint
   user_a: string; // uuid
@@ -41,86 +40,91 @@ export default function ChatPage() {
   const [matches, setMatches] = useState<MatchRow[]>([]);
   const [latestByMatch, setLatestByMatch] = useState<Record<number, MsgRow>>({});
   const [profilesByUser, setProfilesByUser] = useState<Record<string, ProfileRow>>({});
-  const [matchedUser, setMatchedUser] = useState<any>(null);
-
 
   useEffect(() => {
+    let cancelled = false;
+
     (async () => {
       setLoading(true);
+      try {
+        // 0) auth user
+        const { data: udata } = await supabase.auth.getUser();
+        const u = udata.user;
+        if (!u) return;
 
-      // 0) auth user
-      const { data: udata } = await supabase.auth.getUser();
-      const u = udata.user;
-      if (!u) {
-        setLoading(false);
-        return;
-      }
-      setMeUserId(u.id);
+        if (cancelled) return;
+        setMeUserId(u.id);
 
-      // 0.1) my profile -> anon_id
-      const { data: meProf, error: meProfErr } = await supabase
-        .from("profiles")
-.select("user_id, anon_id, nickname, photo_url, photo1_url")
-        .eq("user_id", u.id)
-        .maybeSingle();
-
-      if (meProfErr) console.error("Me profile load error:", meProfErr);
-      if (meProf?.anon_id) setMyAnon(meProf.anon_id);
-
-      // 1) load matches
-      const { data: mData, error: mErr } = await supabase
-        .from("matches")
-        .select("id,user_a,user_b,created_at")
-        .or(`user_a.eq.${u.id},user_b.eq.${u.id}`)
-        .order("created_at", { ascending: false })
-        .limit(30);
-
-      if (mErr) console.error("Matches load error:", mErr);
-      const ms = ((mData as any) ?? []) as MatchRow[];
-      setMatches(ms);
-
-      // 2) load latest messages for these matches (for history preview)
-      const matchIds = ms.map((m) => m.id);
-      if (matchIds.length) {
-        const { data: msgData, error: msgErr } = await supabase
-          .from("messages")
-          .select("id,match_id,sender_anon,content,created_at,read_at")
-          .in("match_id", matchIds)
-          .order("created_at", { ascending: false })
-          .limit(200);
-
-        if (msgErr) console.error("Messages load error:", msgErr);
-
-        const latest: Record<number, MsgRow> = {};
-        (msgData as any)?.forEach((m: MsgRow) => {
-          // since sorted desc, first encountered per match is latest
-          if (!latest[m.match_id]) latest[m.match_id] = m;
-        });
-        setLatestByMatch(latest);
-      }
-
-      // 3) load other users' profiles for avatars
-      const otherUserIds = Array.from(
-        new Set(
-          ms.map((m) => (m.user_a === u.id ? m.user_b : m.user_a)).filter(Boolean)
-        )
-      );
-
-      if (otherUserIds.length) {
-        const { data: pData, error: pErr } = await supabase
+        // 0.1) my profile -> anon_id
+        const { data: meProf, error: meProfErr } = await supabase
           .from("profiles")
-          .select("user_id,anon_id,nickname,photo1_url")
-          .in("user_id", otherUserIds);
+          .select("user_id, anon_id")
+          .eq("user_id", u.id)
+          .maybeSingle();
 
-        if (pErr) console.error("Profiles load error:", pErr);
+        if (meProfErr) console.error("Me profile load error:", meProfErr);
+        if (!cancelled) setMyAnon(meProf?.anon_id ?? "");
 
-        const map: Record<string, ProfileRow> = {};
-        (pData as any)?.forEach((p: ProfileRow) => (map[p.user_id] = p));
-        setProfilesByUser(map);
+        // 1) load matches
+        const { data: mData, error: mErr } = await supabase
+          .from("matches")
+          .select("id,user_a,user_b,created_at")
+          .or(`user_a.eq.${u.id},user_b.eq.${u.id}`)
+          .order("created_at", { ascending: false })
+          .limit(30);
+
+        if (mErr) console.error("Matches load error:", mErr);
+        const ms = ((mData as any) ?? []) as MatchRow[];
+        if (!cancelled) setMatches(ms);
+
+        // 2) load latest messages for these matches
+        const matchIds = ms.map((m) => m.id);
+        if (matchIds.length) {
+          const { data: msgData, error: msgErr } = await supabase
+            .from("messages")
+            .select("id,match_id,sender_anon,content,created_at,read_at")
+            .in("match_id", matchIds)
+            .order("created_at", { ascending: false })
+            .limit(200);
+
+          if (msgErr) console.error("Messages load error:", msgErr);
+
+          const latest: Record<number, MsgRow> = {};
+          (msgData as any)?.forEach((m: MsgRow) => {
+            if (!latest[m.match_id]) latest[m.match_id] = m;
+          });
+          if (!cancelled) setLatestByMatch(latest);
+        } else {
+          if (!cancelled) setLatestByMatch({});
+        }
+
+        // 3) load other users' profiles for avatars
+        const otherUserIds = Array.from(
+          new Set(ms.map((m) => (m.user_a === u.id ? m.user_b : m.user_a)).filter(Boolean))
+        );
+
+        if (otherUserIds.length) {
+          const { data: pData, error: pErr } = await supabase
+            .from("profiles")
+            .select("user_id,anon_id,nickname,photo1_url")
+            .in("user_id", otherUserIds);
+
+          if (pErr) console.error("Profiles load error:", pErr);
+
+          const map: Record<string, ProfileRow> = {};
+          (pData as any)?.forEach((p: ProfileRow) => (map[p.user_id] = p));
+          if (!cancelled) setProfilesByUser(map);
+        } else {
+          if (!cancelled) setProfilesByUser({});
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-
-      setLoading(false);
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const filteredMatches = useMemo(() => {
@@ -167,6 +171,7 @@ export default function ChatPage() {
             {matches.slice(0, 12).map((m) => {
               const otherId = m.user_a === meUserId ? m.user_b : m.user_a;
               const p = profilesByUser[otherId];
+              const avatar = photoSrc(p?.photo1_url ?? null);
 
               return (
                 <button
@@ -175,21 +180,12 @@ export default function ChatPage() {
                   className="relative h-28 w-20 shrink-0 overflow-hidden rounded-2xl bg-white/5 ring-1 ring-white/10"
                   title={p?.nickname ?? "Match"}
                 >
-           {(() => {
-  const avatar = photoSrc(p?.photo1_url ?? p?.photo1_url ?? null);
+                  {avatar ? (
+                    <img src={avatar} className="h-full w-full object-cover" alt="" />
+                  ) : (
+                    <div className="h-full w-full bg-zinc-800/40" />
+                  )}
 
-  return avatar ? (
-    <img
-      src={avatar}
-      className="h-full w-full object-cover"
-      alt=""
-    />
-  ) : (
-    <div className="h-full w-full bg-zinc-800/40" />
-  );
-})()}
-
-                  {/* tiny name strip */}
                   <div className="absolute inset-x-0 bottom-0 bg-black/50 px-2 py-1 text-xs font-semibold">
                     {p?.nickname ?? "Match"}
                   </div>
@@ -217,6 +213,7 @@ export default function ChatPage() {
                 const otherId = m.user_a === meUserId ? m.user_b : m.user_a;
                 const p = profilesByUser[otherId];
                 const last = latestByMatch[m.id];
+                const avatar = photoSrc(p?.photo1_url ?? null);
 
                 return (
                   <button
@@ -224,25 +221,16 @@ export default function ChatPage() {
                     className="flex w-full items-center gap-4 text-left"
                     onClick={() => router.push(`/chat/${m.id}`)}
                   >
-                  <div className="h-14 w-14 overflow-hidden rounded-full bg-white/10 ring-1 ring-white/10">
-  {(() => {
-    const avatar = photoSrc(p?.photo1_url ?? p?.photo1_url ?? null);
+                    <div className="h-14 w-14 overflow-hidden rounded-full bg-white/10 ring-1 ring-white/10">
+                      {avatar ? (
+                        <img src={avatar} className="h-full w-full object-cover" alt="" />
+                      ) : (
+                        <div className="h-full w-full bg-zinc-800/40" />
+                      )}
+                    </div>
 
-    return avatar ? (
-      <img
-        src={avatar}
-        className="h-full w-full object-cover"
-        alt=""
-      />
-    ) : (
-      <div className="h-full w-full bg-zinc-800/40" />
-    );
-  })()}
-</div>
                     <div className="flex-1">
-                      <div className="text-xl font-extrabold">
-                        {p?.nickname ?? "Unknown"}
-                      </div>
+                      <div className="text-xl font-extrabold">{p?.nickname ?? "Unknown"}</div>
 
                       <div className="mt-0.5 text-white/65 line-clamp-1">
                         {last ? (last.sender_anon === myAnon ? "You: " : "") + last.content : "No messages yet"}

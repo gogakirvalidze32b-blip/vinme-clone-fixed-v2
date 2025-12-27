@@ -1,31 +1,75 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+const NAV_H = 72; // base height (safe-area + padding კიდევ დაამატებს)
+
+export const BOTTOM_NAV_PB_CLASS =
+  "pb-[calc(72px+env(safe-area-inset-bottom))]"; // სხვა გვერდებზე convenience
 
 export default function BottomNav() {
-  const router = useRouter();
   const pathname = usePathname();
 
-  const isActive = (path: string) =>
-    pathname === path || pathname.startsWith(path + "/");
-
-  const btn = (path: string) =>
-    `text-xl transition active:scale-95 ${
-      isActive(path) ? "text-white" : "text-white/70 hover:text-white"
-    }`;
+  const items = [
+    { href: "/feed", label: "🔥", key: "feed" },
+    { href: "/matches", label: "💗", key: "matches" },
+    { href: "/chat", label: "💬", key: "chat" },
+    { href: "/profile", label: "👤", key: "profile" },
+  ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-[9999] px-4 pb-[env(safe-area-inset-bottom)]">
-      <div className="mx-auto w-full max-w-[420px]">
-        <div className="bg-black/60 backdrop-blur border-t border-white/10 shadow-[0_-10px_40px_rgba(0,0,0,0.6)]">
-          <div className="flex justify-around py-3">
-            <button onClick={() => router.push("/feed")} className={btn("/feed")}>🔥</button>
-            <button onClick={() => router.push("/likes")} className={btn("/likes")}>❤️</button>
-            <button onClick={() => router.push("/chat")} className={btn("/chat")}>💬</button>
-            <button onClick={() => router.push("/profile")} className={btn("/profile")}>👤</button>
-          </div>
-        </div>
+    <div
+      style={{
+        position: "fixed",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: NAV_H,
+        paddingBottom: "env(safe-area-inset-bottom)",
+        zIndex: 9999,
+        background: "rgba(9,9,11,0.88)",
+        backdropFilter: "blur(14px)",
+        borderTop: "1px solid rgba(255,255,255,0.08)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 480,
+          padding: "0 14px",
+          display: "flex",
+          gap: 14,
+          justifyContent: "space-around",
+          alignItems: "center",
+        }}
+      >
+        {items.map((it) => {
+          const active = pathname?.startsWith(it.href);
+          return (
+            <Link
+              key={it.key}
+              href={it.href}
+              style={{
+                width: 54,
+                height: 46,
+                borderRadius: 16,
+                display: "grid",
+                placeItems: "center",
+                textDecoration: "none",
+                color: "white",
+                background: active ? "rgba(255,255,255,0.10)" : "transparent",
+                border: active ? "1px solid rgba(255,255,255,0.14)" : "1px solid transparent",
+              }}
+            >
+              <span style={{ fontSize: 20, lineHeight: 1 }}>{it.label}</span>
+            </Link>
+          );
+        })}
       </div>
-    </nav>
+    </div>
   );
 }
