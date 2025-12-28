@@ -2,9 +2,9 @@
 
 import React, { useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 import { photoSrc } from "@/lib/photos";
 import MatchModal from "./MatchModal";
+import { supabase } from "@/lib/supabase";
 
 
 
@@ -20,6 +20,7 @@ type CardUser = {
   distanceKm?: number;
   recentlyActive?: boolean;
   photo_url?: string | null;
+  photo1_url?: string | null; //
 };
 
 type Props = {
@@ -74,35 +75,55 @@ const imgSrc = photoSrc(user?.photo1_url ?? user?.photo_url ?? null);
   const closeMatch = () => setShowMatch(false);
 
   // ✅ matches table: user_a / user_b
-  async function getOrCreateMatch(targetUserId: string) {
-    const { data: authData, error: authErr } = await supabase.auth.getUser();
-    if (authErr) throw authErr;
+  // ✅ matches table: user_a / user_b
+async function getOrCreateMatch(targetUserId: string) {
+  // 1️⃣ env guard — ყოველთვის ზემოთ
+  if (!supabase) throw new Error("Supabase env missing");
+  const sb = supabase;
 
-    const me = authData.user?.id;
-    if (!me) throw new Error("Not authenticated");
+  // 2️⃣ authenticated user
+  if (typeof window === "undefined") {
+  // build / server — არ ვიძახებთ auth-ს
+  return;
+}
+let me: string | null = null;
 
-    const { data: existing, error: findErr } = await supabase
-      .from("matches")
-      .select("id")
-      .or(
-        `and(user_a.eq.${me},user_b.eq.${targetUserId}),and(user_a.eq.${targetUserId},user_b.eq.${me})`
-      )
-      .limit(1)
-      .maybeSingle();
+if (typeof window !== "undefined") {
+  const { data, error } = await supabase.auth.getUser();
+  if (error) console.error("auth.getUser error:", error);
+  me = data.user?.id ?? null;
+}
 
-    if (findErr) throw findErr;
-    if (existing?.id) return String(existing.id);
+if (!me) throw new Error("Not authenticated");
 
-    const { data: created, error: insErr } = await supabase
-      .from("matches")
-      .insert({ user_a: me, user_b: targetUserId })
-      .select("id")
-      .single();
 
-    if (insErr) throw insErr;
-    return String(created.id);
-  }
 
+  // 3️⃣ check existing match (ორივე კომბინაცია)
+  const { data: existing, error: findErr } = await sb
+    .from("matches")
+    .select("id")
+    .or(
+      `and(user_a.eq."${me}",user_b.eq."${targetUserId}"),and(user_a.eq."${targetUserId}",user_b.eq."${me}")`
+    )
+    .limit(1)
+    .maybeSingle();
+
+  if (findErr) throw findErr;
+  if (existing?.id) return String(existing.id);
+
+  // 4️⃣ create new match
+  const { data: created, error: createErr } = await sb
+    .from("matches")
+    .insert({
+      user_a: me,
+      user_b: targetUserId,
+    })
+    .select("id")
+    .single();
+
+  if (createErr) throw createErr;
+  return String(created.id);
+}
   // ✅ EARLY RETURNS AFTER HOOKS
   if (loading === true) return <TinderSkeleton />;
   if (!user) return <TinderEmpty onOpenProfile={onOpenProfile} />;
@@ -239,13 +260,15 @@ const imgSrc = photoSrc(user?.photo1_url ?? user?.photo_url ?? null);
                 return;
               }
 
-              try {
-                const id = await getOrCreateMatch(otherUserId);
-                setMatchId(id);
-                setShowMatch(true);
-              } catch (err) {
-                console.error("TEST MATCH failed:", err);
-              }
+             try {
+  const id = await getOrCreateMatch(otherUserId);
+  if (!id) throw new Error("Match id missing");
+  setMatchId(id);
+  setShowMatch(true);
+} catch (err) {
+  console.error("TEST MATCH failed:", err);
+}
+
             }}
             className="absolute right-4 top-4 z-50 rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black shadow"
           >

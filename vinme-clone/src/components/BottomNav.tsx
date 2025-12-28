@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getOrCreateAnonId } from "@/lib/guest";
 
+
 const NAV_H = 72; // base height (safe-area + padding კიდევ დაამატებს)
 
 export const BOTTOM_NAV_PB_CLASS =

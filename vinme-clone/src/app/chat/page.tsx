@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 import { photoSrc } from "@/lib/photos";
+import { supabase } from "@/lib/supabase";
+
 
 type MatchRow = {
   id: number; // bigint
@@ -41,25 +42,51 @@ export default function ChatPage() {
   const [latestByMatch, setLatestByMatch] = useState<Record<number, MsgRow>>({});
   const [profilesByUser, setProfilesByUser] = useState<Record<string, ProfileRow>>({});
 
+  // ✅ 0) UID state სწორ ადგილას (არა useEffect-ის შიგნით)
+  const [uid, setUid] = useState<string | null>(null);
+
+  // ✅ 0) auth user (ერთხელ, mount-ზე)
   useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (!alive) return;
+
+      if (error) {
+        console.error("auth.getUser error:", error);
+        setUid(null);
+        return;
+      }
+
+      setUid(data.user?.id ?? null);
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // ✅ აქ იწყება შენი ძველი ლოგიკა — უბრალოდ uid-ზეა დამოკიდებული
+  useEffect(() => {
+    if (!uid) {
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
 
     (async () => {
       setLoading(true);
       try {
-        // 0) auth user
-        const { data: udata } = await supabase.auth.getUser();
-        const u = udata.user;
-        if (!u) return;
-
         if (cancelled) return;
-        setMeUserId(u.id);
+        setMeUserId(uid);
 
         // 0.1) my profile -> anon_id
         const { data: meProf, error: meProfErr } = await supabase
           .from("profiles")
           .select("user_id, anon_id")
-          .eq("user_id", u.id)
+          .eq("user_id", uid)
           .maybeSingle();
 
         if (meProfErr) console.error("Me profile load error:", meProfErr);
@@ -69,7 +96,7 @@ export default function ChatPage() {
         const { data: mData, error: mErr } = await supabase
           .from("matches")
           .select("id,user_a,user_b,created_at")
-          .or(`user_a.eq.${u.id},user_b.eq.${u.id}`)
+          .or(`user_a.eq.${uid},user_b.eq.${uid}`)
           .order("created_at", { ascending: false })
           .limit(30);
 
@@ -100,7 +127,7 @@ export default function ChatPage() {
 
         // 3) load other users' profiles for avatars
         const otherUserIds = Array.from(
-          new Set(ms.map((m) => (m.user_a === u.id ? m.user_b : m.user_a)).filter(Boolean))
+          new Set(ms.map((m) => (m.user_a === uid ? m.user_b : m.user_a)).filter(Boolean))
         );
 
         if (otherUserIds.length) {
@@ -120,14 +147,12 @@ export default function ChatPage() {
       } finally {
         if (!cancelled) setLoading(false);
       }
-
-      
     })();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [uid]);
 
   const filteredMatches = useMemo(() => {
     if (!q.trim()) return matches;

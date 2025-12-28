@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 
+
 export type Gender = "male" | "female" | "nonbinary";
 export type Seeking = "everyone" | Gender;
 export type Intent =

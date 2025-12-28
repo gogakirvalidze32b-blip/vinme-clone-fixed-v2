@@ -1,9 +1,17 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-// ⚠️ Server-only: never import this in "use client" files
-const url = process.env.SUPABASE_URL!;
-const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+let _admin: SupabaseClient | null = null;
 
-export const supabaseAdmin = createClient(url, serviceRole, {
-  auth: { persistSession: false },
-});
+export function getSupabaseAdmin(): SupabaseClient {
+  if (_admin) return _admin;
+
+  const url = process.env.SUPABASE_URL;
+  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !serviceRole) {
+    throw new Error("Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (server env vars)");
+  }
+
+  _admin = createClient(url, serviceRole);
+  return _admin;
+}

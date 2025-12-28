@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { photoSrc } from "@/lib/photos";
 
+
+
 export default function AuthCallbackPage() {
   const router = useRouter();
   const [msg, setMsg] = useState("Loading…");

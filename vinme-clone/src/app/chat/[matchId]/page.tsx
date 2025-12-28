@@ -2,9 +2,10 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 import BottomNav from "@/components/BottomNav";
 import { photoSrc } from "@/lib/photos";
+import { supabase } from "@/lib/supabase";
+
 
 type DbMessage = {
   id: string;
@@ -59,7 +60,7 @@ useEffect(() => {
   let alive = true;
 
   (async () => {
-    const { data, error } = await supabase.auth.getUser();
+const { data, error } = await supabase.auth.getUser();
     if (error) console.error("auth.getUser error:", error);
 
     const u = data.user;
@@ -72,8 +73,9 @@ useEffect(() => {
 
     setMeUserId(u.id);
 
-    const { data: meProf } = await supabase
-      .from("profiles")
+   const { data: meProf } = await supabase
+  .from("profiles")
+
       .select("user_id, anon_id")
       .eq("user_id", u.id)
       .maybeSingle();
@@ -99,7 +101,8 @@ useEffect(() => {
     (async () => {
       setLoading(true);
 
-      const { data: matchData, error: matchErr } = await supabase
+const { data: matchData, error: matchErr } = await supabase
+  
         .from("matches")
         .select("id, user_a, user_b")
         .eq("id", matchId)

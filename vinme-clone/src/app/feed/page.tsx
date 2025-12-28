@@ -4,10 +4,13 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { photoSrc } from "@/lib/photos";
 import { calcAgeFromBirthdate } from "@/lib/profile";
-import { supabase } from "@/lib/supabase";
 import TinderCard from "@/components/TinderCard";
 import BottomNav from "@/components/BottomNav";
 import { useSearchParams } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+
+
+
 
 
 
@@ -39,16 +42,15 @@ type ProfileRow = {
 
 
 type CardUser = {
-  id: string;          // profiles.id (row id)
-  user_id: string;     // ✅ profiles.user_id (auth uuid)
-  anon_id?: string | null;
+  id: number;
+  user_id: string;
+  anon_id: string | null;
   nickname: string;
   age: number;
   city: string;
-  bio: string;
-  gender: Gender;
-  seeking: Seeking;
+  bio?: string;
   photo_url?: string | null;
+  photo1_url?: string | null;
 };
 
 export default function FeedPage() {
@@ -218,20 +220,22 @@ if (error) {
   // ACTIONS
   // ----------------------------
   const writeSwipe = useCallback(
-    async (action: "like" | "skip", targetUserId: string) => {
-      if (!me?.user_id) return false;
+  async (action: "like" | "skip", targetUserId: string) => {
+    if (!me?.user_id) return false;
 
-    const { error } = await supabase.from("messages").insert({
-  match_id: matchId,              // number (bigint)
-  sender_anon: myAnonId,          // string
-  content: text.trim(),           // string
-});
+    const payload = {
+      from_user_id: me.user_id,
+      to_user_id: targetUserId,
+      action, // "like" | "skip"
+    };
 
-      if (error) console.warn("swipe insert error:", error.message);
-      return !error;
-    },
-    [me?.user_id]
-  );
+    const { error } = await supabase.from("swipes").insert(payload as any);
+
+    if (error) console.warn("swipe insert error:", error.message);
+    return !error;
+  },
+  [me?.user_id]
+);
 
   const tryMakeMatch = useCallback(
     async (targetUserId: string) => {
@@ -297,28 +301,35 @@ if (error) {
     router.push(`/profile/${top.user_id}`);
   }, [router, top]);
 // ✅ აქ ხდება PATH -> URL
-const cardUser = useMemo<CardUser | null>(() => {
+
+type CardUser = {
+  id: string;                 // ✅ string, რადგან top.id string-ია
+  user_id: string;
+  anon_id: string | null;
+  nickname: string;
+  age: number;
+  city: string;
+  bio: string;
+  photo_url: string | null;   // ✅ URL string ან null
+};
+const cardUser: CardUser | null = useMemo(() => {
   if (!top) return null;
 
   const raw = top.photo_url ?? top.photo1_url ?? null;
-  const photo = photoSrc(raw); // ✅ PATH -> URL
-return {
-  id: top.id,               // ✅ profiles row id
-  user_id: top.user_id,     // ✅ auth uuid (match-სთვის)
-  anon_id: top.anon_id ?? null,
-  nickname: top.nickname ?? "Anonymous",
+  const photo = photoSrc(raw);
 
-  // ✅ age ითვლება birthdate-იდან (არანაირი "?? 18" fallback)
-  age: calcAgeFromBirthdate(top.birthdate),
-
-  city: top.city ?? "",
-  bio: top.bio ?? "",
-  gender: (top.gender ?? "") as any,
-  seeking: (top.seeking ?? "everyone") as any,
-
-  photo_url: photo, // ✅ აქ უკვე URL მიდის TinderCard-ში
-};
+  return {
+    id: top.id,
+    user_id: top.user_id,
+    anon_id: top.anon_id ?? null,
+    nickname: top.nickname ?? "Anonymous",
+    age: top.age ?? 18,
+    city: top.city ?? "",
+    bio: top.bio ?? "",
+    photo_url: photo,
+  };
 }, [top]);
+
 
 
 

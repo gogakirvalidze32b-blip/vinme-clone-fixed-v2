@@ -2,9 +2,9 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 import { getOrCreateAnonId } from "@/lib/guest";
 import { upsertProfileByIdentity } from "@/lib/profile";
+import { supabase } from "@/lib/supabase";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -14,8 +14,10 @@ export default function AuthCallbackPage() {
 
     (async () => {
       try {
-        const { data, error: sErr } = await supabase.auth.getSession();
-        if (sErr) throw sErr;
+      if (!supabase) return;
+
+const { data, error: sErr } = await supabase.auth.getSession();
+if (sErr) throw sErr;
 
         if (!data.session?.user?.id) {
           router.replace("/login");

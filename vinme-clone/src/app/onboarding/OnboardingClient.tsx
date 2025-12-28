@@ -5,6 +5,7 @@ import OnboardingShell from "@/components/OnboardingShell";
 import { photoSrc } from "@/lib/photos";
 import { getOrCreateAnonId, generateAnonName } from "@/lib/guest";
 import { supabase } from "@/lib/supabase";
+
 import {
   EMPTY_PROFILE,
   Profile,
@@ -186,7 +187,7 @@ export default function OnboardingClient() {
             nickname: data.nickname ?? generateAnonName(),
             first_name: data.first_name ?? "",
             birthdate: data.birthdate ?? "",
-            age: calcAgeFromBirthdate(top.birthdate ?? null),
+age: calcAgeFromBirthdate(data.birthdate ?? null),
             bio: data.bio ?? "",
 
             gender: (data.gender as any) ?? "",
@@ -297,7 +298,11 @@ async function uploadToStorage(file: File, slot: 1 | 2 | 3 | 4 | 5 | 6) {
   setMsg("");
 
   try {
-    const uid = userId ?? (await supabase.auth.getUser()).data.user?.id ?? null;
+    const uid =
+  userId ??
+  (await supabase.auth.getUser()).data.user?.id ??
+  null;
+
     const owner = uid ?? anonId;
     if (!owner) throw new Error("No user/anon id");
 
@@ -311,8 +316,9 @@ async function uploadToStorage(file: File, slot: 1 | 2 | 3 | 4 | 5 | 6) {
 
     // ✅ upload: key უნდა იყოს bucket-ის შიგნით (არავითარი "photos/" წინ)
     const { error: upErr } = await supabase.storage
-      .from(bucket)
-      .upload(objectKey, file, { upsert: true });
+  .from(bucket)
+  .upload(objectKey, file, { upsert: true });
+
 
     if (upErr) throw upErr;
 
@@ -398,7 +404,7 @@ async function uploadToStorage(file: File, slot: 1 | 2 | 3 | 4 | 5 | 6) {
       setMsg("");
 
       try {
-        const { data: sess, error: sErr } = await supabase.auth.getSession();
+const { data: sess, error: sErr } = await supabase.auth.getSession();
         if (sErr) throw sErr;
 
         const uid = sess.session?.user?.id ?? null;

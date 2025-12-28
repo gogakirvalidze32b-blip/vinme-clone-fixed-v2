@@ -1,11 +1,6 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  reactStrictMode: true,
-  allowedDevOrigins: [
-    "192.168.100.2",
-    "localhost",
-    "127.0.0.1",
-  ],
-};
+const nextConfig = {};
+
+console.log("ENV SUPABASE_URL =", process.env.NEXT_PUBLIC_SUPABASE_URL);
 
 export default nextConfig;
