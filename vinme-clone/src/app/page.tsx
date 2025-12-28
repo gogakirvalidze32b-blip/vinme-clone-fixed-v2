@@ -1,8 +1,5 @@
+import { redirect } from "next/navigation";
+
 export default function Home() {
-  return (
-    <main style={{ padding: 40 }}>
-      <h1>Vinme 👋</h1>
-      <p>Welcome to Vinme</p>
-    </main>
-  );
+  redirect("/feed"); // თუ შენთან მთავარი გვერდი სხვაა, შეცვალე მაგალითად "/login"
 }
