@@ -3,7 +3,7 @@
 import React, { useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-
+import { photoSrc } from "@/lib/photos";
 import MatchModal from "./MatchModal";
 
 
@@ -48,6 +48,7 @@ export default function TinderCard({
   const [rot, setRot] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [animating, setAnimating] = useState(false);
+const imgSrc = photoSrc(user?.photo1_url ?? user?.photo_url ?? null);
 
   const [showMatch, setShowMatch] = useState(false);
   const [matchId, setMatchId] = useState<string | null>(null);
@@ -187,26 +188,24 @@ export default function TinderCard({
           onPointerCancel={onPointerUp}
         >
           {/* ✅ IMAGE (z-0) */}
-          <img
-  src={photoSrc(row.photo1_url ?? row.photo_url)}
-  alt=""
-  onLoad={() => {
-    console.log("✅ loaded:", photoSrc(row.photo1_url ?? row.photo_url));
-  }}
-  onError={() => {
-    console.log("❌ failed:", photoSrc(row.photo1_url ?? row.photo_url));
-  }}
-/>
-return (
-  <div>
+   return (
+  
     {/* IMAGE */}
+    <div className="absolute inset-0">
+
     <img
-      src={photoSrc(row.photo1_url ?? row.photo_url)}
-      alt=""
-      style={{
-        width: "100%",
-        height: "100%",
-        objectFit: "cover",
+   
+    src={photoSrc(user.photo1_url ?? user.photo_url)}
+    alt=""
+    className="w-full h-full object-cover"
+    draggable={false}
+  
+    
+      onLoad={() => {
+        console.log("✅ loaded:", photoSrc(user.photo1_url ?? user.photo_url));
+      }}
+      onError={() => {
+        console.log("❌ failed:", photoSrc(user.photo1_url ?? user.photo_url));
       }}
     />
   </div>

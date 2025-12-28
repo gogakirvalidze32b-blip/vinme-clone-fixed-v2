@@ -10,6 +10,7 @@ import BottomNav from "@/components/BottomNav";
 import { useSearchParams } from "next/navigation";
 
 
+
 type Gender = "" | "male" | "female" | "nonbinary" | "other";
 type Seeking = "everyone" | "male" | "female" | "nonbinary" | "other";
 
@@ -220,11 +221,11 @@ if (error) {
     async (action: "like" | "skip", targetUserId: string) => {
       if (!me?.user_id) return false;
 
-      const { error } = await supabase.from("swipes").insert({
-        from_id: me.user_id,
-        to_id: targetUserId,
-        action,
-      });
+    const { error } = await supabase.from("messages").insert({
+  match_id: matchId,              // number (bigint)
+  sender_anon: myAnonId,          // string
+  content: text.trim(),           // string
+});
 
       if (error) console.warn("swipe insert error:", error.message);
       return !error;
@@ -362,58 +363,60 @@ return {
       </div>
     );
   }
-
-  return (
-    <div className="min-h-[100dvh] flex flex-col bg-black text-white">
-      <div className="flex-1 relative px-0 pb-28 overflow-hidden">
-        {err ? (
-          <div className="w-full h-full px-6 flex items-center justify-center text-center">
-            <div>
-              <div className="text-red-400 font-semibold mb-2">Error</div>
-              <div className="text-sm opacity-90 break-words">{err}</div>
+return (
+  <div className="min-h-[100dvh] flex flex-col bg-black text-white">
+    {/* ✅ CARD AREA: take full screen minus bottom nav */}
+    <div className="relative h-[calc(100dvh-72px)] px-0 overflow-hidden">
+      {err ? (
+        <div className="w-full h-full px-6 flex items-center justify-center text-center">
+          <div>
+            <div className="text-red-400 font-semibold mb-2">Error</div>
+            <div className="text-sm opacity-90 break-words">{err}</div>
+            <button
+              className="mt-4 px-4 py-2 rounded-lg bg-white text-black active:scale-[0.99]"
+              onClick={() => router.refresh()}
+            >
+              Reload
+            </button>
+          </div>
+        </div>
+      ) : !cardUser ? (
+        <div className="w-full h-full px-6 flex items-center justify-center text-center">
+          <div>
+            <div className="text-lg font-semibold">No profiles found 😅</div>
+            <div className="mt-4 flex gap-3 justify-center">
               <button
-                className="mt-4 px-4 py-2 rounded-lg bg-white text-black active:scale-[0.99]"
-                onClick={() => router.refresh()}
+                className="px-4 py-2 rounded-xl bg-neutral-800 active:scale-[0.99]"
+                onClick={() => router.push("/")}
               >
-                Reload
+                Home
+              </button>
+              <button
+                className="px-4 py-2 rounded-xl bg-white text-black active:scale-[0.99]"
+                onClick={() => router.push("/settings")}
+              >
+                Settings
               </button>
             </div>
           </div>
-        ) : !cardUser ? (
-          <div className="w-full h-full px-6 flex items-center justify-center text-center">
-            <div>
-              <div className="text-lg font-semibold">No profiles found 😅</div>
-              <div className="mt-4 flex gap-3 justify-center">
-                <button
-                  className="px-4 py-2 rounded-xl bg-neutral-800 active:scale-[0.99]"
-                  onClick={() => router.push("/")}
-                >
-                  Home
-                </button>
-                <button
-                  className="px-4 py-2 rounded-xl bg-white text-black active:scale-[0.99]"
-                  onClick={() => router.push("/settings")}
-                >
-                  Settings
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <TinderCard
-            user={cardUser as any}
-  otherUserId={cardUser.user_id}   // ✅ ესაა სწორი (auth uuid)
-            loading={loadingTop}
-            onLike={onLike}
-            onSkip={onSkip}
-            onOpenProfile={onOpenProfile}
-          />
-        )}
-      </div>
-
-      <div className="fixed bottom-0 left-0 right-0">
-        <BottomNav />
-      </div>
+        </div>
+      ) : (
+        <TinderCard
+          user={cardUser as any}
+          otherUserId={cardUser.user_id} // ✅ auth uuid
+          loading={loadingTop}
+          onLike={onLike}
+          onSkip={onSkip}
+          onOpenProfile={onOpenProfile}
+        />
+      )}
     </div>
-  );
+
+    {/* bottom nav */}
+    <div className="fixed bottom-0 left-0 right-0">
+      <BottomNav />
+    </div>
+  </div>
+);
 }
+~
