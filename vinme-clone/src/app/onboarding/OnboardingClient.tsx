@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+
 import OnboardingShell from "@/components/OnboardingShell";
 import { photoSrc } from "@/lib/photos";
 import { getOrCreateAnonId, generateAnonName } from "@/lib/guest";
 import { supabase } from "@/lib/supabase";
-
 import {
   EMPTY_PROFILE,
   Profile,
@@ -14,6 +15,8 @@ import {
   getProfileByIdentity,
   upsertProfileByIdentity,
   Intent,
+  stripNullish,
+  Gender,
 } from "@/lib/profile";
 
 type Step =
@@ -34,6 +37,31 @@ const intents: { id: Intent; label: string; emoji: string }[] = [
   { id: "friends", label: "New friends", emoji: "👋" },
   { id: "figuring_out", label: "Still figuring it out", emoji: "🤔" },
 ];
+
+// ✅ ONLY change: auto-format DD/MM/YYYY, digits-only, auto-insert "/"
+function formatDMYInput(v: string) {
+  const digits = v.replace(/\D/g, "").slice(0, 8);
+  const dd = digits.slice(0, 2);
+  const mm = digits.slice(2, 4);
+  const yyyy = digits.slice(4, 8);
+
+  if (digits.length <= 2) return dd;
+  if (digits.length <= 4) return `${dd}/${mm}`;
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+function computeNextStep(profile: Profile): Step {
+  if (!profile.first_name?.trim()) return "name";
+
+  const a = profile.birthdate ? calcAgeFromBirthdate(profile.birthdate) : null;
+  if (!profile.birthdate || a == null || a < 18) return "birth";
+  if (!profile.gender) return "gender";
+  if (!profile.seeking) return "seeking";
+  if (!profile.intent) return "intent";
+  if (!profile.distance_km) return "distance";
+  if (!profile.photo1_url) return "photos";
+  return "photos";
+}
 
 function Pill({
   active,
@@ -84,33 +112,9 @@ function PrimaryButton({
   );
 }
 
-// ✅ ONLY change: auto-format DD/MM/YYYY, digits-only, auto-insert "/"
-function formatDMYInput(v: string) {
-  const digits = v.replace(/\D/g, "").slice(0, 8);
-  const dd = digits.slice(0, 2);
-  const mm = digits.slice(2, 4);
-  const yyyy = digits.slice(4, 8);
-
-  if (digits.length <= 2) return dd;
-  if (digits.length <= 4) return `${dd}/${mm}`;
-  return `${dd}/${mm}/${yyyy}`;
-}
-
-function computeNextStep(profile: Profile): Step {
-  if (!profile.first_name?.trim()) return "name";
-
-  // ✅ ONLY change: TS-safe (age may be invalid/null depending on helper)
-  const a = profile.birthdate ? calcAgeFromBirthdate(profile.birthdate) : null;
-  if (!profile.birthdate || a == null || a < 18) return "birth";
-
-  if (!profile.gender) return "gender";
-  if (!profile.seeking) return "seeking";
-  if (!profile.intent) return "intent";
-  if (!profile.distance_km) return "distance";
-  if (!profile.photo1_url) return "photos";
-  return "photos";
-}
 export default function OnboardingClient() {
+  const router = useRouter();
+
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -122,8 +126,6 @@ export default function OnboardingClient() {
 
   const [userId, setUserId] = useState<string | null>(null);
   const [anonId, setAnonId] = useState<string>("");
-
-
 
   useEffect(() => setMounted(true), []);
 
@@ -155,84 +157,73 @@ export default function OnboardingClient() {
         const a = getOrCreateAnonId();
         if (alive) setAnonId(a);
 
-        // ✅ ensure user row exists if logged in (this is key)
-        if (uid) {
-          await upsertProfileByIdentity({
-            user_id: uid,
-            anon_id: a,
-          } as any);
-        } else {
-          // anon-only (guest)
-          await upsertProfileByIdentity({
-            anon_id: a,
-            user_id: null,
-          } as any);
-        }
+        // ✅ ensure profile row exists (user or guest)
+        await upsertProfileByIdentity({
+          user_id: uid ?? null,
+          anon_id: a,
+        } as any);
 
-        // ✅ always read by identity (prefers user_id)
         const { data, error: gErr } = await getProfileByIdentity({
           user_id: uid ?? undefined,
           anon_id: a,
         });
         if (gErr) throw gErr;
 
-        if (data) {
-          const merged: Profile = {
-            ...EMPTY_PROFILE,
-            ...data,
+        const merged: Profile = {
+          ...EMPTY_PROFILE,
+          ...(data ?? {}),
+          anon_id: (data?.anon_id ?? a) as any,
+          user_id: (data?.user_id ?? uid ?? null) as any,
 
-            anon_id: data.anon_id ?? a,
-            user_id: (data.user_id ?? uid ?? null) as any,
+          nickname: (data?.nickname ?? generateAnonName()) as any,
+          first_name: (data?.first_name ?? "") as any,
+          birthdate: (data?.birthdate ?? "") as any,
+          age: data?.birthdate ? calcAgeFromBirthdate(data.birthdate) : null,
 
-            nickname: data.nickname ?? generateAnonName(),
-            first_name: data.first_name ?? "",
-            birthdate: data.birthdate ?? "",
-age: calcAgeFromBirthdate(data.birthdate ?? null),
-            bio: data.bio ?? "",
+          bio: (data?.bio ?? "") as any,
 
-            gender: (data.gender as any) ?? "",
-            show_gender: Boolean(data.show_gender),
-            seeking: (data.seeking as any) ?? "everyone",
-            intent: (data.intent as any) ?? "",
+          gender: ((data as any)?.gender ?? "") as any,
+          show_gender: Boolean((data as any)?.show_gender),
+          seeking: ((data as any)?.seeking ?? "everyone") as any,
+          intent: ((data as any)?.intent ?? "") as any,
 
-            distance_km: data.distance_km ?? 50,
+          distance_km: (data as any)?.distance_km ?? 50,
 
-            photo1_url: data.photo1_url ?? "",
-            photo2_url: data.photo2_url ?? "",
-            photo3_url: data.photo3_url ?? "",
-            photo4_url: data.photo4_url ?? "",
-            photo5_url: data.photo5_url ?? "",
-            photo6_url: data.photo6_url ?? "",
+          photo1_url: (data as any)?.photo1_url ?? "",
+          photo2_url: (data as any)?.photo2_url ?? "",
+          photo3_url: (data as any)?.photo3_url ?? "",
+          photo4_url: (data as any)?.photo4_url ?? "",
+          photo5_url: (data as any)?.photo5_url ?? "",
+          photo6_url: (data as any)?.photo6_url ?? "",
 
-            onboarding_step: data.onboarding_step ?? 1,
-            onboarding_completed: Boolean(data.onboarding_completed),
-          };
+          onboarding_step: (data as any)?.onboarding_step ?? 1,
+          onboarding_completed: Boolean((data as any)?.onboarding_completed),
+        };
 
-          if (alive) setP(merged);
+        if (alive) setP(merged);
 
-          const shouldSkipOnboarding =
-            merged.onboarding_completed === true &&
-            (merged.onboarding_step ?? 0) >= 8 &&
-            Boolean(merged.photo1_url) &&
-            Boolean(merged.first_name?.trim()) &&
-            Boolean(merged.birthdate) &&
-            Boolean(merged.gender) &&
-            Boolean(merged.seeking) &&
-            Boolean(merged.intent) &&
-            Boolean(merged.distance_km);
+        const shouldSkipOnboarding =
+          merged.onboarding_completed === true &&
+          (merged.onboarding_step ?? 0) >= 8 &&
+          Boolean(merged.photo1_url) &&
+          Boolean(merged.first_name?.trim()) &&
+          Boolean(merged.birthdate) &&
+          Boolean(merged.gender) &&
+          Boolean(merged.seeking) &&
+          Boolean(merged.intent) &&
+          Boolean(merged.distance_km);
 
-          if (shouldSkipOnboarding) {
-            window.location.replace("/feed");
-            return;
-          }
+        if (shouldSkipOnboarding) {
+          router.replace("/feed");
+          return;
+        }
 
-          const next = computeNextStep(merged);
-          if (alive) setStep(next);
+        const next = computeNextStep(merged);
+        if (alive) setStep(next);
 
-          if (merged.birthdate) {
-            const [yyyy, mm, dd] = merged.birthdate.split("-");
-            if (yyyy && mm && dd && alive) setBirthInput(`${dd}/${mm}/${yyyy}`);
-          }
+        if (merged.birthdate) {
+          const [yyyy, mm, dd] = merged.birthdate.split("-");
+          if (yyyy && mm && dd && alive) setBirthInput(`${dd}/${mm}/${yyyy}`);
         }
       } catch (e: any) {
         console.error("ONBOARDING INIT ERROR:", e);
@@ -245,23 +236,31 @@ age: calcAgeFromBirthdate(data.birthdate ?? null),
     return () => {
       alive = false;
     };
-  }, []);
+  }, [router]);
 
   const canNext = useMemo(() => {
     if (step === "rules") return true;
-    if (step === "name") return p.first_name.trim().length >= 2;
+
+    if (step === "name") return (p.first_name?.trim().length ?? 0) >= 2;
+
     if (step === "birth") {
       const iso = formatBirthInputToISO(birthInput);
       if (!iso) return false;
       const a = calcAgeFromBirthdate(iso);
       return a != null && a >= 18;
     }
+
     if (step === "gender") return Boolean(p.gender);
-    if (step === "seeking") return Boolean(p.seeking);
-    if (step === "intent") return Boolean(p.intent);
-    if (step === "distance")
-      return (p.distance_km ?? 0) >= 5 && (p.distance_km ?? 0) <= 200;
-    if (step === "photos") return Boolean(p.photo1_url);
+    if (step === "seeking") return Boolean((p as any).seeking);
+    if (step === "intent") return Boolean((p as any).intent);
+
+    if (step === "distance") {
+      const km = (p as any).distance_km ?? 0;
+      return km >= 5 && km <= 200;
+    }
+
+    if (step === "photos") return Boolean((p as any).photo1_url);
+
     return true;
   }, [step, p, birthInput]);
 
@@ -269,133 +268,149 @@ age: calcAgeFromBirthdate(data.birthdate ?? null),
     setSaving(true);
     setMsg("");
 
-    const uid = userId ?? null;
-    const base: any = {
-      anon_id: anonId || p.anon_id,
-      user_id: uid,
-      ...payload,
-    };
-
     try {
-      // ✅ one reliable write path: upsert by identity
-      const { data, error } = await upsertProfileByIdentity(base);
+      const uid =
+        userId ?? (await supabase.auth.getUser()).data.user?.id ?? null;
+
+      const patch = stripNullish({
+        ...(payload as any),
+        user_id: uid,
+        anon_id: anonId || (p as any).anon_id,
+      });
+
+      const { data, error } = await upsertProfileByIdentity(patch as any);
       if (error) throw error;
-      if (data) setP((prev) => ({ ...prev, ...data } as any));
+
+      if (data) setP((prev) => ({ ...prev, ...(data as any) }));
+      else setP((prev) => ({ ...prev, ...(payload as any) }));
     } catch (e: any) {
       console.error("savePartial error:", e);
-      setMsg("DB ERROR: " + (e?.message ?? "Unknown error"));
+      setMsg(e?.message ?? "Save failed");
     } finally {
       setSaving(false);
     }
   }
 
+  async function uploadToStorage(file: File, slot: 1 | 2 | 3 | 4 | 5 | 6) {
+    if (!file) return;
 
+    setSaving(true);
+    setMsg("");
 
-async function uploadToStorage(file: File, slot: 1 | 2 | 3 | 4 | 5 | 6) {
-  if (!file) return;
+    try {
+      const uid =
+        userId ?? (await supabase.auth.getUser()).data.user?.id ?? null;
 
-  setSaving(true);
-  setMsg("");
+      const owner = uid ?? anonId;
+      if (!owner) throw new Error("No user/anon id");
 
-  try {
-    const uid =
-  userId ??
-  (await supabase.auth.getUser()).data.user?.id ??
-  null;
+      const bucket = "photos";
+      const ext = file.name.split(".").pop() || "jpg";
+      const stamp = Date.now();
 
-    const owner = uid ?? anonId;
-    if (!owner) throw new Error("No user/anon id");
+      const key = `photo${slot}_url` as const;
+      const objectKey = `${owner}/photo${slot}-${stamp}.${ext}`;
+      const dbPath = `${bucket}/${objectKey}`; // ✅ DB-ში PATH ინახება
 
-    const bucket = "photos";
-    const ext = file.name.split(".").pop() || "jpg";
-    const stamp = Date.now();
+      // ✅ upload inside bucket (NO "photos/" prefix here)
+      const { error: upErr } = await supabase.storage
+        .from(bucket)
+        .upload(objectKey, file, { upsert: true });
 
-    const key = `photo${slot}_url` as const;
-    const objectKey = `${owner}/photo${slot}-${stamp}.${ext}`;
-    const path = `${bucket}/${objectKey}`; // ✅ DB-ში ეს ინახება
+      if (upErr) throw upErr;
 
-    // ✅ upload: key უნდა იყოს bucket-ის შიგნით (არავითარი "photos/" წინ)
-    const { error: upErr } = await supabase.storage
-  .from(bucket)
-  .upload(objectKey, file, { upsert: true });
+      const cleanPath = dbPath.replace(/\r?\n/g, "").trim();
 
-
-    if (upErr) throw upErr;
-
-    const cleanPath = path.replace(/\r?\n/g, "").trim();
-
-    setP((prev) => ({ ...prev, [key]: cleanPath } as any));
-    await savePartial({ [key]: cleanPath } as any);
-  } catch (e: any) {
-    console.error("upload error:", e);
-    setMsg(e?.message ?? "Upload failed");
-  } finally {
-    setSaving(false);
+      setP((prev) => ({ ...prev, [key]: cleanPath } as any));
+      await savePartial({ [key]: cleanPath } as any);
+    } catch (e: any) {
+      console.error("upload error:", e);
+      setMsg(e?.message ?? "Upload failed");
+    } finally {
+      setSaving(false);
+    }
   }
-}
-
- 
 
   async function goNext() {
     setMsg("");
 
-    if (step === "rules") return setStep("name");
-
-    if (step === "name") {
-      const first_name = p.first_name.trim();
-      if (first_name.length < 2) return;
-
-      await savePartial({
-        first_name,
-        nickname: first_name,
-        onboarding_step: 2,
-      });
-
-      return setStep("birth");
+    // 1) rules
+    if (step === "rules") {
+      setStep("name");
+      return;
     }
 
+    // 2) name
+    if (step === "name") {
+      const first_name = (p.first_name ?? "").trim();
+      if (first_name.length < 2) return;
+
+      setP((prev) => ({ ...prev, first_name, nickname: prev.nickname ?? first_name }));
+      await savePartial({ first_name, nickname: p.nickname ?? first_name, onboarding_step: 2 } as any);
+
+      setStep("birth");
+      return;
+    }
+
+    // 3) birth
     if (step === "birth") {
       const iso = formatBirthInputToISO(birthInput);
       if (!iso) return;
 
       const age = calcAgeFromBirthdate(iso);
       if (age == null) return;
-      if (age < 18) return setMsg("18+ უნდა იყო 🙂");
 
-    await savePartial({
-  birthdate: iso,
-  onboarding_step: 3,
-});
-      return setStep("gender");
+      if (age < 18) {
+        setMsg("18+ უნდა იყო 🙂");
+        return;
+      }
+
+      setP((prev) => ({ ...prev, birthdate: iso, age } as any));
+      await savePartial({ birthdate: iso, age, onboarding_step: 3 } as any);
+
+      setStep("gender");
+      return;
     }
 
+    // 4) gender
     if (step === "gender") {
       await savePartial({
-        gender: p.gender as any,
-        show_gender: p.show_gender,
+        gender: (p as any).gender,
+        show_gender: (p as any).show_gender ?? false,
         onboarding_step: 4,
-      });
-      return setStep("seeking");
+      } as any);
+
+      setStep("seeking");
+      return;
     }
 
+    // 5) seeking
     if (step === "seeking") {
-      await savePartial({ seeking: p.seeking, onboarding_step: 5 });
-      return setStep("intent");
+      await savePartial({ seeking: (p as any).seeking, onboarding_step: 5 } as any);
+      setStep("intent");
+      return;
     }
 
+    // 6) intent
     if (step === "intent") {
-      await savePartial({ intent: p.intent as any, onboarding_step: 6 });
-      return setStep("distance");
+      await savePartial({ intent: (p as any).intent, onboarding_step: 6 } as any);
+      setStep("distance");
+      return;
     }
 
+    // 7) distance
     if (step === "distance") {
-      await savePartial({ distance_km: p.distance_km, onboarding_step: 7 });
-      return setStep("photos");
+      await savePartial({
+        distance_km: (p as any).distance_km ?? 50,
+        onboarding_step: 7,
+      } as any);
+      setStep("photos");
+      return;
     }
 
-    // ✅ STEP 8 finish: WRITE TO user_id row (prevents feed/onboarding loop)
+    // 8) photos finish -> feed
     if (step === "photos") {
-      if (!p.photo1_url) {
+      if (!(p as any).photo1_url) {
         setMsg("Photo 1 აუცილებელია ✅");
         return;
       }
@@ -404,39 +419,55 @@ async function uploadToStorage(file: File, slot: 1 | 2 | 3 | 4 | 5 | 6) {
       setMsg("");
 
       try {
-const { data: sess, error: sErr } = await supabase.auth.getSession();
+        const { data: sess, error: sErr } = await supabase.auth.getSession();
         if (sErr) throw sErr;
 
         const uid = sess.session?.user?.id ?? null;
-        if (!uid) {
-          setMsg("Auth session missing ❌ (გაიარე Google login თავიდან)");
-          return;
-        }
+        if (!uid) throw new Error("Auth session missing ❌");
 
-        const { data, error } = await upsertProfileByIdentity({
+        const finalPayload = stripNullish({
           user_id: uid,
-          anon_id: anonId || p.anon_id,
-          photo1_url: p.photo1_url,
-          photo2_url: p.photo2_url,
-          photo3_url: p.photo3_url,
-          photo4_url: p.photo4_url,
-          photo5_url: p.photo5_url,
-          photo6_url: p.photo6_url,
+          anon_id: anonId || (p as any).anon_id,
+
+          first_name: (p.first_name ?? "").trim() || (p.nickname ?? ""),
+          nickname: (p.nickname ?? "").trim() || (p.first_name ?? ""),
+
+          birthdate: (p as any).birthdate,
+          age: (p as any).age,
+
+          bio: (p as any).bio ?? "",
+          city: (p as any).city ?? null,
+
+          gender: (p as any).gender,
+          show_gender: (p as any).show_gender ?? false,
+          seeking: (p as any).seeking,
+          intent: (p as any).intent,
+          distance_km: (p as any).distance_km ?? 50,
+
+          photo1_url: (p as any).photo1_url,
+          photo2_url: (p as any).photo2_url,
+          photo3_url: (p as any).photo3_url,
+          photo4_url: (p as any).photo4_url,
+          photo5_url: (p as any).photo5_url,
+          photo6_url: (p as any).photo6_url,
+
           onboarding_step: 8,
           onboarding_completed: true,
-        } as any);
+        });
 
+        const { data, error } = await upsertProfileByIdentity(finalPayload as any);
         if (error) throw error;
-        if (data) setP((prev) => ({ ...prev, ...data } as any));
+        if (data) setP((prev) => ({ ...prev, ...(data as any) }));
 
-        window.location.replace("/feed");
-        return;
+        router.replace("/feed");
       } catch (e: any) {
         console.error("finish onboarding error:", e);
         setMsg(e?.message ?? "Finish failed");
       } finally {
         setSaving(false);
       }
+
+      return;
     }
   }
 
@@ -452,7 +483,7 @@ const { data: sess, error: sErr } = await supabase.auth.getSession();
   }
 
   // ----------------------------
-  // UI STEPS (your existing UI)
+  // UI STEPS
   // ----------------------------
 
   if (step === "rules") {
@@ -483,7 +514,7 @@ const { data: sess, error: sErr } = await supabase.auth.getSession();
       <OnboardingShell title="Your name" subtitle="What should we call you?">
         <div className="space-y-4">
           <input
-            value={p.first_name}
+            value={p.first_name ?? ""}
             onChange={(e) =>
               setP((prev) => ({ ...prev, first_name: e.target.value } as any))
             }
@@ -529,156 +560,146 @@ const { data: sess, error: sErr } = await supabase.auth.getSession();
 
   if (step === "gender") {
     return (
-      <OnboardingShell title="Your gender" subtitle="Choose what fits you">
+      <OnboardingShell
+        title="What’s your gender?"
+        subtitle="Select one to help us show you to the right people."
+      >
         <div className="space-y-3">
-          <Pill
-            active={p.gender === "male"}
-            onClick={() => setP((prev) => ({ ...prev, gender: "male" } as any))}
-          >
-            👨 Male
-          </Pill>
-          <Pill
-            active={p.gender === "female"}
-            onClick={() =>
-              setP((prev) => ({ ...prev, gender: "female" } as any))
-            }
-          >
-            👩 Female
-          </Pill>
-          <Pill
-            active={p.gender === "nonbinary"}
-            onClick={() =>
-              setP((prev) => ({ ...prev, gender: "nonbinary" } as any))
-            }
-          >
-            🌈 Non-binary
-          </Pill>
-
-          <div className="flex items-center gap-2 text-sm text-zinc-300">
-            <input
-              type="checkbox"
-              checked={Boolean(p.show_gender)}
-              onChange={(e) =>
-                setP((prev) => ({
-                  ...prev,
-                  show_gender: e.target.checked,
-                }))
-              }
-            />
-            Show gender on profile
-          </div>
-
-          <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
-            Continue →
-          </PrimaryButton>
-
-          {msg && <p className="text-sm text-zinc-300">{msg}</p>}
+          {(["male", "female", "nonbinary"] as Gender[]).map((g) => (
+            <Pill
+              key={g}
+              active={(p as any).gender === g}
+              onClick={() => setP((prev) => ({ ...prev, gender: g } as any))}
+            >
+              <div className="text-lg font-semibold capitalize">{g}</div>
+            </Pill>
+          ))}
         </div>
+
+        <label className="mt-4 flex items-center gap-2 text-sm text-zinc-300">
+          <input
+            type="checkbox"
+            checked={(p as any).show_gender ?? false}
+            onChange={(e) =>
+              setP((prev) => ({ ...prev, show_gender: e.target.checked } as any))
+            }
+          />
+          Show gender on profile
+        </label>
+
+        <div className="mt-4">
+          <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
+            Next
+          </PrimaryButton>
+        </div>
+
+        {msg && <p className="mt-3 text-sm text-zinc-300">{msg}</p>}
       </OnboardingShell>
     );
   }
 
   if (step === "seeking") {
     return (
-      <OnboardingShell title="Looking for" subtitle="Who do you want to see?">
+      <OnboardingShell
+        title="Who are you interested in seeing?"
+        subtitle="This controls your feed filter."
+      >
         <div className="space-y-3">
-          <Pill
-            active={p.seeking === "everyone"}
-            onClick={() =>
-              setP((prev) => ({ ...prev, seeking: "everyone" } as any))
-            }
-          >
-            🌍 Everyone
-          </Pill>
-          <Pill
-            active={p.seeking === "male"}
-            onClick={() => setP((prev) => ({ ...prev, seeking: "male" } as any))}
-          >
-            👨 Men
-          </Pill>
-          <Pill
-            active={p.seeking === "female"}
-            onClick={() =>
-              setP((prev) => ({ ...prev, seeking: "female" } as any))
-            }
-          >
-            👩 Women
-          </Pill>
-          <Pill
-            active={p.seeking === "nonbinary"}
-            onClick={() =>
-              setP((prev) => ({ ...prev, seeking: "nonbinary" } as any))
-            }
-          >
-            🌈 Non-binary
-          </Pill>
-
-          <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
-            Continue →
-          </PrimaryButton>
-
-          {msg && <p className="text-sm text-zinc-300">{msg}</p>}
+          {(["male", "female", "nonbinary", "everyone"] as const).map((s) => (
+            <Pill
+              key={s}
+              active={(p as any).seeking === s}
+              onClick={() => setP((prev) => ({ ...prev, seeking: s } as any))}
+            >
+              <div className="text-lg font-semibold capitalize">{s}</div>
+            </Pill>
+          ))}
         </div>
+
+        <div className="mt-4">
+          <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
+            Next
+          </PrimaryButton>
+        </div>
+
+        {msg && <p className="mt-3 text-sm text-zinc-300">{msg}</p>}
       </OnboardingShell>
     );
   }
 
   if (step === "intent") {
     return (
-      <OnboardingShell title="Intent" subtitle="What are you here for?">
-        <div className="space-y-3">
+      <OnboardingShell
+        title="What are you looking for?"
+        subtitle="Pick one (you can change later)."
+      >
+        <div className="grid grid-cols-2 gap-3">
           {intents.map((it) => (
-            <Pill
+            <button
               key={it.id}
-              active={p.intent === it.id}
+              type="button"
               onClick={() => setP((prev) => ({ ...prev, intent: it.id } as any))}
+              className={`rounded-2xl border p-4 text-left transition ${
+                (p as any).intent === it.id
+                  ? "border-pink-500 bg-pink-500/10"
+                  : "border-zinc-800 bg-zinc-900/40 hover:bg-zinc-900/70"
+              }`}
             >
-              <div className="text-base font-semibold">
-                {it.emoji} {it.label}
-              </div>
-            </Pill>
+              <div className="text-2xl">{it.emoji}</div>
+              <div className="mt-2 text-sm font-semibold">{it.label}</div>
+            </button>
           ))}
-
-          <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
-            Continue →
-          </PrimaryButton>
-
-          {msg && <p className="text-sm text-zinc-300">{msg}</p>}
         </div>
+
+        <div className="mt-4">
+          <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
+            Next
+          </PrimaryButton>
+        </div>
+
+        {msg && <p className="mt-3 text-sm text-zinc-300">{msg}</p>}
       </OnboardingShell>
     );
   }
 
   if (step === "distance") {
     return (
-      <OnboardingShell title="Distance" subtitle="How far should we search?">
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
-            <div className="text-sm text-zinc-300 mb-2">
-              Distance: <span className="font-semibold">{p.distance_km} km</span>
-            </div>
-
-            <input
-              type="range"
-              min={5}
-              max={200}
-              value={p.distance_km ?? 50}
-              onChange={(e) =>
-                setP((prev) => ({
-                  ...prev,
-                  distance_km: Number(e.target.value),
-                }))
-              }
-              className="w-full"
-            />
+      <OnboardingShell
+        title="Your distance preference?"
+        subtitle="Set the maximum distance for matches."
+      >
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+          <div className="flex items-center justify-between text-sm text-zinc-300">
+            <span>Distance Preference</span>
+            <span className="text-white">{(p as any).distance_km ?? 50} km</span>
           </div>
 
-          <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
-            Continue →
-          </PrimaryButton>
+          <input
+            type="range"
+            min={5}
+            max={200}
+            value={(p as any).distance_km ?? 50}
+            onChange={(e) =>
+              setP((prev) => ({
+                ...prev,
+                distance_km: Number(e.target.value),
+              } as any))
+            }
+            className="mt-4 w-full"
+          />
 
-          {msg && <p className="text-sm text-zinc-300">{msg}</p>}
+          <div className="mt-2 text-center text-xs text-zinc-500">
+            You can change preferences later in Settings
+          </div>
         </div>
+
+        <div className="mt-4">
+          <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
+            Next
+          </PrimaryButton>
+        </div>
+
+        {msg && <p className="mt-3 text-sm text-zinc-300">{msg}</p>}
       </OnboardingShell>
     );
   }
@@ -689,41 +710,34 @@ const { data: sess, error: sErr } = await supabase.auth.getSession();
       title="Add your recent pics"
       subtitle="Photo 1 is required. Add more to stand out."
     >
-
       <div className="grid grid-cols-3 gap-3">
-  {([1, 2, 3, 4, 5, 6] as const).map((i) => {
-    const key = `photo${i}_url` as const;
-    
-   const raw = (p as any)[key] as string | null | undefined;
-const src = photoSrc(raw);
+        {([1, 2, 3, 4, 5, 6] as const).map((i) => {
+          const key = `photo${i}_url` as const;
+          const path = (p as any)[key] as string;
+          const url = photoSrc(path);
 
-// ✅ ეს ლოგები გვაჩვენებს უხილავ სიმბოლოებს (\n, space, etc)
-
-
-
-    return (
-      <label
-        key={i}
-        className={`relative aspect-[3/4] rounded-2xl border cursor-pointer overflow-hidden ${
-          i === 1 && !p.photo1_url ? "border-pink-500/70" : "border-zinc-800"
-        } bg-zinc-900/30`}
-        title={`Upload Photo ${i}`}
-      >
-  {src ? (
-  <img
-    src={src}
-    alt=""
-    className="h-full w-full object-cover"
-    onError={(e) => {
-      (e.currentTarget as HTMLImageElement).src = "";
-    }}
-  />
-) : (
-  <div className="flex h-full items-center justify-center text-zinc-500">
-    <span className="text-2xl">＋</span>
-  </div>
-)}
-
+          return (
+            <label
+              key={i}
+              className={`relative aspect-[3/4] cursor-pointer overflow-hidden rounded-2xl border ${
+                i === 1 && !(p as any).photo1_url
+                  ? "border-pink-500/70"
+                  : "border-zinc-800"
+              } bg-zinc-900/30`}
+              title={`Upload Photo ${i}`}
+            >
+              {path ? (
+                <img
+                  src={url}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  draggable={false}
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center text-zinc-500">
+                  <span className="text-2xl">＋</span>
+                </div>
+              )}
 
               <input
                 type="file"
@@ -744,11 +758,13 @@ const src = photoSrc(raw);
         })}
       </div>
 
-      <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
-        Finish &amp; Go to Feed 🔥
-      </PrimaryButton>
+      <div className="mt-4">
+        <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
+          Finish & Go to Feed 🔥
+        </PrimaryButton>
+      </div>
 
-      {msg && <p className="text-sm text-zinc-300">{msg}</p>}
+      {msg && <p className="mt-3 text-sm text-zinc-300">{msg}</p>}
     </OnboardingShell>
   );
 }

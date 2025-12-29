@@ -1,8 +1,12 @@
-export default function Home() {
-  return (
-    <main style={{ padding: 40 }}>
-      <h1>Vinme is live 🚀</h1>
-      <p>Root page works</p>
-    </main>
-  );
+"use client";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+export default function HomePage() {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace("/login");
+  }, [router]);
+
+  return null;
 }

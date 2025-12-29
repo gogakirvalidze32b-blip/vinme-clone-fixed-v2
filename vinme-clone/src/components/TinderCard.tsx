@@ -409,21 +409,22 @@ if (!me) throw new Error("Not authenticated");
       </div>
 
       {/* ✅ MATCH MODAL (External file) */}
-{showMatch && (
+
+
+{showMatch && matchId != null && (
   <MatchModal
     onClose={closeMatch}
     onOpenChat={() => {
       closeMatch();
-      if (matchId) router.push(`/chat?matchId=${encodeURIComponent(matchId)}`);
-      else router.push("/chat");
+      router.push(`/chat/${matchId}`);
     }}
     meName="მე"
-    matchName={user.nickname ?? "ვიღაც"}
+    matchName={user?.nickname ?? "ვიღაც"}
     myPhoto={null}
-    theirPhoto={user.photo_url ?? null}
+    theirPhoto={user?.photo_url ?? null}
   />
+)}
 
-      )}
 
       {/* ✅ BOTTOM PANEL */}
       <nav className="fixed bottom-0 left-0 right-0 z-[9999]">

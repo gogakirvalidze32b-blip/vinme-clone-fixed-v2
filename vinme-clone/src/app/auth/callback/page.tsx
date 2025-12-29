@@ -2,9 +2,8 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getOrCreateAnonId } from "@/lib/guest";
-import { upsertProfileByIdentity } from "@/lib/profile";
 import { supabase } from "@/lib/supabase";
+import { getOrCreateAnonId } from "@/lib/guest";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -14,45 +13,56 @@ export default function AuthCallbackPage() {
 
     (async () => {
       try {
-      if (!supabase) return;
+        const { data: s, error: sErr } = await supabase.auth.getSession();
+        if (sErr) throw sErr;
 
-const { data, error: sErr } = await supabase.auth.getSession();
-if (sErr) throw sErr;
-
-        if (!data.session?.user?.id) {
+        const uid = s.session?.user?.id ?? null;
+        if (!uid) {
           router.replace("/login");
           return;
         }
 
-        const uid = data.session.user.id;
-
-        // ✅ always ensure user_id row exists (NO anon-row bind here)
-        const a = getOrCreateAnonId();
-        await upsertProfileByIdentity({
-          user_id: uid,
-          anon_id: a,
-          age: 18,
-        } as any);
-
-        // ✅ now decide route
-        const { data: profile, error } = await supabase
+        // ✅ IMPORTANT: read ONLY by user_id (არავითარი anon აქ!)
+        const { data: p, error: pErr } = await supabase
           .from("profiles")
-          .select("onboarding_completed, onboarding_step")
+          .select("user_id, onboarding_completed")
           .eq("user_id", uid)
           .maybeSingle();
 
-        if (error) throw error;
+        if (pErr) throw pErr;
 
-        const completed =
-          profile?.onboarding_completed === true &&
-          (profile?.onboarding_step ?? 0) >= 8;
+        // NEW USER (no row) → create minimal row then onboarding
+        const anonId = getOrCreateAnonId();
 
+        if (!p?.user_id) {
+          const a = getOrCreateAnonId();
+         const { error } = await supabase
+  .from("profiles")
+  .upsert(
+    {
+      user_id: uid,
+      anon_id: anonId,
+      onboarding_completed: false,
+      onboarding_step: 0,
+    },
+    { onConflict: "user_id" }
+  );
+
+if (error) throw error;
+
+
+          if (!alive) return;
+          router.replace("/onboarding");
+          return;
+        }
+
+        // EXISTING USER → route by onboarding_completed
         if (!alive) return;
 
-        router.replace(completed ? "/feed" : "/onboarding");
-      } catch (e) {
-        // fallback: go login
-        if (!alive) return;
+        if (p.onboarding_completed) router.replace("/feed");
+        else router.replace("/onboarding");
+      } catch (e: any) {
+        console.error("auth/callback error:", e?.message ?? e);
         router.replace("/login");
       }
     })();
@@ -63,8 +73,8 @@ if (sErr) throw sErr;
   }, [router]);
 
   return (
-    <main className="fixed inset-0 flex items-center justify-center bg-black text-white">
-      Loading…
-    </main>
+    <div className="min-h-[60vh] flex items-center justify-center text-white">
+      Signing in… 🔄
+    </div>
   );
 }

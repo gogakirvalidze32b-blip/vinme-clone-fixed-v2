@@ -1,7 +1,6 @@
 "use client";
 
 import { supabase } from "@/lib/supabase";
-import { photoSrc } from "@/lib/photos";
 
 export default function GoogleButton() {
   async function handleGoogle() {
@@ -10,43 +9,24 @@ export default function GoogleButton() {
         ? `${window.location.origin}/auth/callback`
         : undefined;
 
-    await supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo },
     });
+
+    if (error) {
+      console.error("Google login error:", error);
+      alert("Google login failed. Try again.");
+    }
   }
 
   return (
-    <div className="flex justify-center">
-      <button
-        type="button"
-        onClick={handleGoogle}
-        className="
-          flex items-center gap-3
-          rounded-full
-          border-2 border-zinc-400
-          bg-white
-
-          px-8 py-4
-          text-lg font-medium text-zinc-900
-
-          shadow-sm
-          transition
-          hover:bg-zinc-100
-          active:scale-[0.98]
-        "
-      >
-        {/* Google logo */}
-        <img
-          src="https://icons.veryicon.com/png/o/internet--web/iview-3-x-icons/logo-google.png"
-          alt="Google"
-          className="w-6 h-6"
-        />
-
-        <span className="whitespace-nowrap">
-          Sign in with Google
-        </span>
-      </button>
-    </div>
+    <button
+      type="button"
+      onClick={handleGoogle}
+      className="w-full rounded-full bg-white text-black px-6 py-4 font-semibold active:scale-[0.99]"
+    >
+      Continue with Google
+    </button>
   );
 }

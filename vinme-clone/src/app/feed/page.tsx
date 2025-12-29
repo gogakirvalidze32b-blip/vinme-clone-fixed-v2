@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { photoSrc } from "@/lib/photos";
-import { calcAgeFromBirthdate } from "@/lib/profile";
+import { calcAgeFromBirthdate, Profile } from "@/lib/profile";
 import TinderCard from "@/components/TinderCard";
 import BottomNav from "@/components/BottomNav";
 import { useSearchParams } from "next/navigation";
@@ -58,11 +58,67 @@ export default function FeedPage() {
 
   const [me, setMe] = useState<ProfileRow | null>(null);
   const [top, setTop] = useState<ProfileRow | null>(null);
+const [matchOpen, setMatchOpen] = useState(false);
+const [matchId, setMatchId] = useState<number | null>(null);
+const [theirUserId, setTheirUserId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [loadingTop, setLoadingTop] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+const [profiles, setProfiles] = useState<Profile[]>([]);
   
+const [idx, setIdx] = useState(0);
+async function maybeOpenMatchModal(myId: string, theirId: string) {
+  // trigger-მა match შეიძლება ჩასვას პატარა დაგვიანებით → retry
+  for (let i = 0; i < 6; i++) {
+    const { data, error } = await supabase
+      .from("matches")
+      .select("id, user_a, user_b")
+      .or(
+        `and(user_a.eq.${myId},user_b.eq.${theirId}),and(user_a.eq.${theirId},user_b.eq.${myId})`
+      )
+      .order("id", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!error && data?.id != null) {
+      setMatchId(Number(data.id));
+      setTheirUserId(theirId);
+      setMatchOpen(true);
+      return;
+    }
+
+    await new Promise((r) => setTimeout(r, 120));
+  }
+}
+
+
+
+const current = profiles.length > idx ? profiles[idx] : null;
+
+if (!current) {
+  return (
+    <div className="min-h-[100dvh] bg-black text-white flex items-center justify-center px-6 text-center">
+      <div>
+        <div className="text-xl font-semibold mb-2">No more profiles 👀</div>
+        <div className="text-sm text-white/70">
+          Try refreshing or change your filters.
+        </div>
+
+        <button
+          className="mt-4 w-full rounded-full bg-white text-black px-5 py-4 font-semibold"
+          onClick={() => {
+            setIdx(0);
+            // თუ გაქვს load function, აქ გამოიძახე:
+            // loadProfiles();
+          }}
+        >
+          Refresh
+        </button>
+      </div>
+    </div>
+  );
+}
 
   // ----------------------------
   // LOAD ME (ONLY by user_id)

@@ -11,40 +11,44 @@ export type Intent =
   | "friends"
   | "figuring_out";
 
+
+
 export type Profile = {
-  anon_id: string;
-  user_id?: string | null;
+  user_id?: string;
+  anon_id?: string;
+show_gender?: boolean | null;
 
-  first_name: string;
-  nickname: string;
-  birthdate: string; // YYYY-MM-DD
-  age: number;
+  first_name?: string | null;
+  nickname?: string | null;
 
-  city: string;
-  bio: string;
+  birthdate?: string | null;   // 👈 აუცილებელია
+  age?: number | null;         // 👈 აუცილებელია
 
-  gender: Gender | "";
-  show_gender: boolean;
-  seeking: Seeking;
-  intent: Intent | "";
+  city?: string | null;
+  bio?: string | null;
 
-  distance_km: number;
+  gender?: string | null;
+  seeking?: string | null;
+  intent?: Intent | null;
 
-  photo1_url: string;
-  photo2_url: string;
-  photo3_url: string;
-  photo4_url: string;
-  photo5_url: string;
-  photo6_url: string;
+  distance_km?: number | null;
 
-  // ✅ ONBOARDING FLAGS
-  onboarding_step: number;
-  onboarding_completed: boolean;
+  photo1_url?: string | null;
+photo2_url?: string | null;
+photo3_url?: string | null;
+photo4_url?: string | null;
+photo5_url?: string | null;
+photo6_url?: string | null;
+
+
+  onboarding_completed?: boolean | null;
+  onboarding_step?: number | null;
 };
+
 
 export const EMPTY_PROFILE: Profile = {
   anon_id: "",
-  user_id: null,
+user_id: undefined,
 
   first_name: "",
   nickname: "",
@@ -57,20 +61,22 @@ export const EMPTY_PROFILE: Profile = {
   gender: "",
   show_gender: false,
   seeking: "everyone",
-  intent: "",
+  intent: null,          // ✅ აქაა მთავარი FIX
 
   distance_km: 50,
-
-  photo1_url: "",
-  photo2_url: "",
-  photo3_url: "",
-  photo4_url: "",
-  photo5_url: "",
-  photo6_url: "",
-
-  onboarding_step: 1,
-  onboarding_completed: false,
 };
+
+export function stripNullish(obj: Record<string, any>) {
+  const out: any = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === undefined || v === null) continue;
+    if (typeof v === "string" && v.trim() === "") continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+
 
 // -------------------------
 // GETTERS
@@ -81,7 +87,7 @@ export async function getProfile(anon_id: string) {
 }
 
 export async function getProfileByIdentity(params: {
-  user_id?: string;
+user_id?: string | null;
   anon_id?: string;
 }) {
   // 1) try by user_id first
@@ -148,16 +154,23 @@ export async function upsertProfileByIdentity(
     if (a != null) safe.age = a;
   }
 
-  if (safe.age == null && !safe.birthdate) safe.age = 18;
+// ❌ აღარ ვწერთ 18-ს DB-ში ავტომატურად
+// თუ birthdate არ აქვს, უბრალოდ age ველი დარჩეს null
+
 
   // 1) Upsert by anon_id always
-  const { data: row, error: upErr } = await supabase
-    .from("profiles")
-    .upsert(safe, { onConflict: "anon_id" })
-    .select("*")
-    .maybeSingle();
+ const uid = safe.user_id ?? null;
 
-  if (upErr) return { data: null, error: upErr };
+// აირჩიე conflict სწორად
+const conflictCol = uid ? "user_id" : "anon_id";
+
+const { data: row, error: upErr } = await supabase
+  .from("profiles")
+  .upsert(safe, { onConflict: conflictCol })
+  .select("*")
+  .maybeSingle();
+
+if (upErr) return { data: null, error: upErr };
 
   // 2) If logged in -> bind user_id to THIS row (anon_id)
   if (safe.user_id) {

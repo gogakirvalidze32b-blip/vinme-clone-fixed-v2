@@ -45,11 +45,19 @@ export default function MatchesPage() {
         setRows([]);
         return;
       }
+function prettyBirth(iso?: string | null) {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  if (!y || !m || !d) return iso;
+  return `${d}/${m}/${y}`;
+}
+
 
       const { data: profs } = await supabase
-        .from("profiles")
-.select("user_id, anon_id, nickname, birthdate, city, bio, photo1_url")
-        .in("user_id", otherIds);
+  .from("profiles")
+  .select("user_id, anon_id, first_name, nickname, birthdate, city, bio, photo1_url")
+  .in("user_id", otherIds);
+
 
       const map = new Map<string, ProfileLite>();
       (profs ?? []).forEach((p: any) => map.set(p.user_id, p));

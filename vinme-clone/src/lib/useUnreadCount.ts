@@ -13,20 +13,27 @@ export function useUnreadCount(myAnonId: string | null) {
 
     let alive = true;
 
-    async function refresh() {
-      const { count, error } = await supabase
-        .from("messages")
-        .select("*", { count: "exact", head: true })
-        .neq("sender_anon", myAnonId)
-        .is("read_at", null);
+async function refresh() {
+  const { data: sess } = await supabase.auth.getSession();
+  const uid = sess.session?.user?.id ?? null;
+  if (!uid) return;
 
-      if (!alive) return;
-      if (error) {
-        console.error("Unread count error:", error);
-        return;
-      }
-      setUnread(count ?? 0);
-    }
+  // ✅ unread = რამდენ match-შია has_unread = true
+  const { count, error } = await supabase
+    .from("matches")
+    .select("id", { count: "exact", head: true })
+    .or(`user_a.eq.${uid},user_b.eq.${uid}`)
+    .eq("has_unread", true);
+
+  if (!alive) return;
+
+  if (error) {
+    console.error("Unread count error:", error);
+    return;
+  }
+
+  setUnread(count ?? 0);
+}
 
     refresh();
 

@@ -7,14 +7,24 @@ import { photoSrc } from "@/lib/photos";
 import { supabase } from "@/lib/supabase";
 
 
+type MsgRow = {
+  id: string;            // uuid
+  match_id: number;     // bigint
+  sender_id: string;    // uuid ✅
+  content: string;
+  created_at: string;
+  read_at: string | null;
+};
+
 type DbMessage = {
   id: string;
   match_id: number | null; // bigint in DB
-  sender_anon: string;
+  sender_anon: string; // 👈 ეს აუცილებელია
   content: string;
   created_at?: string;
   read_at?: string | null;
 };
+
 
 type DbMatch = {
   id: number; // bigint in DB
@@ -35,6 +45,14 @@ export default function ChatThreadPage() {
   const matchIdStr = params?.matchId ?? "";
   const matchId = Number(matchIdStr);
 
+useEffect(() => {
+  if (!matchId) return;
+
+  supabase
+    .from("matches")
+    .update({ has_unread: false })
+    .eq("id", matchId);
+}, [matchId]);
 
   const router = useRouter();
 
@@ -100,34 +118,36 @@ const { data, error } = await supabase.auth.getUser();
 
     (async () => {
       setLoading(true);
+const [matches, setMatches] = useState<any[]>([]);
 
-const { data: matchData, error: matchErr } = await supabase
-  
-        .from("matches")
-        .select("id, user_a, user_b")
-        .eq("id", matchId)
-        .maybeSingle();
+  const { data: matchData, error: matchErr } = await supabase
+  .from("matches")
+  .select("id, user_a, user_b, has_unread, last_message_at")
+  .order("last_message_at", { ascending: false })
+  .limit(1)
+  .maybeSingle();
 
-      if (!alive) return;
 
-      if (matchErr || !matchData) {
-        console.error("Match load error:", matchErr);
-        setLoading(false);
-        return;
-      }
+if (!alive) return;
 
-      setMatch(matchData as any);
-
+if (matchErr) {
+  console.error("Match load error:", matchErr);
+  setLoading(false);
+  return;
+}
+setMatch(matchData);
+    
       const otherId =
         (matchData as any).user_a === meUserId
           ? (matchData as any).user_b
           : (matchData as any).user_a;
 
-      const { data: prof, error: profErr } = await supabase
-        .from("profiles")
-        .select("user_id, anon_id, nickname, photo1_url, photo_url")
-        .eq("user_id", otherId)
-        .maybeSingle();
+     const { data: prof, error: profErr } = await supabase
+  .from("profiles")
+  .select("user_id, anon_id, first_name, nickname, birthdate, photo1_url")
+  .eq("user_id", otherId)
+  .maybeSingle();
+
 
       if (!alive) return;
 
@@ -193,27 +213,39 @@ const { data: matchData, error: matchErr } = await supabase
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
-  async function send() {
-    const t = text.trim();
-    if (!t || !myAnon) return;
-    if (!matchId || Number.isNaN(matchId)) return;
+async function send() {
+  const t = text.trim();
+  if (!t) return;
+  if (!matchId || Number.isNaN(matchId)) return;
 
-    setText("");
+  // ✅ user-based sender_id (matches your DB + RLS)
+  const {
+    data: { user },
+    error: uErr,
+  } = await supabase.auth.getUser();
 
-    const { data, error } = await supabase
-      .from("messages")
-      .insert({
-        match_id: matchId as any,
-        sender_anon: myAnon,
-        content: t,
-      })
-      .select("id, match_id, sender_anon, content, created_at, read_at")
-      .single();
+  if (uErr) {
+    console.error("getUser error:", uErr);
+    return;
+  }
+  if (!user?.id) return;
 
-    if (error) {
-      console.error("Send error:", error);
-      return;
-    }
+  setText("");
+
+  const { data, error } = await supabase
+    .from("messages")
+    .insert({
+      match_id: matchId as any, // bigint
+      sender_id: user.id,       // uuid ✅
+      content: t,
+    })
+    .select("id, match_id, sender_id, content, created_at, read_at")
+    .single();
+
+  if (error) {
+    console.error("Send error:", error);
+    return;
+  }
 
     setMessages((prev) =>
       prev.some((x) => x.id === data.id) ? prev : [...prev, data as any]

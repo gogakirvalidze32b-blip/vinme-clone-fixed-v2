@@ -21,25 +21,31 @@ export default function BottomNav() {
     return getOrCreateAnonId();
   }, []);
 
-  const [unread, setUnread] = useState(0);
+ 
 
   // ✅ fetch unread count
-  async function refreshUnread() {
-    if (!myAnonId) return;
+ const [unread, setUnread] = useState(0);
 
-    const { count, error } = await supabase
-      .from("messages")
-      .select("*", { count: "exact", head: true })
-      .neq("sender_anon", myAnonId) // not mine
-      .is("read_at", null); // unread
+async function refreshUnread() {
+  const { data: sess } = await supabase.auth.getSession();
+  const uid = sess.session?.user?.id ?? null;
+  if (!uid) return;
 
-    if (error) {
-      console.error("Unread count error:", error);
-      return;
-    }
+  // ✅ unread count = რამდენ match-შია has_unread=true
+  const { count, error } = await supabase
+    .from("matches")
+    .select("id", { count: "exact", head: true })
+    .or(`user_a.eq.${uid},user_b.eq.${uid}`)
+    .eq("has_unread", true);
 
-    setUnread(count ?? 0);
+  if (error) {
+    console.error("Unread count error:", error);
+    return;
   }
+
+  setUnread(count ?? 0);
+}
+
 
   useEffect(() => {
     if (!myAnonId) return;

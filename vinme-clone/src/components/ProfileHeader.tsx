@@ -1,23 +1,36 @@
 "use client";
 
+import { calcAgeFromBirthdate } from "@/lib/profile";
+
 type Props = {
   name: string;
-  age?: number;
+  age?: number | null;
+  birthdate?: string | null; // ✅ add this
   photoUrl?: string | null;
   progress?: number; // 0..100
   onEdit?: () => void;
   onOpenSettings?: () => void;
 };
-
 export default function ProfileHeader({
   name,
   age,
+  birthdate,
   photoUrl,
   progress = 50,
   onEdit,
   onOpenSettings,
 }: Props) {
   const pct = Math.max(0, Math.min(100, Math.round(progress)));
+
+  const safeBirth = birthdate?.trim() ? birthdate.trim() : null;
+
+  const shownAge =
+    typeof age === "number"
+      ? age
+      : safeBirth
+      ? calcAgeFromBirthdate(safeBirth)
+      : null;
+console.log("ProfileHeader props:", { name, age, birthdate });
 
   return (
     <div className="relative w-full rounded-3xl bg-zinc-950 px-5 pt-5 pb-6 text-white">
@@ -31,6 +44,7 @@ export default function ProfileHeader({
         ⚙️
       </button>
 
+
       <div className="flex items-center gap-4">
         {/* Avatar with ring */}
         <div className="relative h-20 w-20 shrink-0">
@@ -42,7 +56,11 @@ export default function ProfileHeader({
           />
           <div className="absolute inset-[4px] overflow-hidden rounded-full bg-white/10 ring-1 ring-white/10">
             {photoUrl ? (
-              <img src={photoUrl} className="h-full w-full object-cover" alt="avatar" />
+              <img
+                src={photoUrl}
+                className="h-full w-full object-cover"
+                alt="avatar"
+              />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-white/50">
                 👤
@@ -56,12 +74,12 @@ export default function ProfileHeader({
           </div>
         </div>
 
-        {/* Name + button */}
+        {/* Name + age + button */}
         <div className="flex-1">
           <div className="text-3xl font-extrabold tracking-tight">
             {name}
-            {typeof age === "number" ? (
-              <span className="text-white/80">, {age}</span>
+            {shownAge != null ? (
+              <span className="text-white/80">, {shownAge}</span>
             ) : null}
           </div>
 
