@@ -370,7 +370,7 @@ const imgSrc = useMemo(() => {
           </div>
 
           {/* ✅ ACTIONS */}
-          <div className="absolute bottom-[18px] left-0 right-0 z-40 flex justify-center pb-[env(safe-area-inset-bottom)]">
+          <div className="absolute bottom-[35px] left-0 right-0 z-40 flex justify-center pb-[env(safe-area-inset-bottom)]">
             <div className="flex items-center gap-8">
               <div
                 style={{
