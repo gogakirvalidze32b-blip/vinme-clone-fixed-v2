@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import BackButton from "@/components/BackButton";
 import { supabase } from "@/lib/supabase";
 import { photoSrc } from "@/lib/photos";
 import { calcAgeFromBirthdate } from "@/lib/profile";
 
-type Profile = {
+type ProfileRow = {
   user_id: string;
   anon_id: string | null;
   first_name: string | null;
@@ -36,8 +37,9 @@ export default function ProfilePage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
-  const [p, setP] = useState<Profile | null>(null);
-  const [imgOk, setImgOk] = useState(true);
+  const [me, setMe] = useState<ProfileRow | null>(null);
+  const [otherUser, setOtherUser] = useState<ProfileRow | null>(null);
+
   const [loadErr, setLoadErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -61,17 +63,17 @@ export default function ProfilePage() {
           .from("profiles")
           .select(
             `
-              user_id,
-              anon_id,
-              first_name,
-              nickname,
-              birthdate,
-              city,
-              bio,
-              photo1_url,
-              onboarding_step,
-              onboarding_completed
-            `
+            user_id,
+            anon_id,
+            first_name,
+            nickname,
+            birthdate,
+            city,
+            bio,
+            photo1_url,
+            onboarding_step,
+            onboarding_completed
+          `
           )
           .eq("user_id", uid)
           .maybeSingle();
@@ -82,7 +84,7 @@ export default function ProfilePage() {
           const e = normalizeSupabaseError(error);
           console.error("Profile load error:", e);
           setLoadErr(e?.message ?? "Failed to load profile");
-          setP(null);
+          setMe(null);
           return;
         }
 
@@ -99,40 +101,31 @@ export default function ProfilePage() {
         }
 
         const displayName =
-          (data.first_name ?? "").trim() ||
-          (data.nickname ?? "").trim() ||
-          "";
+          (data.first_name ?? "").trim() || (data.nickname ?? "").trim() || "";
 
-        // ✅ თუ სახელი მაინც ცარიელია -> onboarding (რადგან “რეალური პროფილი” გინდა)
+        // ✅ “რეალური პროფილი” გინდა → თუ სახელი ცარიელია, ისევ onboarding
         if (!displayName) {
           router.replace("/onboarding");
           return;
         }
 
-        const finalAge = calcAgeFromBirthdate(data.birthdate ?? null);
-
-        setP({
+        setMe({
           user_id: data.user_id,
           anon_id: data.anon_id ?? null,
           first_name: data.first_name ?? null,
           nickname: data.nickname ?? null,
           birthdate: data.birthdate ?? null,
-          city: data.city ?? "",
+          city: data.city ?? null,
           bio: data.bio ?? null,
           photo1_url: data.photo1_url ?? null,
           onboarding_step: data.onboarding_step ?? null,
           onboarding_completed: data.onboarding_completed ?? null,
         });
-
-        // (თუ გინდა age UI-ში)
-        // NOTE: p.age field აღარ გვაქვს აქ; UI-ში პირდაპირ finalAge გამოვიყენოთ
-        // მარტივად: render-ში calcAgeFromBirthdate(p.birthdate) დააყენე
-
       } catch (e: any) {
         const ex = normalizeSupabaseError(e);
         console.error("Profile page fatal error:", ex);
         setLoadErr(ex?.message ?? "Something went wrong");
-        setP(null);
+        setMe(null);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -143,9 +136,44 @@ export default function ProfilePage() {
     };
   }, [router]);
 
-  const avatarUrl = useMemo(() => photoSrc(p?.photo1_url ?? null), [p?.photo1_url]);
+  const name = useMemo(() => {
+    if (!me) return "";
+    return (me.first_name ?? "").trim() || (me.nickname ?? "").trim() || "";
+  }, [me]);
 
-  useEffect(() => setImgOk(true), [avatarUrl]);
+  const age = useMemo(() => {
+    if (!me) return null;
+    return calcAgeFromBirthdate(me.birthdate ?? null);
+  }, [me]);
+
+  const avatarUrl = useMemo(() => photoSrc(me?.photo1_url ?? null), [me?.photo1_url]);
+
+  // 0..100 progress (მარტივი მაგალითი — შენ შეგიძლია ზუსტად ჩათვალო)
+  const progress = useMemo(() => {
+    if (!me) return 0;
+
+    // მარტივი scoring:
+    // name 20, birth 20, city 10, bio 10, photo 40 = 100
+    let score = 0;
+    const hasName = !!((me.first_name ?? "").trim() || (me.nickname ?? "").trim());
+    const hasBirth = !!(me.birthdate ?? "");
+    const hasCity = !!((me.city ?? "").trim());
+    const hasBio = !!((me.bio ?? "").trim());
+    const hasPhoto = !!((me.photo1_url ?? "").trim());
+
+    if (hasName) score += 20;
+    if (hasBirth) score += 20;
+    if (hasCity) score += 10;
+    if (hasBio) score += 10;
+    if (hasPhoto) score += 40;
+
+    // თუ onboarding_completed true, მაინც 100 დავტოვოთ
+    if (me.onboarding_completed === true) score = 100;
+
+    return score;
+  }, [me]);
+
+  const pct = Math.max(0, Math.min(100, progress));
 
   if (loading) {
     return (
@@ -157,7 +185,7 @@ export default function ProfilePage() {
 
   if (loadErr) {
     return (
-      <div className="min-h-[100svh] bg-black text-white px-4 pt-6 pb-28 flex items-center justify-center">
+      <div className="min-h-[100svh] bg-black text-white px-4 pt-6 pb-24 flex items-center justify-center">
         <div className="w-full max-w-md rounded-3xl bg-zinc-950/90 p-6 ring-1 ring-white/10 text-center">
           <div className="text-red-400 font-semibold mb-2">Error</div>
           <div className="text-sm text-white/80 break-words">{loadErr}</div>
@@ -180,67 +208,163 @@ export default function ProfilePage() {
     );
   }
 
-  if (!p) return null;
-
-  const shownAge = calcAgeFromBirthdate(p.birthdate ?? null);
+  if (!me) return null;
 
   return (
-    <div className="min-h-[100svh] bg-black text-white px-4 pt-6 pb-28">
-      <div className="flex items-center gap-4">
-        <div className="relative">
-          {avatarUrl && imgOk ? (
-            <img
-              src={avatarUrl}
-              alt=""
-              onError={() => setImgOk(false)}
-              className="h-24 w-24 rounded-full object-cover"
-              draggable={false}
-            />
-          ) : (
-            <div className="h-24 w-24 rounded-full bg-white/10" />
-          )}
+    <main className="min-h-[100svh] bg-zinc-950 text-white">
+      <div className="mx-auto w-full max-w-[480px] px-4 pb-24 pt-4">
+        {/* Top row */}
+        <div className="flex items-center justify-between">
+          <BackButton href="/feed" label="Back" />
 
-          <div className="absolute -left-1 bottom-2 rounded-full bg-pink-500 px-3 py-1 text-xs font-bold text-white">
-            50%
+          <div className="flex items-center gap-2">
+            <button
+              className="rounded-full bg-white/10 px-3 py-2 text-sm text-white/80 ring-1 ring-white/10 hover:bg-white/15"
+              type="button"
+              title="Safety"
+              aria-label="Safety"
+              onClick={() => alert("Soon")}
+            >
+              🛡️
+            </button>
+
+            <button
+              className="rounded-full bg-white/10 px-3 py-2 text-sm text-white/80 ring-1 ring-white/10 hover:bg-white/15"
+              type="button"
+              title="Settings"
+              aria-label="Settings"
+              onClick={() => router.push("/settings")}
+            >
+              ⚙️
+            </button>
           </div>
         </div>
 
-        <div>
-          <h1 className="text-2xl font-bold">
-            {((p.first_name ?? "").trim() || (p.nickname ?? "").trim())}
-            {shownAge != null ? `, ${shownAge}` : ""}
-          </h1>
+        {/* Header */}
+        <div className="mt-6 flex items-center gap-4">
+          {/* Avatar + progress ring */}
+          <div className="relative h-20 w-20 shrink-0">
+            <div
+              className="absolute inset-0 rounded-full"
+              style={{
+                background: `conic-gradient(rgba(236,72,153,.95) ${pct * 3.6}deg, rgba(255,255,255,.12) 0deg)`,
+              }}
+            />
+            <div className="absolute inset-[3px] rounded-full bg-zinc-950" />
 
-          <p className="text-white/70">{p.city ?? ""}</p>
+            <div className="absolute inset-[6px] overflow-hidden rounded-full bg-white/10">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={name} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-white/60">
+                  👤
+                </div>
+              )}
+            </div>
 
-          <button className="mt-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black active:scale-[0.99]">
-            ✏️ Edit profile
-          </button>
+            {/* % badge */}
+            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-zinc-950 px-3 py-1 text-xs font-semibold ring-2 ring-pink-500">
+              {pct}%
+            </div>
+          </div>
+
+          {/* Name + button */}
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-extrabold">
+                {name}
+                {age != null ? `, ${age}` : ""}
+              </h1>
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/15 text-white/70">
+                ✓
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => router.push("/profile/edit")}
+              className="mt-3 inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 font-semibold text-zinc-900 hover:bg-zinc-200"
+            >
+              ✏️ Edit profile
+            </button>
+          </div>
+        </div>
+
+        {/* Big card */}
+        <div className="mt-6 rounded-3xl bg-white/10 p-5 ring-1 ring-white/10 backdrop-blur">
+          <div className="flex items-center justify-between">
+            <div className="flex items-start gap-3">
+              <div className="mt-1 text-2xl">👥</div>
+              <div>
+                <div className="text-lg font-bold">Try Double Date</div>
+                <div className="text-sm text-white/70">
+                  Invite your friends and find other pairs.
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="rounded-full bg-white/10 px-3 py-2 text-white/80 ring-1 ring-white/10 hover:bg-white/15"
+              aria-label="Open"
+              title="Open"
+              onClick={() => alert("Soon")}
+            >
+              ➜
+            </button>
+          </div>
+        </div>
+
+        {/* Small tiles row */}
+        <div className="mt-5 grid grid-cols-3 gap-3">
+          <Tile icon="⭐" title="Super Likes" subtitle="0" onClick={() => alert("Soon")} />
+          <Tile icon="⚡" title="Boosts" subtitle="My Boosts" onClick={() => alert("Soon")} />
+          <Tile icon="🔥" title="Subs" subtitle="Subscriptions" onClick={() => alert("Soon")} />
+        </div>
+
+        {/* Optional promo card */}
+        <div className="mt-5 rounded-3xl bg-gradient-to-br from-amber-500/20 via-zinc-900/30 to-zinc-900/30 p-5 ring-1 ring-white/10">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-lg font-extrabold">Premium</div>
+              <div className="mt-1 text-sm text-white/75">
+                See who likes you, top picks, and more.
+              </div>
+            </div>
+            <button
+              type="button"
+              className="rounded-full bg-amber-300 px-5 py-3 font-semibold text-zinc-900 hover:bg-amber-200"
+              onClick={() => alert("Soon")}
+            >
+              Upgrade
+            </button>
+          </div>
         </div>
       </div>
+    </main>
+  );
+}
 
-      {p.bio ? (
-        <div className="mt-6 rounded-2xl bg-zinc-900/70 p-4">
-          <p className="text-white/90">{p.bio}</p>
-        </div>
-      ) : null}
-
-      <div className="mt-6 grid grid-cols-3 gap-3">
-        <div className="rounded-2xl bg-zinc-900 p-4 text-center">
-          ⭐
-          <p className="mt-2 text-sm text-white/70">Super Likes</p>
-        </div>
-
-        <div className="rounded-2xl bg-zinc-900 p-4 text-center text-purple-400">
-          ⚡
-          <p className="mt-2 text-sm text-white/70">Boosts</p>
-        </div>
-
-        <div className="rounded-2xl bg-zinc-900 p-4 text-center text-pink-500">
-          🔥
-          <p className="mt-2 text-sm text-white/70">Subscriptions</p>
-        </div>
-      </div>
-    </div>
+function Tile({
+  icon,
+  title,
+  subtitle,
+  onClick,
+}: {
+  icon: string;
+  title: string;
+  subtitle: string;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-3xl bg-white/10 p-4 text-left ring-1 ring-white/10 hover:bg-white/15"
+    >
+      <div className="text-2xl">{icon}</div>
+      <div className="mt-3 text-sm font-semibold">{title}</div>
+      <div className="text-xs text-white/60">{subtitle}</div>
+    </button>
   );
 }

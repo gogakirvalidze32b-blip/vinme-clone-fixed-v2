@@ -1,6 +1,9 @@
 "use client";
 
 import { calcAgeFromBirthdate } from "@/lib/profile";
+import { useRouter } from "next/navigation";
+
+const router = useRouter();
 
 type Props = {
   name: string;
@@ -76,19 +79,29 @@ console.log("ProfileHeader props:", { name, age, birthdate });
 
         {/* Name + age + button */}
         <div className="flex-1">
-          <div className="text-3xl font-extrabold tracking-tight">
-            {name}
-            {shownAge != null ? (
-              <span className="text-white/80">, {shownAge}</span>
-            ) : null}
-          </div>
+<div className="mt-2 flex items-center gap-3">
+  <button
+    onClick={() => router.push("/profile/edit")}
+    className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black active:scale-[0.99]"
+  >
+    ✏️ Edit profile
+  </button>
 
-          <button
-            onClick={onEdit}
-            className="mt-3 inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 font-extrabold text-zinc-900 hover:bg-zinc-200"
-          >
-            ✏️ Edit profile
-          </button>
+  <button
+    onClick={() => router.push("/settings")}
+    aria-label="Settings"
+    className="h-10 w-10 rounded-full bg-white/10 ring-1 ring-white/10 flex items-center justify-center text-lg active:scale-[0.99]"
+    title="Settings"
+  >
+    ⚙️
+  </button>
+</div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-extrabold">
+              {name}
+              {shownAge != null ? `, ${shownAge}` : ""}
+            </h1>
+          </div>
         </div>
       </div>
     </div>

@@ -1,39 +1,42 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { photoSrc } from "@/lib/photos";
 import MatchModal from "./MatchModal";
 import { supabase } from "@/lib/supabase";
 
-
-
-// ✅ ჩასვი სადაც გაქვს რეალურად
-
-// ⚠️ თუ path სხვანაირია, შეცვალე: "@/components/MatchModal" -> "@/app/..." ან "@/components/modals/..."
+type ProfileRow = {
+  user_id: string;
+  first_name: string | null;
+  nickname: string | null;
+  photo1_url: string | null;
+};
 
 type CardUser = {
-  user_id: string; // ✅ ესაა target uuid
+  user_id: string; // target uuid
   nickname: string;
   age: number;
   city: string;
   distanceKm?: number;
   recentlyActive?: boolean;
   photo_url?: string | null;
-  photo1_url?: string | null; //
+  photo1_url?: string | null;
 };
 
 type Props = {
   user: CardUser | null;
   otherUserId?: string;
-  myPhoto?: string | null;          // ✅ დაამატე
-  myName?: string;                  // სურვილისამებრ
+  myPhoto?: string | null;
+  myName?: string;
   loading?: boolean;
   onLike?: () => string | null | Promise<string | null>;
   onSkip?: () => void | Promise<void>;
   onOpenProfile?: () => void;
   showTopTabs?: boolean;
 };
+
+const NAV_H = 60; // BottomNav height
 
 export default function TinderCard({
   user,
@@ -44,18 +47,20 @@ export default function TinderCard({
   onOpenProfile,
   showTopTabs = false,
 }: Props) {
+  const router = useRouter();
+  const pathname = usePathname();
+
   // ✅ ALL HOOKS FIRST
   const [x, setX] = useState(0);
   const [rot, setRot] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [animating, setAnimating] = useState(false);
-const imgSrc = photoSrc(user?.photo1_url ?? user?.photo_url ?? null);
+
+  const [me, setMe] = useState<ProfileRow | null>(null);
+  const [otherUser, setOtherUser] = useState<ProfileRow | null>(null);
 
   const [showMatch, setShowMatch] = useState(false);
   const [matchId, setMatchId] = useState<string | null>(null);
-
-  const router = useRouter();
-  const pathname = usePathname();
 
   const startX = useRef(0);
   const downAt = useRef(0);
@@ -64,67 +69,100 @@ const imgSrc = photoSrc(user?.photo1_url ?? user?.photo_url ?? null);
   const progress = Math.min(Math.abs(x) / threshold, 1);
   const dir = x > 10 ? "right" : x < -10 ? "left" : "none";
 
-  // ✅ აქ იყო კონფლიქტი photoSrc სახელზე — ვტოვებ იგივე ლოგიკას, უბრალოდ ვუცვლი სახელს
-  const cardPhoto =
-    typeof user?.photo_url === "string" &&
-    user.photo_url.trim() &&
-    !user.photo_url.includes("google.com/search")
-      ? user.photo_url
-      : "/bg-retro-mobile.png";
+  // ✅ picture url
+const imgSrc = useMemo(() => {
+  // აიღე ფოტო path/url სხვადასხვა ველიდან
+  const raw =
+    user?.photo1_url ??
+    user?.photo_url ??
+   
+    null;
+
+  // photoSrc თვითონ აკეთებს PATH -> public URL
+  return photoSrc(raw);
+}, [user?.photo1_url, user?.photo_url, ]);
+
+  // ✅ load ME + OTHER USER (for modal)
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      const { data: sess } = await supabase.auth.getSession();
+      const uid = sess.session?.user?.id ?? null;
+      if (!uid) return;
+
+      const meRes = await supabase
+        .from("profiles")
+        .select("user_id, first_name, nickname, photo1_url")
+        .eq("user_id", uid)
+        .maybeSingle();
+
+      if (alive && !meRes.error) {
+        setMe((meRes.data as ProfileRow) ?? null);
+      }
+
+      if (!otherUserId) {
+        if (alive) setOtherUser(null);
+        return;
+      }
+
+      const otherRes = await supabase
+        .from("profiles")
+        .select("user_id, first_name, nickname, photo1_url")
+        .eq("user_id", otherUserId)
+        .maybeSingle();
+
+      if (otherRes.error) {
+        console.error("OTHER USER load error:", otherRes.error.message);
+        if (alive) setOtherUser(null);
+      } else {
+        if (alive) setOtherUser((otherRes.data as ProfileRow) ?? null);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [otherUserId]);
 
   const closeMatch = () => setShowMatch(false);
 
-  // ✅ matches table: user_a / user_b
-  // ✅ matches table: user_a / user_b
-async function getOrCreateMatch(targetUserId: string) {
-  // 1️⃣ env guard — ყოველთვის ზემოთ
-  if (!supabase) throw new Error("Supabase env missing");
-  const sb = supabase;
+  async function getOrCreateMatch(targetUserId: string) {
+    if (typeof window === "undefined") return null;
 
-  // 2️⃣ authenticated user
-  if (typeof window === "undefined") {
-  // build / server — არ ვიძახებთ auth-ს
-  return;
-}
-let me: string | null = null;
+    const { data, error } = await supabase.auth.getUser();
+    if (error) {
+      console.error("auth.getUser error:", error);
+      return null;
+    }
 
-if (typeof window !== "undefined") {
-  const { data, error } = await supabase.auth.getUser();
-  if (error) console.error("auth.getUser error:", error);
-  me = data.user?.id ?? null;
-}
+    const myId = data.user?.id ?? null;
+    if (!myId) return null;
 
-if (!me) throw new Error("Not authenticated");
+    // check existing match (both orders)
+    const { data: existing, error: findErr } = await supabase
+      .from("matches")
+      .select("id")
+      .or(
+        `and(user_a.eq.${myId},user_b.eq.${targetUserId}),and(user_a.eq.${targetUserId},user_b.eq.${myId})`
+      )
+      .limit(1)
+      .maybeSingle();
 
+    if (findErr) throw findErr;
+    if (existing?.id) return String(existing.id);
 
+    // create
+    const { data: created, error: createErr } = await supabase
+      .from("matches")
+      .insert({ user_a: myId, user_b: targetUserId })
+      .select("id")
+      .single();
 
-  // 3️⃣ check existing match (ორივე კომბინაცია)
-  const { data: existing, error: findErr } = await sb
-    .from("matches")
-    .select("id")
-    .or(
-      `and(user_a.eq."${me}",user_b.eq."${targetUserId}"),and(user_a.eq."${targetUserId}",user_b.eq."${me}")`
-    )
-    .limit(1)
-    .maybeSingle();
-
-  if (findErr) throw findErr;
-  if (existing?.id) return String(existing.id);
-
-  // 4️⃣ create new match
-  const { data: created, error: createErr } = await sb
-    .from("matches")
-    .insert({
-      user_a: me,
-      user_b: targetUserId,
-    })
-    .select("id")
-    .single();
-
-  if (createErr) throw createErr;
-  return String(created.id);
-}
-  // ✅ EARLY RETURNS AFTER HOOKS
+    if (createErr) throw createErr;
+    return created?.id ? String(created.id) : null;
+  }
+// ✅ EARLY RETURNS AFTER HOOKS
   if (loading === true) return <TinderSkeleton />;
   if (!user) return <TinderEmpty onOpenProfile={onOpenProfile} />;
 
@@ -147,7 +185,6 @@ if (!me) throw new Error("Not authenticated");
     if (animating) return;
     setAnimating(true);
 
-    // animate off-screen
     const off = action === "like" ? window.innerWidth : -window.innerWidth;
     setX(off);
     setRot(action === "like" ? 14 : -14);
@@ -187,56 +224,40 @@ if (!me) throw new Error("Not authenticated");
   }
 
   return (
-    <div className="relative min-h-[100dvh] bg-black text-white overflow-x-hidden pb-28">
-      {/* ✅ CARD WRAPPER (stick to bottom above BottomNav) */}
-      <div className="relative z-10 flex w-full justify-center items-end px-0 pt-0">
+    <div className="relative w-full h-full bg-black text-white overflow-hidden">
+      {/* ✅ CARD WRAPPER: height = viewport - BottomNav */}
+      <div className="mx-auto w-full max-w-[480px] px-0">
         <div
-          className="
-            relative z-10 w-full max-w-[420px]
-            h-[calc(100dvh-12px)]
-            overflow-hidden
-            bg-black shadow-[0_20px_60px_rgba(0,0,0,0.55)]
-          "
+          className="relative w-full overflow-hidden bg-black ring-1 ring-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.55)]"
           style={{
+            height: `calc(100dvh - (${NAV_H}px + env(safe-area-inset-bottom)))`,
             transform: `translateX(${x}px) rotate(${rot}deg)`,
             transition: dragging ? "none" : "transform 180ms ease-out",
-            touchAction: "none",
             willChange: "transform",
+            touchAction: "pan-y",
+            userSelect: "none",
+            WebkitUserSelect: "none",
           }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
         >
-          {/* ✅ IMAGE (z-0) */}
-   return (
-  
-    {/* IMAGE */}
-    <div className="absolute inset-0">
+          {/* ✅ IMAGE */}
+          <div className="absolute inset-0">
+            <img
+              src={imgSrc || "/bg-retro-mobile.png"}
+              alt=""
+              draggable={false}
+              onDragStart={(e) => e.preventDefault()}
+              className="absolute inset-0 w-full h-full object-cover object-center select-none pointer-events-none"
+            />
+          </div>
 
-    <img
-   
-    src={photoSrc(user.photo1_url ?? user.photo_url)}
-    alt=""
-    className="w-full h-full object-cover"
-    draggable={false}
-  
-    
-      onLoad={() => {
-        console.log("✅ loaded:", photoSrc(user.photo1_url ?? user.photo_url));
-      }}
-      onError={() => {
-        console.log("❌ failed:", photoSrc(user.photo1_url ?? user.photo_url));
-      }}
-    />
-  </div>
-);
+          {/* ✅ GRADIENT */}
+          <div className="absolute inset-0 z-10 bg-gradient-to-b from-black/25 via-transparent to-black/75" />
 
-
-          {/* ✅ GRADIENT (z-10) */}
-          <div className="absolute inset-0 z-10 bg-gradient-to-b from-black/30 via-transparent to-black/70" />
-
-          {/* ✅ TOP BUTTONS (z-50) */}
+          {/* ✅ TOP BUTTONS */}
           <button
             type="button"
             onClick={() => router.push("/chat")}
@@ -253,29 +274,23 @@ if (!me) throw new Error("Not authenticated");
             onPointerUp={(e) => e.stopPropagation()}
             onClick={async (e) => {
               e.stopPropagation();
+              if (!otherUserId) return;
 
-              if (!otherUserId) {
-                console.warn("Missing otherUserId, skipping match create");
-                setShowMatch(true); // თუ გინდა მაინც გამოჩნდეს modal
-                return;
+              try {
+                const id = await getOrCreateMatch(otherUserId);
+                if (!id) throw new Error("Match id missing");
+                setMatchId(id);
+                setShowMatch(true);
+              } catch (err) {
+                console.error("TEST MATCH failed:", err);
               }
-
-             try {
-  const id = await getOrCreateMatch(otherUserId);
-  if (!id) throw new Error("Match id missing");
-  setMatchId(id);
-  setShowMatch(true);
-} catch (err) {
-  console.error("TEST MATCH failed:", err);
-}
-
             }}
             className="absolute right-4 top-4 z-50 rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black shadow"
           >
             TEST MATCH
           </button>
 
-          {/* Corner LIKE/NOPE */}
+          {/* ✅ LIKE/NOPE badge */}
           {dir !== "none" && (
             <div
               className={`absolute top-0 z-30 select-none ${
@@ -323,8 +338,8 @@ if (!me) throw new Error("Not authenticated");
             </div>
           )}
 
-          {/* ✅ INFO (z-30) */}
-          <div className="absolute bottom-28 left-0 right-0 z-30 px-4">
+          {/* ✅ INFO */}
+          <div className="absolute bottom-[88px] left-0 right-0 z-30 px-4">
             {user.recentlyActive && (
               <span className="inline-block rounded-full bg-emerald-300/90 px-3 py-1 text-xs font-semibold text-black">
                 Recently Active
@@ -335,9 +350,7 @@ if (!me) throw new Error("Not authenticated");
               <div>
                 <div className="text-3xl font-extrabold leading-tight">
                   {user.nickname}{" "}
-                  <span className="font-semibold text-white/90">
-                    {user.age}
-                  </span>
+                  <span className="font-semibold text-white/90">{user.age}</span>
                 </div>
 
                 <div className="mt-1 flex items-center gap-2 text-sm text-white/85">
@@ -356,10 +369,9 @@ if (!me) throw new Error("Not authenticated");
             </div>
           </div>
 
-          {/* ✅ ACTIONS (z-40) */}
-          <div className="absolute bottom-15 left-0 right-0 z-40 flex justify-center">
+          {/* ✅ ACTIONS */}
+          <div className="absolute bottom-[18px] left-0 right-0 z-40 flex justify-center pb-[env(safe-area-inset-bottom)]">
             <div className="flex items-center gap-8">
-              {/* ❌ */}
               <div
                 style={{
                   opacity: dir === "left" ? 0.65 + progress * 0.35 : 1,
@@ -381,7 +393,6 @@ if (!me) throw new Error("Not authenticated");
                 />
               </div>
 
-              {/* 💚 */}
               <div
                 style={{
                   opacity: dir === "right" ? 0.65 + progress * 0.35 : 1,
@@ -408,48 +419,46 @@ if (!me) throw new Error("Not authenticated");
         </div>
       </div>
 
-      {/* ✅ MATCH MODAL (External file) */}
+      {/* ✅ MATCH MODAL */}
+      {showMatch && (
+        <MatchModal
+          onClose={closeMatch}
+          onOpenChat={() => router.push(`/chat/${matchId}`)}
+          meName={me?.nickname ?? me?.first_name ?? "მე"}
+          myPhoto={me?.photo1_url ?? null}
+          matchName={otherUser?.nickname ?? otherUser?.first_name ?? "ვიღაც"}
+          theirPhoto={otherUser?.photo1_url ?? null}
+        />
+      )}
 
-
-{showMatch && matchId != null && (
-  <MatchModal
-    onClose={closeMatch}
-    onOpenChat={() => {
-      closeMatch();
-      router.push(`/chat/${matchId}`);
-    }}
-    meName="მე"
-    matchName={user?.nickname ?? "ვიღაც"}
-    myPhoto={null}
-    theirPhoto={user?.photo_url ?? null}
-  />
-)}
-
-
-      {/* ✅ BOTTOM PANEL */}
+      {/* ✅ BOTTOM PANEL (full width like Tinder) */}
       <nav className="fixed bottom-0 left-0 right-0 z-[9999]">
-        <div className="w-full bg-black/60 backdrop-blur-md">
+        <div className="w-full bg-black/60 backdrop-blur-md border-t border-white/10">
           <div className="mx-auto flex max-w-[420px] items-center justify-between px-4 py-2 pb-[max(6px,env(safe-area-inset-bottom))]">
-            <button
-              type="button"
-              onClick={() => router.push("/feed")}
-              className={`flex h-10 w-10 items-center justify-center text-xl active:scale-95 transition ${
-                pathname === "/feed" ? "text-orange-400" : "text-white/70"
-              }`}
-            >
-              🔥
-            </button>
-
+            {/* 1) MATCHES 💕 (გული ოდნავ მარცხნივ) */}
             <button
               type="button"
               onClick={() => router.push("/matches")}
-              className={`flex h-10 w-10 items-center justify-center text-xl active:scale-95 transition ${
-                pathname === "/matches" ? "text-red-400" : "text-white/70"
+              className={`flex h-10 w-10 items-center justify-center text-xl active:scale-95 transition -ml-2 ${
+                pathname === "/matches" ? "text-pink-400" : "text-white/70"
               }`}
             >
-              ❤️
+              💕
             </button>
 
+            {/* 2) CARDS STACK (🔥 მაგივრად) */}
+            <button
+              type="button"
+              onClick={() => router.push("/feed")}
+              className={`flex h-10 w-10 items-center justify-center active:scale-95 transition ${
+                pathname === "/feed" ? "text-white" : "text-white/60"
+              }`}
+              aria-label="Cards"
+            >
+              <CardStackIcon active={pathname === "/feed"} />
+            </button>
+
+            {/* 3) CHAT */}
             <button
               type="button"
               onClick={() => router.push("/chat")}
@@ -460,6 +469,7 @@ if (!me) throw new Error("Not authenticated");
               💬
             </button>
 
+            {/* 4) PROFILE */}
             <button
               type="button"
               onClick={() => router.push("/profile")}
@@ -476,6 +486,8 @@ if (!me) throw new Error("Not authenticated");
   );
 }
 
+/* ===== Helpers (ფაილის ბოლოში უნდა იყოს) ===== */
+
 function TinderSkeleton() {
   return (
     <div className="fixed inset-0 overflow-hidden text-white flex items-center justify-center bg-black">
@@ -485,6 +497,7 @@ function TinderSkeleton() {
 }
 
 function TinderEmpty({ onOpenProfile }: { onOpenProfile?: () => void }) {
+  const router = useRouter();
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center gap-3 text-white px-4 bg-black">
       <p className="text-lg font-semibold">No profiles found 😅</p>
@@ -493,9 +506,7 @@ function TinderEmpty({ onOpenProfile }: { onOpenProfile?: () => void }) {
         <button
           type="button"
           className="rounded-xl bg-white/10 px-4 py-3 font-semibold text-white ring-1 ring-white/10 hover:bg-white/15"
-          onClick={() => {
-            // stay on feed
-          }}
+          onClick={() => router.push("/feed")}
         >
           Home
         </button>
@@ -541,3 +552,45 @@ function CircleBtn({
   );
 }
 
+function CardStackIcon({
+  active,
+  size = 26,
+}: {
+  active?: boolean;
+  size?: number;
+}) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 64 64"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      {/* back card */}
+      <g transform="translate(10,14) rotate(-18 20 20)">
+        <rect
+          x="6"
+          y="10"
+          width="22"
+          height="30"
+          rx="8"
+          opacity={active ? 0.45 : 0.22}
+        />
+      </g>
+
+      {/* front card */}
+      <g transform="translate(18,8) rotate(8 22 22)">
+        <rect
+          x="14"
+          y="8"
+          width="28"
+          height="38"
+          rx="10"
+          opacity={active ? 0.9 : 0.6}
+        />
+      </g>
+    </svg>
+  );
+}

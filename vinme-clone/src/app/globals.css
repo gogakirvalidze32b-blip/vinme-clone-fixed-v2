@@ -36,3 +36,17 @@ html, body {
 }
 
 
+/* ✅ stop blue selection / highlight while swiping */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  overscroll-behavior: none;
+}
+
+img {
+  -webkit-user-drag: none;
+  user-select: none;
+}

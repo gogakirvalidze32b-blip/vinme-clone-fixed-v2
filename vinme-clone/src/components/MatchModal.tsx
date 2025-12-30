@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import { photoSrc } from "@/lib/photos";
 
 type MatchModalProps = {
@@ -8,9 +8,10 @@ type MatchModalProps = {
   onOpenChat: () => void;
   meName?: string;
   matchName?: string;
-  myPhoto?: string | null; // PATH ან URL
-  theirPhoto?: string | null; // PATH ან URL
+  myPhoto?: string | null;
+  theirPhoto?: string | null;
 };
+
 
 export default function MatchModal({
   onClose,
@@ -20,73 +21,100 @@ export default function MatchModal({
   myPhoto = null,
   theirPhoto = null,
 }: MatchModalProps) {
-  // ✅ PATH -> URL
-  const myAvatar = photoSrc(myPhoto);
-  const theirAvatar = photoSrc(theirPhoto);
+
+  // ✅ PATH -> URL (robust + memoized)
+  const myAvatar = useMemo(() => photoSrc(myPhoto), [myPhoto]);
+  const theirAvatar = useMemo(() => photoSrc(theirPhoto), [theirPhoto]);
+
+  console.log("MY RAW:", myPhoto);
+console.log("MY AVATAR:", myAvatar);
+
+
+  // ✅ flags (უფრო სუფთა რენდერისთვის)
+  const hasMyAvatar = !!myAvatar;
+  const hasTheirAvatar = !!theirAvatar;
+
+  // 🧪 DEBUG (დროებით დატოვე თუ გინდა)
+  // console.log("MatchModal:", { myPhoto, myAvatar, theirPhoto, theirAvatar });
 
   return (
-    <div
-      className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      {/* stop propagation so clicking inside doesn't close */}
-      <div
-        className="w-full max-w-sm rounded-3xl bg-zinc-950/90 p-6 ring-1 ring-white/10"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="mb-4 text-center text-2xl font-extrabold">შეხვდით 🎉</h2>
+<div
+  className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm"
+  onClick={onClose}
+>
+  <div
+    className="w-full max-w-sm rounded-3xl bg-zinc-950/90 p-6 ring-1 ring-white/10"
+    onClick={(e) => e.stopPropagation()}
+  >
+    {/* Title */}
+    <div className="text-center">
+      <h2 className="text-2xl font-bold tracking-tight text-white">
+        შეხვედრა შედგა 🐾
+      </h2>
+      <p className="mt-2 text-sm text-white/80">ყველაფერი ახლა იწყება✨</p>
+    </div>
 
-        {/* Avatars */}
-        <div className="mb-6 flex items-center justify-center gap-6">
-          {/* ME */}
-          <div className="h-20 w-20 overflow-hidden rounded-full bg-white/10 ring-2 ring-white/10 flex items-center justify-center">
-            {myAvatar ? (
-              <img
-                src={myAvatar}
-                alt={meName}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <span className="text-2xl opacity-80">🙂</span>
-            )}
-          </div>
-
-          {/* THEM */}
-          <div className="h-20 w-20 overflow-hidden rounded-full bg-white/10 ring-2 ring-white/10 flex items-center justify-center">
-            {theirAvatar ? (
-              <img
-                src={theirAvatar}
-                alt={matchName}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <span className="text-2xl opacity-80">✨</span>
-            )}
-          </div>
+    {/* Avatars */}
+    <div className="mt-5 flex items-center justify-center gap-6">
+      {/* Me */}
+      <div className="text-center">
+        <div className="h-20 w-20 overflow-hidden rounded-full ring-2 ring-white/20">
+          <img
+            src={myAvatar || "/avatar-placeholder.png"}
+            alt=""
+            className="h-full w-full object-cover"
+            draggable={false}
+          />
         </div>
+        <div className="mt-2 text-sm text-white/70">{meName}</div>
+      </div>
 
-        {/* Names */}
-        <div className="mb-6 text-center text-sm opacity-80">
-          {meName} 💛 {matchName}
+      {/* Their */}
+      <div className="text-center">
+        <div className="h-20 w-20 overflow-hidden rounded-full ring-2 ring-pink-400/70">
+          <img
+            src={theirAvatar || "/avatar-placeholder.png"}
+            alt=""
+            className="h-full w-full object-cover"
+            draggable={false}
+          />
         </div>
-
-        {/* Actions */}
-        <div className="flex flex-col gap-3">
-          <button
-            onClick={onOpenChat}
-            className="w-full rounded-2xl bg-orange-500 py-3 font-semibold text-black active:scale-[0.99]"
-          >
-            მიმოწერა 💬
-          </button>
-
-          <button
-            onClick={onClose}
-            className="w-full rounded-2xl bg-white/10 py-3 text-white ring-1 ring-white/10 active:scale-[0.99]"
-          >
-            გაგრძელება →
-          </button>
-        </div>
+        <div className="mt-2 text-sm text-white/70">{matchName}</div>
       </div>
     </div>
+
+    {/* Primary action */}
+    <button
+      type="button"
+      onClick={onOpenChat}
+      className="
+        mt-6 w-full rounded-xl
+        bg-gradient-to-r from-orange-500 to-pink-500
+        px-6 py-4
+        text-base font-semibold text-black
+        shadow-lg
+        active:scale-[0.98]
+        transition
+      "
+    >
+      მიწერე ახლა 💬
+    </button>
+
+    {/* Secondary action */}
+    <button
+      type="button"
+      onClick={onClose}
+      className="
+        mt-3 w-full rounded-xl
+        bg-white/10 px-6 py-3
+        text-sm font-medium text-white/85
+        hover:bg-white/15
+        transition
+      "
+    >
+      მოგვიანებით →
+    </button>
+  </div>
+</div>
   );
 }
