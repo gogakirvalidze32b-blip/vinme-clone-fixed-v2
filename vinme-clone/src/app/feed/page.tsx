@@ -147,6 +147,13 @@ const mySeeking = me?.seeking ?? "everyone";
   .not("photo1_url", "is", null)
   .eq("onboarding_completed", true);
 
+  // ✅ EXCLUDE ALREADY SWIPED USERS
+if (swipedIds.length > 0) {
+  // supabase expects "(...)" string for NOT IN
+  const inList = `(${swipedIds.map((id) => `"${id}"`).join(",")})`;
+  q = q.not("user_id", "in", inList);
+}
+
 // 1) მე ვის ვხედავ (mySeeking -> candidate.gender)
 if (mySeeking !== "everyone") {
   q = q.eq("gender", mySeeking);
@@ -410,13 +417,14 @@ return (
       ) : (
         <div className="w-full h-full">
           <TinderCard
-            user={cardUser as any}
-            otherUserId={cardUser.user_id}
-            loading={loadingTop}
-            onLike={onLike}
-            onSkip={onSkip}
-            onOpenProfile={onOpenProfile}
-          />
+  key={cardUser.id} // ✅ IMPORTANT
+  user={cardUser as any}
+  otherUserId={cardUser.user_id}
+  loading={loadingTop}
+  onLike={onLike}
+  onSkip={onSkip}
+  onOpenProfile={onOpenProfile}
+/>
         </div>
       )}
     </div>
