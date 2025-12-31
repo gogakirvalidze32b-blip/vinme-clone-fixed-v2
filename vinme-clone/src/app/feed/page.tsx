@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { photoSrc } from "@/lib/photos";
 import TinderCard from "@/components/TinderCard";
- import BottomNav, { BOTTOM_NAV_PB_CLASS } from "@/components/BottomNav";
+ import BottomNav from "@/components/BottomNav";
 import { supabase } from "@/lib/supabase";
+import { error } from "console";
 type Gender = "" | "male" | "female" | "nonbinary" | "other";
 type Seeking = "everyone" | "male" | "female" | "nonbinary" | "other";
 
@@ -26,7 +27,8 @@ type ProfileRow = {
 
   photo1_url: string | null;
   photo_url?: string | null;
-
+  lat: number | null;
+  lng: number | null;
   onboarding_completed: boolean | null;
   onboarding_step: number | null;
 
@@ -56,15 +58,13 @@ useEffect(() => {
     const uid = sess.session?.user?.id;
     if (!uid) return;
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("profiles")
-      .select("user_id, first_name, nickname, photo1_url, photo_url")
+      .select("user_id, first_name, nickname, photo1_url, photo_url, lat, lng")
       .eq("user_id", uid)
       .single();
 
-      console.log("ME from DB:", data);
-
-
+      if (error) return; // ან handle
     setMe(data as ProfileRow);
   })();
 }, []);
@@ -72,7 +72,7 @@ useEffect(() => {
   const [top, setTop] = useState<ProfileRow | null>(null);
 const myGender = me?.gender ?? null;
 const mySeeking = me?.seeking ?? "everyone";
-
+const geoOnce = useRef(false);
   const [loading, setLoading] = useState(true);
   const [loadingTop, setLoadingTop] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -185,46 +185,74 @@ if (myGender === "male" || myGender === "female" || myGender === "nonbinary") {
   // ----------------------------
   // INITIAL BOOTSTRAP
   // ----------------------------
-  useEffect(() => {
-    let alive = true;
+useEffect(() => {
+  let alive = true;
 
-    (async () => {
-      try {
-        setLoading(true);
-        setErr(null);
+  (async () => {
+    try {
+      setLoading(true);
+      setErr(null);
 
-        const my = await loadMe();
+      const my = await loadMe();
 
-        // no profile row yet -> onboarding
-        if (!my?.user_id) {
-          if (alive) setLoading(false);
-          router.replace("/onboarding");
-          return;
-        }
-
-        // force onboarding completion
-        const completed =
-          my.onboarding_completed === true && (my.onboarding_step ?? 0) >= 8;
-
-        if (!completed) {
-          if (alive) setLoading(false);
-          router.replace("/onboarding");
-          return;
-        }
-
-        await loadTop(my.user_id, my.seeking);
-      } catch (e: any) {
-        if (alive) setErr(e?.message ?? "Feed init error");
-      } finally {
+      // no profile row yet -> onboarding
+      if (!my?.user_id) {
         if (alive) setLoading(false);
+        router.replace("/onboarding");
+        return;
       }
-    })();
 
-    return () => {
-      alive = false;
-    };
-  }, [loadMe, loadTop, router]);
+      // ✅ GEO LOCATION — მხოლოდ ერთხელ
+      if (!geoOnce.current && "geolocation" in navigator) {
+        geoOnce.current = true;
 
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+
+            const { error } = await supabase
+              .from("profiles")
+              .update({ lat, lng })
+              .eq("user_id", my.user_id);
+
+            if (error) {
+              console.log("geo update error:", error.message);
+            }
+          },
+          (err) => {
+            console.log("geo denied/failed:", err?.message);
+          },
+          {
+            enableHighAccuracy: false,
+            timeout: 7000,
+            maximumAge: 60_000,
+          }
+        );
+      }
+
+      // force onboarding completion
+      const completed =
+        my.onboarding_completed === true && (my.onboarding_step ?? 0) >= 8;
+
+      if (!completed) {
+        if (alive) setLoading(false);
+        router.replace("/onboarding");
+        return;
+      }
+
+      await loadTop(my.user_id, my.seeking);
+    } catch (e: any) {
+      if (alive) setErr(e?.message ?? "Feed init error");
+    } finally {
+      if (alive) setLoading(false);
+    }
+  })();
+
+  return () => {
+    alive = false;
+  };
+}, [loadMe, loadTop, router]);
   // ----------------------------
   // ACTIONS
   // ----------------------------
@@ -287,25 +315,53 @@ if (myGender === "male" || myGender === "female" || myGender === "nonbinary") {
     [me?.user_id]
   );
 
-  const onSkip = useCallback(async () => {
-    if (!top || !me?.user_id) return;
-    await writeSwipe("skip", top.user_id);
-    await loadTop(me.user_id, me.seeking);
-  }, [loadTop, me?.seeking, me?.user_id, top, writeSwipe]);
+          // onSkip
 
-  const onLike = useCallback(async (): Promise<string | null> => {
-    if (!top || !me?.user_id) return null;
+const onSkip = useCallback(async () => {
+  if (!top || !me?.user_id) return;
 
-    const ok = await writeSwipe("like", top.user_id);
-    if (!ok) {
-      await loadTop(me.user_id, me.seeking);
-      return null;
-    }
+  // 1) ჯერ გააქრე მიმდინარე ბარათი
+  setTop(null);
 
-    const matchId = await tryMakeMatch(top.user_id);
-    await loadTop(me.user_id, me.seeking);
-    return matchId;
-  }, [loadTop, me?.seeking, me?.user_id, top, tryMakeMatch, writeSwipe]);
+  // 2) ჩაწერე swipe
+  await writeSwipe("skip", top.user_id);
+
+  // 3) შემდეგი frame-ზე მოიტანე ახალი
+  requestAnimationFrame(() => {
+    loadTop(me.user_id, me.seeking);
+  });
+}, [top, me?.user_id, me?.seeking, loadTop, writeSwipe]);
+
+
+              // onLike
+
+const onLike = useCallback(async (): Promise<string | null> => {
+  if (!top || !me?.user_id) return null;
+
+  // 1) ჯერ გააქრე მიმდინარე ბარათი
+  setTop(null);
+
+  // 2) ჩაწერე swipe
+  const ok = await writeSwipe("like", top.user_id);
+
+  // 3) თუ ვერ ჩაიწერა, მაინც მოიტანე შემდეგი
+  if (!ok) {
+    requestAnimationFrame(() => {
+      loadTop(me.user_id, me.seeking);
+    });
+    return null;
+  }
+
+  // 4) match-ის ცდა
+  const matchId = await tryMakeMatch(top.user_id);
+
+  // 5) შემდეგი
+  requestAnimationFrame(() => {
+    loadTop(me.user_id, me.seeking);
+  });
+
+  return matchId;
+}, [top, me?.user_id, me?.seeking, loadTop, writeSwipe, tryMakeMatch]);
 
   const onOpenProfile = useCallback(() => {
     if (!top) return;
@@ -345,7 +401,7 @@ if (loading) {
 
 if (!me?.user_id) {
   return (
-    <main className={`min-h-[100dvh] bg-black text-white ${BOTTOM_NAV_PB_CLASS}`}>
+    <main className={`min-h-[100dvh] bg-black text-white`}>
       <div className="mx-auto w-full max-w-[480px] px-0 h-[calc(100dvh-(72px+env(safe-area-inset-bottom)))]">
         <div className="w-full h-full flex items-center justify-center px-6 text-center">
           <div>
@@ -374,7 +430,6 @@ return (
   <main
     className={[
       "min-h-[100dvh] bg-black text-white",
-      BOTTOM_NAV_PB_CLASS,
       "select-none",
       "overscroll-none",
     ].join(" ")}
@@ -416,8 +471,8 @@ return (
         </div>
       ) : (
         <div className="w-full h-full">
-          <TinderCard
-  key={cardUser.id} // ✅ IMPORTANT
+<TinderCard
+  key={cardUser.id}
   user={cardUser as any}
   otherUserId={cardUser.user_id}
   loading={loadingTop}

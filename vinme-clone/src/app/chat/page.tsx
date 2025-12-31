@@ -5,13 +5,13 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { photoSrc } from "@/lib/photos";
 import { getOrCreateAnonId } from "@/lib/guest";
+import BottomNav from "@/components/BottomNav";
 
 type MatchRow = {
-  id: number; // bigint
-  user_a: string; // uuid
-  user_b: string; // uuid
+  id: number;
+  user_a: string;
+  user_b: string;
   last_message_at: string | null;
-  has_messages?: boolean;
 };
 
 type ProfileRow = {
@@ -32,10 +32,10 @@ type MsgRow = {
 
 export default function MessagesPage() {
   const router = useRouter();
+  const chRef = useRef<any>(null);
 
   const [uid, setUid] = useState<string | null>(null);
   const [myAnonId, setMyAnonId] = useState<string>("");
-
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -75,10 +75,9 @@ export default function MessagesPage() {
     };
   }, []);
 
-  // --- initial load (matches + profiles + latest + unread counts) ---
+  // --- initial load ---
   useEffect(() => {
     if (!uid) return;
-
     let cancelled = false;
 
     (async () => {
@@ -86,31 +85,29 @@ export default function MessagesPage() {
         setLoading(true);
         setErr(null);
 
-        // 1) matches of current user
+        // 1) matches
         const { data: matchData, error: matchErr } = await supabase
           .from("matches")
-          .select("id, user_a, user_b, last_message_at, has_messages")
+          .select("id, user_a, user_b, last_message_at")
           .or(`user_a.eq.${uid},user_b.eq.${uid}`)
           .order("last_message_at", { ascending: false });
 
         if (matchErr) throw matchErr;
 
-        const ms = ((matchData ?? []) as MatchRow[]).filter(Boolean);
+        const ms = (matchData ?? []) as MatchRow[];
         if (cancelled) return;
         setMatches(ms);
 
-        // 2) other user profiles
+        // 2) profiles
         const otherUserIds = Array.from(
           new Set(ms.map((m) => (m.user_a === uid ? m.user_b : m.user_a)).filter(Boolean))
         ) as string[];
 
         if (otherUserIds.length) {
-          const { data: pData, error: pErr } = await supabase
+          const { data: pData } = await supabase
             .from("profiles")
             .select("user_id, anon_id, nickname, photo1_url")
             .in("user_id", otherUserIds);
-
-          if (pErr) console.warn("Profiles load warn:", pErr);
 
           const map: Record<string, ProfileRow> = {};
           (pData as ProfileRow[] | null)?.forEach((p) => (map[p.user_id] = p));
@@ -119,17 +116,15 @@ export default function MessagesPage() {
           if (!cancelled) setProfilesByUser({});
         }
 
-        // 3) latest messages (for preview)
+        // 3) latest preview
         if (ms.length) {
           const matchIds = ms.map((m) => m.id);
 
-          const { data: msgData, error: msgErr } = await supabase
+          const { data: msgData } = await supabase
             .from("messages")
             .select("id, match_id, sender_anon, content, created_at, read_at")
             .in("match_id", matchIds)
             .order("created_at", { ascending: false });
-
-          if (msgErr) throw msgErr;
 
           const latest: Record<number, MsgRow> = {};
           (msgData as MsgRow[] | null)?.forEach((row) => {
@@ -137,27 +132,21 @@ export default function MessagesPage() {
           });
           if (!cancelled) setLatestByMatch(latest);
 
-          // 4) unread counts per match (messages not mine, read_at null)
+          // 4) unread counts (სწრაფი ვერსია: წამოვიღოთ მხოლოდ match_id list)
           if (myAnonId) {
-            const { data: unreadRows, error: uErr } = await supabase
+            const { data: unreadRows } = await supabase
               .from("messages")
-              .select("match_id", { count: "exact", head: false })
+              .select("match_id")
               .in("match_id", matchIds)
               .neq("sender_anon", myAnonId)
               .is("read_at", null);
 
-            // NOTE: supabase-js doesn't return grouped counts; we compute by fetching ids.
-            // So: better fetch match_id list and count in JS:
-            if (uErr) {
-              console.warn("Unread load warn:", uErr);
-            } else {
-              const by: Record<number, number> = {};
-              (unreadRows as any[] | null)?.forEach((r) => {
-                const mid = Number(r.match_id);
-                by[mid] = (by[mid] ?? 0) + 1;
-              });
-              if (!cancelled) setUnreadByMatch(by);
-            }
+            const by: Record<number, number> = {};
+            (unreadRows as any[] | null)?.forEach((r) => {
+              const mid = Number(r.match_id);
+              by[mid] = (by[mid] ?? 0) + 1;
+            });
+            if (!cancelled) setUnreadByMatch(by);
           }
         } else {
           if (!cancelled) {
@@ -178,63 +167,100 @@ export default function MessagesPage() {
     };
   }, [uid, myAnonId]);
 
-  // --- realtime: new messages / read updates ---
+  // ✅ realtime: new messages => update UI WITHOUT refresh
   useEffect(() => {
-    if (!uid || !myAnonId) return;
+  if (!uid || !myAnonId) return;
 
-    const ch = supabase
-      .channel(`realtime:chatlist:${uid}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages" },
-        (payload) => {
-          const row = payload.new as any as MsgRow;
-          if (!row?.match_id) return;
+  const ch = supabase
+    .channel(`realtime:chatlist:${uid}`)
 
-          // latest preview update
-          setLatestByMatch((prev) => {
-            const cur = prev[row.match_id];
-            // if we already have newer, keep it
-            if (cur && new Date(cur.created_at).getTime() > new Date(row.created_at).getTime()) return prev;
-            return { ...prev, [row.match_id]: row };
+    // ================= INSERT (ახალი მესიჯი) =================
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "messages" },
+      (payload) => {
+        const row = payload.new as any as MsgRow;
+        const mid = Number(row.match_id);
+
+        // 1) update latest preview
+        setLatestByMatch((prev) => ({ ...prev, [mid]: row }));
+
+        // 2) bump unread only if incoming
+        if (row.sender_anon !== myAnonId) {
+          setUnreadByMatch((prev) => ({
+            ...prev,
+            [mid]: (prev[mid] ?? 0) + 1,
+          }));
+        }
+
+        // 3) reorder matches to top by last_message_at
+        setMatches((prev) => {
+          const idx = prev.findIndex((m) => m.id === mid);
+          if (idx === -1) return prev;
+
+          const updated = [...prev];
+          const m = updated[idx];
+          updated[idx] = { ...m, last_message_at: row.created_at };
+
+          updated.sort((a, b) => {
+            const ta = a.last_message_at
+              ? new Date(a.last_message_at).getTime()
+              : 0;
+            const tb = b.last_message_at
+              ? new Date(b.last_message_at).getTime()
+              : 0;
+            return tb - ta;
           });
 
-          // bump unread only if not mine and still unread
-          if (row.sender_anon !== myAnonId && row.read_at == null) {
-            setUnreadByMatch((prev) => ({ ...prev, [row.match_id]: (prev[row.match_id] ?? 0) + 1 }));
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "messages" },
-        (payload) => {
-          const row = payload.new as any as MsgRow;
-          if (!row?.match_id) return;
+          return updated;
+        });
+      }
+    )
 
-          // if message became read -> recompute this match unread safely (set to 0 if our read)
-          // simple: when any update with read_at, we can decrement if it was counted
-          if (row.read_at != null && row.sender_anon !== myAnonId) {
-            // safest: set to 0 only when we are in that match page, but here we just decrement if >0
-            setUnreadByMatch((prev) => {
-              const cur = prev[row.match_id] ?? 0;
-              if (cur <= 0) return prev;
-              return { ...prev, [row.match_id]: cur - 1 };
-            });
-          }
-        }
-      )
-      .subscribe();
+    // ================= UPDATE (read_at შეიცვალა) =================
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "messages" },
+      (payload) => {
+        const row = payload.new as any as MsgRow;
+        const old = payload.old as any as MsgRow;
+        const mid = Number(row.match_id);
 
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [uid, myAnonId]);
+        // თუ unread -> read გახდა და ეს მესიჯი ჩემთვის იყო
+        if (
+          old?.read_at == null &&
+          row.read_at != null &&
+          row.sender_anon !== myAnonId
+        ) {
+          setUnreadByMatch((prev) => {
+            const cur = prev[mid] ?? 0;
+            if (cur <= 1) {
+              const { [mid]: _, ...rest } = prev;
+              return rest;
+            }
+            return { ...prev, [mid]: cur - 1 };
+          });
+        }
+      }
+    )
+
+    .subscribe();
+
+  chRef.current = ch;
+
+  return () => {
+    if (chRef.current) {
+      supabase.removeChannel(chRef.current);
+      chRef.current = null;
+    }
+  };
+}, [uid, myAnonId]);
 
   // bottom badge: how many chats have unread (>0)
-  const bottomUnreadChats = useMemo(() => {
-    return Object.values(unreadByMatch).filter((n) => n > 0).length;
-  }, [unreadByMatch]);
+  const bottomUnreadChats = useMemo(
+    () => Object.values(unreadByMatch).filter((n) => n > 0).length,
+    [unreadByMatch]
+  );
 
   const filteredMatches = useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -249,7 +275,7 @@ export default function MessagesPage() {
   }, [q, matches, profilesByUser, uid]);
 
   return (
-    <main className="min-h-[100dvh] bg-black text-white">
+    <main className="min-h-[100dvh] bg-black text-white pb-28">
       <div className="mx-auto w-full max-w-md px-4 py-6">
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-3xl font-extrabold">Chats</h1>
@@ -294,7 +320,6 @@ export default function MessagesPage() {
                     <div className="h-full w-full bg-zinc-800/40" />
                   )}
 
-                  {/* unread badge per match */}
                   {(unreadByMatch[m.id] ?? 0) > 0 && (
                     <div className="absolute top-2 right-2 h-5 min-w-[20px] rounded-full bg-pink-500 px-1 text-xs font-extrabold text-white flex items-center justify-center">
                       {unreadByMatch[m.id] > 99 ? "99+" : unreadByMatch[m.id]}
@@ -329,6 +354,7 @@ export default function MessagesPage() {
                 const p = profilesByUser[otherId];
                 const last = latestByMatch[m.id];
                 const avatar = photoSrc(p?.photo1_url ?? null);
+                const unread = unreadByMatch[m.id] ?? 0;
 
                 return (
                   <button
@@ -356,13 +382,19 @@ export default function MessagesPage() {
                           : "No messages yet"}
                       </div>
 
-                      <div className="mt-4 h-px w-full bg-white/10" />
+                      {/* ✅ “რამდენჯერ მოგწერა” ტექსტითაც */}
+                      {unread > 0 && (
+                        <div className="mt-1 text-xs font-semibold text-pink-300">
+                          {unread} new message{unread === 1 ? "" : "s"}
+                        </div>
+                      )}
+
+                      <div className="mt-3 h-px w-full bg-white/10" />
                     </div>
 
-                    {/* unread badge per chat row */}
-                    {(unreadByMatch[m.id] ?? 0) > 0 && (
+                    {unread > 0 && (
                       <div className="absolute right-0 top-1/2 -translate-y-1/2 rounded-full bg-pink-500 px-2 py-1 text-xs font-extrabold text-white">
-                        {unreadByMatch[m.id] > 99 ? "99+" : unreadByMatch[m.id]}
+                        {unread > 99 ? "99+" : unread}
                       </div>
                     )}
                   </button>
@@ -373,9 +405,7 @@ export default function MessagesPage() {
         </div>
       </div>
 
-      {/* ✅ თუ BottomNav ცალკე კომპონენტში გაქვს — იქ ჩაამატე badge.
-          აქ უბრალოდ გაჩვენებ როგორ გამოიტანო ციფრი: */}
-      <ChatBadgeDebug unreadChats={bottomUnreadChats} />
+      <BottomNav chatBadge={bottomUnreadChats} />
     </main>
   );
 }
@@ -394,15 +424,5 @@ function LikeTile() {
         <span className="text-base font-extrabold">Likes</span>
       </div>
     </button>
-  );
-}
-
-/** ეს უბრალოდ debug-ია რომ ნახო რიცხვი მუშაობს — შეგიძლია წაშალო */
-function ChatBadgeDebug({ unreadChats }: { unreadChats: number }) {
-  return (
-    <div className="
-    -3 left-3 rounded-full bg-white/10 px-3 py-2 text-xs text-white/80">
-      chat badge: {unreadChats}
-    </div>
   );
 }

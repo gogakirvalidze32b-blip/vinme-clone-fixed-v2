@@ -22,7 +22,7 @@ export default function AuthCallbackPage() {
           return;
         }
 
-        // ✅ IMPORTANT: read ONLY by user_id (არავითარი anon აქ!)
+        //  IMPORTANT: read ONLY by user_id (არავითარი anon აქ!)
         const { data: p, error: pErr } = await supabase
           .from("profiles")
           .select("user_id, onboarding_completed")
@@ -50,7 +50,6 @@ export default function AuthCallbackPage() {
 
 if (error) throw error;
 
-
           if (!alive) return;
           router.replace("/onboarding");
           return;
@@ -74,7 +73,8 @@ if (error) throw error;
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center text-white">
-      Signing in… 🔄
+      Signing in…  
     </div>
   );
 }
+

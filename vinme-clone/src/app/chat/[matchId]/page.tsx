@@ -5,15 +5,14 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { getOrCreateAnonId } from "@/lib/guest";
 import { photoSrc } from "@/lib/photos";
+import BottomNav from "@/components/BottomNav";
 
 type MatchRow = {
   id: number;
   user_a: string;
   user_b: string;
   last_message_at: string | null;
-  has_messages: boolean;
-  unread_a: number;
-  unread_b: number;
+  has_messages?: boolean;
 };
 
 type ProfileRow = {
@@ -62,7 +61,6 @@ export default function ChatThreadPage() {
 
         const { data, error } = await supabase.auth.getUser();
         if (!alive) return;
-
         if (error) throw error;
 
         const id = data.user?.id ?? null;
@@ -82,94 +80,91 @@ export default function ChatThreadPage() {
     };
   }, []);
 
-  // helper: reset unread counter for THIS user in THIS match
-  async function clearUnreadForMe(currentMatch: MatchRow) {
-    if (!uid) return;
+  // ✅ mark all incoming as read (this chat)
+  async function markThreadRead() {
+    if (!myAnonId || !matchId) return;
 
-    const isA = currentMatch.user_a === uid;
-
-    // 1) messages.read_at (optional, მაგრამ კარგია)
     await supabase
       .from("messages")
       .update({ read_at: new Date().toISOString() })
-      .eq("match_id", currentMatch.id)
+      .eq("match_id", matchId)
       .neq("sender_anon", myAnonId)
       .is("read_at", null);
-
-    // 2) matches unread counter reset
-    await supabase
-      .from("matches")
-      .update(isA ? { unread_a: 0 } : { unread_b: 0 })
-      .eq("id", currentMatch.id);
-
-    // 3) UI optimistic
-    setMatch((prev) => {
-      if (!prev) return prev;
-      return { ...prev, ...(isA ? { unread_a: 0 } : { unread_b: 0 }) };
-    });
   }
 
   // 1) load match + other profile + messages
-  useEffect(() => {
-    if (!uid) return;
-    if (!matchId || Number.isNaN(matchId)) return;
+ useEffect(() => {
+  if (!uid) return;
 
-    let alive = true;
+  // ✅ matchId შეიძლება იყოს string -> გადავიყვანოთ number-ში სწორად
+  const mid = Number(matchId);
+  if (!mid || Number.isNaN(mid)) return;
 
-    (async () => {
-      try {
-        setLoading(true);
-        setErr(null);
+  // ✅ myAnonId საჭიროა read-ის დასასმელად
+  if (!myAnonId) return;
 
-        const { data: mData, error: mErr } = await supabase
-          .from("matches")
-          .select("id, user_a, user_b, last_message_at, has_messages, unread_a, unread_b")
-          .eq("id", matchId)
-          .maybeSingle();
+  let alive = true;
 
-        if (mErr) throw mErr;
-        if (!mData) throw new Error("Match not found");
+  (async () => {
+    try {
+      setLoading(true);
+      setErr(null);
 
-        if (!alive) return;
-        const mRow = mData as MatchRow;
-        setMatch(mRow);
+      const { data: mData, error: mErr } = await supabase
+        .from("matches")
+        .select("id, user_a, user_b, last_message_at, has_messages")
+        .eq("id", mid)
+        .maybeSingle();
 
-        const otherId = (mRow.user_a === uid ? mRow.user_b : mRow.user_a) as string;
+      if (mErr) throw mErr;
+      if (!mData) throw new Error("Match not found");
 
-        const { data: pData, error: pErr } = await supabase
-          .from("profiles")
-          .select("user_id, anon_id, nickname, photo1_url")
-          .eq("user_id", otherId)
-          .maybeSingle();
+      if (!alive) return;
+      const mRow = mData as MatchRow;
+      setMatch(mRow);
 
-        if (pErr) console.warn("other profile error:", pErr);
-        if (!alive) return;
-        setOtherProfile((pData as ProfileRow) ?? null);
+      const otherId = (mRow.user_a === uid ? mRow.user_b : mRow.user_a) as string;
 
-        const { data: msgData, error: msgErr } = await supabase
-          .from("messages")
-          .select("id, match_id, sender_anon, content, created_at, read_at")
-          .eq("match_id", matchId)
-          .order("created_at", { ascending: true });
+      const { data: pData } = await supabase
+        .from("profiles")
+        .select("user_id, anon_id, nickname, photo1_url")
+        .eq("user_id", otherId)
+        .maybeSingle();
 
-        if (msgErr) throw msgErr;
-        if (!alive) return;
-        setMsgs((msgData as MsgRow[]) ?? []);
+      if (!alive) return;
+      setOtherProfile((pData as ProfileRow) ?? null);
 
-        // open chat => clear unread now
-        await clearUnreadForMe(mRow);
-      } catch (e: any) {
-        console.error("CHAT LOAD ERROR:", e);
-        if (alive) setErr(e?.message ?? "Load failed");
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
+      const { data: msgData, error: msgErr } = await supabase
+        .from("messages")
+        .select("id, match_id, sender_anon, content, created_at, read_at")
+        .eq("match_id", mid)
+        .order("created_at", { ascending: true });
 
-    return () => {
-      alive = false;
-    };
-  }, [uid, matchId, myAnonId]);
+      if (msgErr) throw msgErr;
+      if (!alive) return;
+
+      setMsgs((msgData as MsgRow[]) ?? []);
+
+      // ✅ open thread => mark read (მხოლოდ სხვა ადამიანის unread მესიჯები ამ match-ზე)
+      await supabase
+        .from("messages")
+        .update({ read_at: new Date().toISOString() })
+        .eq("match_id", mid)
+        .is("read_at", null)
+        .neq("sender_anon", myAnonId);
+
+    } catch (e: any) {
+      console.error("CHAT LOAD ERROR:", e);
+      if (alive) setErr(e?.message ?? "Load failed");
+    } finally {
+      if (alive) setLoading(false);
+    }
+  })();
+
+  return () => {
+    alive = false;
+  };
+}, [uid, matchId, myAnonId]);
 
   // 2) realtime messages for this match
   useEffect(() => {
@@ -185,23 +180,18 @@ export default function ChatThreadPage() {
         { event: "INSERT", schema: "public", table: "messages", filter: `match_id=eq.${matchId}` },
         async (payload) => {
           if (!alive) return;
-
           const row = payload.new as any as MsgRow;
 
-          // append if not already
-          setMsgs((prev) => {
-            if (prev.some((m) => m.id === row.id)) return prev;
-            return [...prev, row];
-          });
+          
 
-          // if it's incoming => instantly mark read + clear unread counter (so badge disappears without refresh)
-          if (row.sender_anon !== myAnonId && match) {
+          // append (no dup)
+          setMsgs((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]));
+
+          // ✅ incoming => instantly mark read (badge disappears without refresh)
+          if (row.sender_anon !== myAnonId) {
             try {
               await supabase.from("messages").update({ read_at: new Date().toISOString() }).eq("id", row.id);
-              await clearUnreadForMe(match);
-            } catch (e) {
-              console.warn("auto-read failed:", e);
-            }
+            } catch {}
           }
         }
       )
@@ -211,7 +201,7 @@ export default function ChatThreadPage() {
       alive = false;
       supabase.removeChannel(ch);
     };
-  }, [matchId, myAnonId, match]);
+  }, [matchId, myAnonId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -223,34 +213,41 @@ export default function ChatThreadPage() {
     if (!myAnonId) return;
     if (!matchId || Number.isNaN(matchId)) return;
 
-    setText("");
     setSending(true);
 
     try {
-      const { data, error } = await supabase
-        .from("messages")
-        .insert({
+      const optimisticId = `tmp-${Date.now()}`;
+      const nowIso = new Date().toISOString();
+
+      // ✅ optimistic UI FIRST (რომ “მყისიერად გამოჩნდეს”)
+      setMsgs((prev) => [
+        ...prev,
+        {
+          id: optimisticId,
           match_id: matchId,
           sender_anon: myAnonId,
           content: t,
-        })
+          created_at: nowIso,
+          read_at: null,
+        },
+      ]);
+
+      setText("");
+
+      const { data, error } = await supabase
+        .from("messages")
+        .insert({ match_id: matchId, sender_anon: myAnonId, content: t })
         .select("id, match_id, sender_anon, content, created_at, read_at")
         .single();
 
       if (error) throw error;
 
-      // optimistic (realtime-იც მოვა, მაგრამ დუბლს ვფილტრავთ)
-      setMsgs((prev) => {
-        if (prev.some((m) => m.id === (data as any).id)) return prev;
-        return [...prev, data as any];
-      });
+      // replace optimistic with real row
+      setMsgs((prev) => prev.map((m) => (m.id === optimisticId ? (data as any as MsgRow) : m)));
 
       await supabase
         .from("matches")
-        .update({
-          has_messages: true,
-          last_message_at: new Date().toISOString(),
-        })
+        .update({ has_messages: true, last_message_at: new Date().toISOString() })
         .eq("id", matchId);
     } catch (e: any) {
       console.error("Send error:", e);
@@ -260,13 +257,10 @@ export default function ChatThreadPage() {
     }
   }
 
-  const otherAvatar = useMemo(
-    () => photoSrc(otherProfile?.photo1_url ?? null),
-    [otherProfile?.photo1_url]
-  );
+  const otherAvatar = useMemo(() => photoSrc(otherProfile?.photo1_url ?? null), [otherProfile?.photo1_url]);
 
   return (
-    <main className="min-h-[100dvh] bg-black text-white">
+    <main className="min-h-[100dvh] bg-black text-white pb-28">
       <div className="mx-auto w-full max-w-md px-4 py-4">
         <div className="flex items-center gap-3">
           <button
@@ -315,6 +309,7 @@ export default function ChatThreadPage() {
             </div>
           )}
 
+          {/* ✅ input + send (ვიზუალი იგივე) */}
           <div className="mt-3 flex gap-2">
             <input
               value={text}
@@ -336,6 +331,9 @@ export default function ChatThreadPage() {
           </div>
         </div>
       </div>
+
+      {/* ჩათში ბეჯი არ გვჭირდება */}
+      <BottomNav chatBadge={0} />
     </main>
   );
 }
