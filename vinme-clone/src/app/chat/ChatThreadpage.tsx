@@ -18,7 +18,7 @@ type MsgRow = {
 export default function ChatThreadPage() {
   const router = useRouter();
   const params = useParams();
-  const matchId = Number(params.matchId);
+  const matchId = Number((params as any)?.matchId);
 
   const [msgs, setMsgs] = useState<MsgRow[]>([]);
   const [text, setText] = useState("");
@@ -31,62 +31,125 @@ export default function ChatThreadPage() {
 
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // ✅ mark ALL incoming messages as read for this thread
+  async function markThreadRead(inMatchId: number, meAnon: string) {
+    const { error } = await supabase
+      .from("messages")
+      .update({ read_at: new Date().toISOString() })
+      .eq("match_id", inMatchId)
+      .is("read_at", null)
+      .neq("sender_anon", meAnon);
+
+    if (error) {
+      console.log("markThreadRead error:", error.message);
+    }
+
+    // ✅ AppShell badge refresh (თუ იყენებ listener-ს)
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("badge:refresh"));
+    }
+  }
+
   // ===== load initial =====
   useEffect(() => {
+    let alive = true;
+
     (async () => {
-      const { data: session } = await supabase.auth.getSession();
-      if (!session?.session?.user) return;
+      try {
+        setLoading(true);
+        setErr(null);
 
-      const uid = session.session.user.id;
+        if (!matchId || Number.isNaN(matchId)) {
+          throw new Error("Bad match id");
+        }
 
-      const { data: me } = await supabase
-        .from("profiles")
-        .select("anon_id")
-        .eq("user_id", uid)
-        .single();
+        const { data: session } = await supabase.auth.getSession();
+        const user = session?.session?.user;
+        if (!user) return;
 
-      setMyAnonId(me?.anon_id ?? null);
+        const uid = user.id;
 
-      const { data: mRow } = await supabase
-        .from("matches")
-        .select("user_a, user_b")
-        .eq("id", matchId)
-        .single();
+        const { data: me, error: meErr } = await supabase
+          .from("profiles")
+          .select("anon_id")
+          .eq("user_id", uid)
+          .maybeSingle();
 
-      const otherId = mRow?.user_a === uid ? mRow.user_b : mRow?.user_a;
+        if (meErr) throw meErr;
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("nickname, photo1_url")
-        .eq("user_id", otherId)
-        .single();
+        const anon = me?.anon_id ?? null;
+        if (!alive) return;
+        setMyAnonId(anon);
 
-      setOtherProfile(profile);
+        const { data: mRow, error: mErr } = await supabase
+          .from("matches")
+          .select("user_a, user_b")
+          .eq("id", matchId)
+          .maybeSingle();
 
-      const { data: messages } = await supabase
-        .from("messages")
-        .select("id, match_id, sender_anon, content, created_at, read_at")
-        .eq("match_id", matchId)
-        .order("created_at", { ascending: true });
+        if (mErr) throw mErr;
+        if (!mRow) throw new Error("Match not found");
 
-      setMsgs((messages as MsgRow[]) ?? []);
-      setLoading(false);
+        const otherId = mRow.user_a === uid ? mRow.user_b : mRow.user_a;
+
+        const { data: profile, error: pErr } = await supabase
+          .from("profiles")
+          .select("nickname, photo1_url")
+          .eq("user_id", otherId)
+          .maybeSingle();
+
+        if (pErr) throw pErr;
+
+        if (!alive) return;
+        setOtherProfile(profile ?? null);
+
+        const { data: messages, error: msgErr } = await supabase
+          .from("messages")
+          .select("id, match_id, sender_anon, content, created_at, read_at")
+          .eq("match_id", matchId)
+          .order("created_at", { ascending: true });
+
+        if (msgErr) throw msgErr;
+
+        if (!alive) return;
+        setMsgs((messages as MsgRow[]) ?? []);
+
+        // ✅ open thread => mark read (badge should disappear)
+        if (anon) {
+          await markThreadRead(matchId, anon);
+        }
+      } catch (e: any) {
+        console.error("CHAT LOAD ERROR:", e);
+        if (alive) setErr(e?.message ?? "Load failed");
+      } finally {
+        if (alive) setLoading(false);
+      }
     })();
+
+    return () => {
+      alive = false;
+    };
   }, [matchId]);
 
   // ===== REALTIME =====
   useEffect(() => {
-    if (!matchId || !myAnonId) return;
+    if (!matchId || Number.isNaN(matchId)) return;
+    if (!myAnonId) return;
 
     let alive = true;
 
     const ch = supabase
       .channel(`chat-${matchId}`)
 
-      // ✅ INSERT (ახალი მესიჯი)
+      // ✅ INSERT (new message)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages", filter: `match_id=eq.${matchId}` },
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `match_id=eq.${matchId}`,
+        },
         async (payload) => {
           if (!alive) return;
           const row = payload.new as MsgRow;
@@ -95,20 +158,32 @@ export default function ChatThreadPage() {
             prev.some((m) => m.id === row.id) ? prev : [...prev, row]
           );
 
-          // თუ შემომავალია → მყისიერად mark read
+          // ✅ incoming => mark read immediately
           if (row.sender_anon !== myAnonId) {
-            await supabase
+            const { error } = await supabase
               .from("messages")
               .update({ read_at: new Date().toISOString() })
               .eq("id", row.id);
+
+            if (error) console.log("mark single read error:", error.message);
+
+            // refresh badge
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new Event("badge:refresh"));
+            }
           }
         }
       )
 
-      // ✅ UPDATE (read_at / badge sync)
+      // ✅ UPDATE (read_at sync)
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "messages", filter: `match_id=eq.${matchId}` },
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "messages",
+          filter: `match_id=eq.${matchId}`,
+        },
         (payload) => {
           if (!alive) return;
           const row = payload.new as MsgRow;
@@ -137,10 +212,11 @@ export default function ChatThreadPage() {
   // ===== SEND =====
   async function send() {
     const t = text.trim();
-    if (!t || !myAnonId) return;
+    if (!t || !myAnonId || !matchId || Number.isNaN(matchId)) return;
 
     setSending(true);
     setText("");
+    setErr(null);
 
     const optimisticId = `tmp-${Date.now()}`;
     const now = new Date().toISOString();
@@ -158,17 +234,19 @@ export default function ChatThreadPage() {
     ]);
 
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("messages")
         .insert({ match_id: matchId, sender_anon: myAnonId, content: t })
         .select("id, match_id, sender_anon, content, created_at, read_at")
         .single();
 
+      if (error) throw error;
+
       setMsgs((prev) =>
         prev.map((m) => (m.id === optimisticId ? (data as MsgRow) : m))
       );
     } catch (e: any) {
-      setErr(e.message);
+      setErr(e?.message ?? "Send failed");
     } finally {
       setSending(false);
     }
@@ -178,6 +256,18 @@ export default function ChatThreadPage() {
     () => photoSrc(otherProfile?.photo1_url ?? null),
     [otherProfile?.photo1_url]
   );
+
+  // ✅ GUARD: სანამ anonId არ მოვა, ჩატი არ დახატო (ერთნაირი UI ყველა chat-ზე)
+  if (loading && !myAnonId) {
+    return (
+      <main className="min-h-[100dvh] bg-black text-white pb-28">
+        <div className="mx-auto w-full max-w-md px-4 py-6 text-white/70">
+          Loading…
+        </div>
+        <BottomNav chatBadge={0} />
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-[100dvh] bg-black text-white pb-28">
@@ -192,7 +282,13 @@ export default function ChatThreadPage() {
 
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 overflow-hidden rounded-full bg-white/10">
-              {otherAvatar && <img src={otherAvatar} className="h-full w-full object-cover" />}
+              {otherAvatar && (
+                <img
+                  src={otherAvatar}
+                  className="h-full w-full object-cover"
+                  alt=""
+                />
+              )}
             </div>
             <div className="text-lg font-bold">
               {otherProfile?.nickname ?? "Chat"}
@@ -200,14 +296,25 @@ export default function ChatThreadPage() {
           </div>
         </div>
 
+        {err && (
+          <div className="mt-3 rounded-xl bg-red-500/10 ring-1 ring-red-500/30 px-3 py-2 text-sm text-red-200">
+            {err}
+          </div>
+        )}
+
         <div className="mt-4 space-y-2 max-h-[65dvh] overflow-y-auto">
           {msgs.map((m) => {
             const mine = m.sender_anon === myAnonId;
             return (
-              <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+              <div
+                key={m.id}
+                className={`flex ${mine ? "justify-end" : "justify-start"}`}
+              >
                 <div
                   className={`rounded-2xl px-3 py-2 text-sm max-w-[80%] ${
-                    mine ? "bg-white text-black" : "bg-black/40 ring-1 ring-white/10"
+                    mine
+                      ? "bg-white text-black"
+                      : "bg-black/40 ring-1 ring-white/10"
                   }`}
                 >
                   {m.content}

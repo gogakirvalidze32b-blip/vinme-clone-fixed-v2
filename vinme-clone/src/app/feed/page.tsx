@@ -4,9 +4,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation";
 import { photoSrc } from "@/lib/photos";
 import TinderCard from "@/components/TinderCard";
- import BottomNav from "@/components/BottomNav";
+import BottomNav from "@/components/BottomNav";
 import { supabase } from "@/lib/supabase";
-import { error } from "console";
+
 type Gender = "" | "male" | "female" | "nonbinary" | "other";
 type Seeking = "everyone" | "male" | "female" | "nonbinary" | "other";
 
@@ -27,8 +27,10 @@ type ProfileRow = {
 
   photo1_url: string | null;
   photo_url?: string | null;
+
   lat: number | null;
   lng: number | null;
+
   onboarding_completed: boolean | null;
   onboarding_step: number | null;
 
@@ -36,7 +38,7 @@ type ProfileRow = {
 };
 
 type CardUser = {
-  id: string; // TinderCard-სთვის stable id
+  id: string;
   user_id: string;
   anon_id: string | null;
   nickname: string;
@@ -50,36 +52,16 @@ export default function FeedPage() {
   const router = useRouter();
 
   const [me, setMe] = useState<ProfileRow | null>(null);
-  const [otherUser, setOtherUser] = useState<ProfileRow | null>(null);
-
-useEffect(() => {
-  (async () => {
-    const { data: sess } = await supabase.auth.getSession();
-    const uid = sess.session?.user?.id;
-    if (!uid) return;
-
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("user_id, first_name, nickname, photo1_url, photo_url, lat, lng")
-      .eq("user_id", uid)
-      .single();
-
-      if (error) return; // ან handle
-    setMe(data as ProfileRow);
-  })();
-}, []);
-
   const [top, setTop] = useState<ProfileRow | null>(null);
-const myGender = me?.gender ?? null;
-const mySeeking = me?.seeking ?? "everyone";
-const geoOnce = useRef(false);
+
+  const myGender = me?.gender ?? null;
+
+  const geoOnce = useRef(false);
+
   const [loading, setLoading] = useState(true);
   const [loadingTop, setLoadingTop] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // ----------------------------
-  // LOAD ME (ONLY by user_id)
-  // ----------------------------
   const loadMe = useCallback(async () => {
     setErr(null);
 
@@ -105,7 +87,7 @@ const geoOnce = useRef(false);
     const { data, error } = await supabase
       .from("profiles")
       .select(
-        "user_id, anon_id, nickname, age, city, bio, gender, seeking, photo_url, photo1_url, created_at, onboarding_completed, onboarding_step, first_name"
+        "user_id, anon_id, nickname, age, city, bio, gender, seeking, photo_url, photo1_url, created_at, onboarding_completed, onboarding_step, first_name, lat, lng"
       )
       .eq("user_id", userId)
       .maybeSingle();
@@ -121,152 +103,126 @@ const geoOnce = useRef(false);
     return row;
   }, [router]);
 
-  // ----------------------------
-  // LOAD TOP
-  // ----------------------------
-  const loadTop = useCallback(async (myUserId: string, mySeeking?: Seeking | null) => {
-    setLoadingTop(true);
-    setErr(null);
-
-    try {
-      const { data: swipedRows, error: swErr } = await supabase
-        .from("swipes")
-        .select("to_id")
-        .eq("from_id", myUserId);
-
-      if (swErr) console.warn("Failed to load swipes:", swErr.message);
-
-      const swipedIds = (swipedRows ?? [])
-        .map((r: any) => r.to_id)
-        .filter(Boolean) as string[];
-
-      let q = supabase
-  .from("profiles")
-  .select("user_id, anon_id, nickname, age, city, bio, gender, seeking, photo1_url, created_at")
-  .neq("user_id", myUserId)
-  .not("photo1_url", "is", null)
-  .eq("onboarding_completed", true);
-
-  // ✅ EXCLUDE ALREADY SWIPED USERS
-if (swipedIds.length > 0) {
-  // supabase expects "(...)" string for NOT IN
-  const inList = `(${swipedIds.map((id) => `"${id}"`).join(",")})`;
-  q = q.not("user_id", "in", inList);
-}
-
-// 1) მე ვის ვხედავ (mySeeking -> candidate.gender)
-if (mySeeking !== "everyone") {
-  q = q.eq("gender", mySeeking);
-}
-
-if (myGender === "male" || myGender === "female" || myGender === "nonbinary") {
-  q = q.in("seeking", [myGender, "everyone"]);
-}
-
-
-
-      const { data: topRow, error } = await q
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (error) {
-        setErr(error.message);
-        setTop(null);
-      } else {
-        setErr(null);
-        setTop((topRow as ProfileRow | null) ?? null);
-      }
-    } finally {
-      setLoadingTop(false);
-    }
-  }, []);
-
-  // ----------------------------
-  // INITIAL BOOTSTRAP
-  // ----------------------------
-useEffect(() => {
-  let alive = true;
-
-  (async () => {
-    try {
-      setLoading(true);
+  const loadTop = useCallback(
+    async (myUserId: string, mySeeking?: Seeking | null) => {
+      setLoadingTop(true);
       setErr(null);
 
-      const my = await loadMe();
+      try {
+        const { data: swipedRows, error: swErr } = await supabase
+          .from("swipes")
+          .select("to_id")
+          .eq("from_id", myUserId);
 
-      // no profile row yet -> onboarding
-      if (!my?.user_id) {
+        if (swErr) console.warn("Failed to load swipes:", swErr.message);
+
+        const swipedIds = (swipedRows ?? [])
+          .map((r: any) => r.to_id)
+          .filter(Boolean) as string[];
+
+        let q = supabase
+          .from("profiles")
+          .select(
+            "user_id, anon_id, nickname, age, city, bio, gender, seeking, photo1_url, photo_url, created_at"
+          )
+          .eq("paused", false)
+          .neq("user_id", myUserId)
+          .not("photo1_url", "is", null)
+          .eq("onboarding_completed", true);
+
+        if (swipedIds.length > 0) {
+          const inList = `(${swipedIds.map((id) => `"${id}"`).join(",")})`;
+          q = q.not("user_id", "in", inList);
+        }
+
+        if (mySeeking && mySeeking !== "everyone") {
+          q = q.eq("gender", mySeeking);
+        }
+
+        if (myGender === "male" || myGender === "female" || myGender === "nonbinary") {
+          q = q.in("seeking", [myGender, "everyone"]);
+        }
+
+        const { data: topRow, error } = await q
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (error) {
+          setErr(error.message);
+          setTop(null);
+        } else {
+          setErr(null);
+          setTop((topRow as ProfileRow | null) ?? null);
+        }
+      } finally {
+        setLoadingTop(false);
+      }
+    },
+    [myGender]
+  );
+
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      try {
+        setLoading(true);
+        setErr(null);
+
+        const my = await loadMe();
+
+        if (!my?.user_id) {
+          if (alive) setLoading(false);
+          router.replace("/onboarding");
+          return;
+        }
+
+        if (!geoOnce.current && "geolocation" in navigator) {
+          geoOnce.current = true;
+
+          navigator.geolocation.getCurrentPosition(
+            async (pos) => {
+              const lat = pos.coords.latitude;
+              const lng = pos.coords.longitude;
+
+              const { error } = await supabase
+                .from("profiles")
+                .update({ lat, lng })
+                .eq("user_id", my.user_id);
+
+              if (error) console.log("geo update error:", error.message);
+            },
+            (err) => console.log("geo denied/failed:", err?.message),
+            { enableHighAccuracy: false, timeout: 7000, maximumAge: 60_000 }
+          );
+        }
+
+        const completed = my.onboarding_completed === true && (my.onboarding_step ?? 0) >= 8;
+        if (!completed) {
+          if (alive) setLoading(false);
+          router.replace("/onboarding");
+          return;
+        }
+
+        await loadTop(my.user_id, my.seeking);
+      } catch (e: any) {
+        if (alive) setErr(e?.message ?? "Feed init error");
+      } finally {
         if (alive) setLoading(false);
-        router.replace("/onboarding");
-        return;
       }
+    })();
 
-      // ✅ GEO LOCATION — მხოლოდ ერთხელ
-      if (!geoOnce.current && "geolocation" in navigator) {
-        geoOnce.current = true;
+    return () => {
+      alive = false;
+    };
+  }, [loadMe, loadTop, router]);
 
-        navigator.geolocation.getCurrentPosition(
-          async (pos) => {
-            const lat = pos.coords.latitude;
-            const lng = pos.coords.longitude;
-
-            const { error } = await supabase
-              .from("profiles")
-              .update({ lat, lng })
-              .eq("user_id", my.user_id);
-
-            if (error) {
-              console.log("geo update error:", error.message);
-            }
-          },
-          (err) => {
-            console.log("geo denied/failed:", err?.message);
-          },
-          {
-            enableHighAccuracy: false,
-            timeout: 7000,
-            maximumAge: 60_000,
-          }
-        );
-      }
-
-      // force onboarding completion
-      const completed =
-        my.onboarding_completed === true && (my.onboarding_step ?? 0) >= 8;
-
-      if (!completed) {
-        if (alive) setLoading(false);
-        router.replace("/onboarding");
-        return;
-      }
-
-      await loadTop(my.user_id, my.seeking);
-    } catch (e: any) {
-      if (alive) setErr(e?.message ?? "Feed init error");
-    } finally {
-      if (alive) setLoading(false);
-    }
-  })();
-
-  return () => {
-    alive = false;
-  };
-}, [loadMe, loadTop, router]);
-  // ----------------------------
-  // ACTIONS
-  // ----------------------------
   const writeSwipe = useCallback(
     async (action: "like" | "skip", targetUserId: string) => {
       if (!me?.user_id) return false;
 
-      // ✅ IMPORTANT: column names match the rest of your code (from_id/to_id)
-      const payload = {
-        from_id: me.user_id,
-        to_id: targetUserId,
-        action,
-      };
-
+      const payload = { from_id: me.user_id, to_id: targetUserId, action };
       const { error } = await supabase.from("swipes").insert(payload as any);
 
       if (error) console.warn("swipe insert error:", error.message);
@@ -279,7 +235,6 @@ useEffect(() => {
     async (targetUserId: string) => {
       if (!me?.user_id) return null;
 
-      // ✅ IMPORTANT: uses from_id/to_id (same as writeSwipe)
       const back = await supabase
         .from("swipes")
         .select("id")
@@ -315,62 +270,45 @@ useEffect(() => {
     [me?.user_id]
   );
 
-          // onSkip
+  const onSkip = useCallback(async () => {
+    if (!top || !me?.user_id) return;
 
-const onSkip = useCallback(async () => {
-  if (!top || !me?.user_id) return;
+    setTop(null);
+    await writeSwipe("skip", top.user_id);
 
-  // 1) ჯერ გააქრე მიმდინარე ბარათი
-  setTop(null);
-
-  // 2) ჩაწერე swipe
-  await writeSwipe("skip", top.user_id);
-
-  // 3) შემდეგი frame-ზე მოიტანე ახალი
-  requestAnimationFrame(() => {
-    loadTop(me.user_id, me.seeking);
-  });
-}, [top, me?.user_id, me?.seeking, loadTop, writeSwipe]);
-
-
-              // onLike
-
-const onLike = useCallback(async (): Promise<string | null> => {
-  if (!top || !me?.user_id) return null;
-
-  // 1) ჯერ გააქრე მიმდინარე ბარათი
-  setTop(null);
-
-  // 2) ჩაწერე swipe
-  const ok = await writeSwipe("like", top.user_id);
-
-  // 3) თუ ვერ ჩაიწერა, მაინც მოიტანე შემდეგი
-  if (!ok) {
     requestAnimationFrame(() => {
       loadTop(me.user_id, me.seeking);
     });
-    return null;
-  }
+  }, [top, me?.user_id, me?.seeking, loadTop, writeSwipe]);
 
-  // 4) match-ის ცდა
-  const matchId = await tryMakeMatch(top.user_id);
+  const onLike = useCallback(async (): Promise<string | null> => {
+    if (!top || !me?.user_id) return null;
 
-  // 5) შემდეგი
-  requestAnimationFrame(() => {
-    loadTop(me.user_id, me.seeking);
-  });
+    setTop(null);
 
-  return matchId;
-}, [top, me?.user_id, me?.seeking, loadTop, writeSwipe, tryMakeMatch]);
+    const ok = await writeSwipe("like", top.user_id);
+
+    if (!ok) {
+      requestAnimationFrame(() => {
+        loadTop(me.user_id, me.seeking);
+      });
+      return null;
+    }
+
+    const matchId = await tryMakeMatch(top.user_id);
+
+    requestAnimationFrame(() => {
+      loadTop(me.user_id, me.seeking);
+    });
+
+    return matchId;
+  }, [top, me?.user_id, me?.seeking, loadTop, writeSwipe, tryMakeMatch]);
 
   const onOpenProfile = useCallback(() => {
     if (!top) return;
     router.push(`/profile/${top.user_id}`);
   }, [router, top]);
 
-  // ----------------------------
-  // PATH -> URL (cardUser)
-  // ----------------------------
   const cardUser: CardUser | null = useMemo(() => {
     if (!top) return null;
 
@@ -378,7 +316,7 @@ const onLike = useCallback(async (): Promise<string | null> => {
     const photo = raw ? photoSrc(raw) : null;
 
     return {
-      id: top.user_id, // ✅ stable id
+      id: top.user_id,
       user_id: top.user_id,
       anon_id: top.anon_id ?? null,
       nickname: top.nickname ?? "Anonymous",
@@ -388,104 +326,93 @@ const onLike = useCallback(async (): Promise<string | null> => {
       photo_url: photo,
     };
   }, [top]);
-// ----------------------------
-// UI
-// ----------------------------
-if (loading) {
-  return (
-    <div className="min-h-[100dvh] flex items-center justify-center bg-black text-white">
-      Loading…
-    </div>
-  );
-}
 
-if (!me?.user_id) {
-  return (
-    <main className={`min-h-[100dvh] bg-black text-white`}>
-      <div className="mx-auto w-full max-w-[480px] px-0 h-[calc(100dvh-(72px+env(safe-area-inset-bottom)))]">
-        <div className="w-full h-full flex items-center justify-center px-6 text-center">
-          <div>
-            <div className="text-xl font-semibold mb-2">Finish your profile 📝</div>
-            <div className="opacity-80 text-sm">
-              Profiles table-ში row ვერ ვიპოვე user_id-ით. შედი Onboarding-ში.
+  if (loading) {
+    return (
+      <div className="h-[100dvh] flex items-center justify-center bg-black text-white">
+        Loading…
+      </div>
+    );
+  }
+
+  if (!me?.user_id) {
+    return (
+      <main className="h-[100dvh] bg-black text-white overflow-hidden">
+        <div className="mx-auto w-full max-w-[420px] h-full px-4 pt-6">
+          <div className="w-full h-full flex items-center justify-center text-center">
+            <div>
+              <div className="text-xl font-semibold mb-2">Finish your profile 📝</div>
+              <div className="opacity-80 text-sm">
+                Profiles table-ში row ვერ ვიპოვე user_id-ით. შედი Onboarding-ში.
+              </div>
+              <button
+                className="mt-5 w-full px-5 py-3 rounded-2xl bg-white text-black font-semibold active:scale-[0.99]"
+                onClick={() => router.push("/onboarding")}
+              >
+                Go to Onboarding
+              </button>
             </div>
-            <button
-              className="mt-5 w-full px-5 py-3 rounded-2xl bg-white text-black font-semibold active:scale-[0.99]"
-              onClick={() => router.push("/onboarding")}
-            >
-              Go to Onboarding
-            </button>
           </div>
         </div>
+        <BottomNav />
+      </main>
+    );
+  }
+
+  return (
+    <main className="h-[100dvh] bg-black text-white overflow-hidden">
+      {/* ✅ ეკრანი მთლიანად კარტას — ქვემოთ ადგილი BottomNav-სთვის */}
+      <div className="mx-auto w-full max-w-[420px] h-full px-0">
+        {err ? (
+          <div className="w-full h-full px-6 flex items-center justify-center text-center">
+            <div>
+              <div className="text-red-400 font-semibold mb-2">Error</div>
+              <div className="text-sm opacity-90 break-words">{err}</div>
+              <button
+                className="mt-4 px-4 py-2 rounded-lg bg-white text-black active:scale-[0.99]"
+                onClick={() => router.refresh()}
+              >
+                Reload
+              </button>
+            </div>
+          </div>
+        ) : !cardUser ? (
+          <div className="w-full h-full px-6 flex items-center justify-center text-center">
+            <div>
+              <div className="text-lg font-semibold">No profiles found 😅</div>
+              <div className="mt-4 flex gap-3 justify-center">
+                <button
+                  className="px-4 py-2 rounded-xl bg-neutral-800 active:scale-[0.99]"
+                  onClick={() => router.push("/")}
+                >
+                  Home
+                </button>
+                <button
+                  className="px-4 py-2 rounded-xl bg-white text-black active:scale-[0.99]"
+                  onClick={() => router.push("/settings")}
+                >
+                  Settings
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          // ✅ ეს pb არის “ზუსტად” რომ ქვედა UI ლამაზად ჩაჯდეს (როგორც სქრინზე)
+          <div className="w-full h-full pb-[92px]">
+            <TinderCard
+              key={cardUser.id}
+              user={cardUser as any}
+              otherUserId={cardUser.user_id}
+              loading={loadingTop}
+              onLike={onLike}
+              onSkip={onSkip}
+              onOpenProfile={onOpenProfile}
+            />
+          </div>
+        )}
       </div>
 
-      {/* ✅ BottomNav fixed-ია — უბრალოდ დავრენდეროთ ერთხელ */}
       <BottomNav />
     </main>
   );
-}
-
-// ✅ NORMAL FEED
-return (
-  <main
-    className={[
-      "min-h-[100dvh] bg-black text-white",
-      "select-none",
-      "overscroll-none",
-    ].join(" ")}
-  >
-    {/* ✅ კონტენტი = ეკრანი minus BottomNav სივრცე */}
-    <div className="mx-auto w-full max-w-[480px] px-0 h-[calc(100dvh-(72px+env(safe-area-inset-bottom)))]">
-      {err ? (
-        <div className="w-full h-full px-6 flex items-center justify-center text-center">
-          <div>
-            <div className="text-red-400 font-semibold mb-2">Error</div>
-            <div className="text-sm opacity-90 break-words">{err}</div>
-            <button
-              className="mt-4 px-4 py-2 rounded-lg bg-white text-black active:scale-[0.99]"
-              onClick={() => router.refresh()}
-            >
-              Reload
-            </button>
-          </div>
-        </div>
-      ) : !cardUser ? (
-        <div className="w-full h-full px-6 flex items-center justify-center text-center">
-          <div>
-            <div className="text-lg font-semibold">No profiles found 😅</div>
-            <div className="mt-4 flex gap-3 justify-center">
-              <button
-                className="px-4 py-2 rounded-xl bg-neutral-800 active:scale-[0.99]"
-                onClick={() => router.push("/")}
-              >
-                Home
-              </button>
-              <button
-                className="px-4 py-2 rounded-xl bg-white text-black active:scale-[0.99]"
-                onClick={() => router.push("/settings")}
-              >
-                Settings
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="w-full h-full">
-<TinderCard
-  key={cardUser.id}
-  user={cardUser as any}
-  otherUserId={cardUser.user_id}
-  loading={loadingTop}
-  onLike={onLike}
-  onSkip={onSkip}
-  onOpenProfile={onOpenProfile}
-/>
-        </div>
-      )}
-    </div>
-
-    {/* ✅ BottomNav fixed-ია — wrapper აღარ გვჭირდება (ეს იყო overlap-ის მიზეზი) */}
-    <BottomNav />
-  </main>
-);
 }

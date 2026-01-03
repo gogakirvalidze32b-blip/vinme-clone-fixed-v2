@@ -244,16 +244,17 @@ const imgSrc = useMemo(() => {
           onPointerCancel={onPointerUp}
         >
           {/* ✅ IMAGE */}
-          <div className="absolute inset-0">
-            <img
-              src={imgSrc || "/bg-retro-mobile.png"}
-              alt=""
-              draggable={false}
-              onDragStart={(e) => e.preventDefault()}
-              className="absolute inset-0 w-full h-full object-cover object-center select-none pointer-events-none"
-            />
-          </div>
-
+{imgSrc && (
+  <div className="absolute inset-0">
+    <img
+      src={imgSrc}
+      alt=""
+      draggable={false}
+      onDragStart={(e) => e.preventDefault()}
+      className="absolute inset-0 w-full h-full object-cover object-center select-none pointer-events-none"
+    />
+  </div>
+)}
           {/* ✅ GRADIENT */}
           <div className="absolute inset-0 z-10 bg-gradient-to-b from-black/25 via-transparent to-black/75" />
 
@@ -431,58 +432,8 @@ const imgSrc = useMemo(() => {
         />
       )}
 
-      {/* ✅ BOTTOM PANEL (full width like Tinder) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-[9999]">
-        <div className="w-full bg-black/60 backdrop-blur-md border-t border-white/10">
-          <div className="mx-auto flex max-w-[420px] items-center justify-between px-4 py-2 pb-[max(6px,env(safe-area-inset-bottom))]">
-            {/* 1) MATCHES 💕 (გული ოდნავ მარცხნივ) */}
-            <button
-              type="button"
-              onClick={() => router.push("/matches")}
-              className={`flex h-10 w-10 items-center justify-center text-xl active:scale-95 transition -ml-2 ${
-                pathname === "/matches" ? "text-pink-400" : "text-white/70"
-              }`}
-            >
-              💕
-            </button>
-
-            {/* 2) CARDS STACK (🔥 მაგივრად) */}
-            <button
-              type="button"
-              onClick={() => router.push("/feed")}
-              className={`flex h-10 w-10 items-center justify-center active:scale-95 transition ${
-                pathname === "/feed" ? "text-white" : "text-white/60"
-              }`}
-              aria-label="Cards"
-            >
-              <CardStackIcon active={pathname === "/feed"} />
-            </button>
-
-            {/* 3) CHAT */}
-            <button
-              type="button"
-              onClick={() => router.push("/chat")}
-              className={`flex h-10 w-10 items-center justify-center text-xl active:scale-95 transition ${
-                pathname === "/chat" ? "text-white" : "text-white/70"
-              }`}
-            >
-              💬
-            </button>
-
-            {/* 4) PROFILE */}
-            <button
-              type="button"
-              onClick={() => router.push("/profile")}
-              className={`flex h-10 w-10 items-center justify-center text-xl active:scale-95 transition ${
-                pathname === "/profile" ? "text-white" : "text-white/70"
-              }`}
-            >
-              👤
-            </button>
-          </div>
-        </div>
-      </nav>
-    </div>
+  </div>
+    
   );
 }
 

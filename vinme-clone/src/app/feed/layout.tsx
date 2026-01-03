@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import BottomNav from "@/components/BottomNav";
 
@@ -16,6 +17,9 @@ export default function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+  const hideNav = pathname === "/feed" || pathname?.startsWith("/feed/");
+
   const [chatBadge, setChatBadge] = useState(0);
   const [myAnonId, setMyAnonId] = useState<string | null>(null);
 
@@ -66,7 +70,7 @@ export default function AppLayout({
     refresh();
   }, [myAnonId, refresh]);
 
-  // 4️⃣ realtime listener (აქაა მთავარი მაგია 🔥)
+  // 4️⃣ realtime listener
   useEffect(() => {
     if (!myAnonId) return;
 
@@ -85,11 +89,9 @@ export default function AppLayout({
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "messages" },
-        (payload) => {
-          const row = payload.new as MsgRow;
-          if (row.read_at) {
-            refresh();
-          }
+        () => {
+          // read_at როცა შეიცვლება, ჯობია თავიდან დაითვალოს
+          refresh();
         }
       )
       .subscribe();
@@ -103,7 +105,7 @@ export default function AppLayout({
   return (
     <>
       {children}
-      <BottomNav chatBadge={chatBadge} />
+      {!hideNav && <BottomNav chatBadge={chatBadge} />}
     </>
   );
 }

@@ -5,15 +5,11 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { photoSrc } from "@/lib/photos";
 import BottomNav from "@/components/BottomNav";
-import SwipeToDeleteRow from "@/components/SwipeToDeleteRow";
-
 
 type MatchRow = {
   id: number;
   user_a: string;
   user_b: string;
-  hidden_by_a?: boolean;
-  hidden_by_b?: boolean;
 };
 
 type ProfileRow = {
@@ -37,8 +33,6 @@ export default function MessagesPage() {
   const [uid, setUid] = useState<string | null>(null);
   const [myAnonId, setMyAnonId] = useState<string | null>(null);
 
-  
-
   const [matches, setMatches] = useState<MatchRow[]>([]);
   const [profilesByUser, setProfilesByUser] = useState<Record<string, ProfileRow>>({});
   const [latestByMatch, setLatestByMatch] = useState<Record<number, MsgRow | null>>({});
@@ -56,8 +50,6 @@ export default function MessagesPage() {
 
         const { data: sess } = await supabase.auth.getSession();
         const user = sess?.session?.user;
-        const { data, error } = await supabase.from("profiles").select("user_id,nickname").limit(5);
-console.log("profiles read:", data, error);
         if (!user) return;
 
         setUid(user.id);
@@ -71,37 +63,32 @@ console.log("profiles read:", data, error);
         setMyAnonId(me?.anon_id ?? null);
 
         const { data: mRows } = await supabase
-  .from("matches")
-  .select("id, user_a, user_b, hidden_by_a, hidden_by_b")
-  .or(`user_a.eq.${user.id},user_b.eq.${user.id}`);
+          .from("matches")
+          .select("id, user_a, user_b")
+          .or(`user_a.eq.${user.id},user_b.eq.${user.id}`);
 
-        const mm = (mRows as MatchRow[]) ?? [];
-        setMatches(mm);
+        setMatches((mRows as MatchRow[]) ?? []);
 
         const userIds = new Set<string>();
-        mm.forEach((m) => {
+        (mRows ?? []).forEach((m: MatchRow) => {
           userIds.add(m.user_a);
           userIds.add(m.user_b);
         });
 
-        const { data: profiles, error: pErr } = await supabase
-  .from("profiles")
-  .select("user_id, nickname, photo1_url")
-  .in("user_id", Array.from(userIds));
-
-console.log("profiles read:", profiles, pErr);
-
-if (pErr) setErr(pErr.message);
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("user_id, nickname, photo1_url")
+          .in("user_id", Array.from(userIds));
 
         const map: Record<string, ProfileRow> = {};
         (profiles ?? []).forEach((p: ProfileRow) => (map[p.user_id] = p));
         setProfilesByUser(map);
 
-        // latest messages + unread
+        // latest messages
         const latest: Record<number, MsgRow | null> = {};
         const unread: Record<number, number> = {};
 
-        for (const m of mm) {
+        for (const m of mRows ?? []) {
           const { data: last } = await supabase
             .from("messages")
             .select("id, match_id, sender_anon, content, created_at, read_at")
@@ -132,50 +119,18 @@ if (pErr) setErr(pErr.message);
     })();
   }, []);
 
-  /* ================= HELPERS ================= */
-  function otherUserId(m: MatchRow) {
-    return m.user_a === uid ? m.user_b : m.user_a;
-  }
-
-  function displayNameFor(m: MatchRow) {
-    const otherId = otherUserId(m);
-    const p = profilesByUser[otherId];
-    const name = (p?.nickname ?? "").trim();
-    return name || "Unknown";
-  }
-
-  /* ================= SPLIT: NEW MATCHES vs MESSAGES ================= */
-const matchesWithMessages = useMemo(() => {
-  return matches
-    .filter((m) => {
-      // 👇 მთავარი hide ლოგიკა
-      const hiddenForMe =
-        m.user_a === uid ? m.hidden_by_a : m.hidden_by_b;
-
-      if (hiddenForMe) return false;
-
-      return !!latestByMatch[m.id];
-    })
-    .sort((a, b) => {
-      const da = latestByMatch[a.id]?.created_at ?? "";
-      const db = latestByMatch[b.id]?.created_at ?? "";
-      return db.localeCompare(da);
-    });
-}, [matches, latestByMatch, uid]);
-
-  const matchesNoMessages = useMemo(() => {
-    return matches.filter((m) => !latestByMatch[m.id]); //  new matches (no message yet)
-  }, [matches, latestByMatch]);
-
-  /* ================= FILTER (only for Messages list) ================= */
+  /* ================= FILTER ================= */
   const filteredMatches = useMemo(() => {
     const query = q.trim().toLowerCase();
-    const base = matchesWithMessages;
+    if (!query) return matches;
 
-    if (!query) return base;
-
-    return base.filter((m) => displayNameFor(m).toLowerCase().includes(query));
-  }, [q, matchesWithMessages, profilesByUser, uid]);
+    return matches.filter((m) => {
+      const otherId = m.user_a === uid ? m.user_b : m.user_a;
+      const p = profilesByUser[otherId];
+      const name = (p?.nickname ?? "").toLowerCase();
+      return name.includes(query);
+    });
+  }, [q, matches, profilesByUser, uid]);
 
   const bottomUnreadChats = useMemo(
     () => Object.values(unreadByMatch).filter((n) => n > 0).length,
@@ -192,8 +147,8 @@ const matchesWithMessages = useMemo(() => {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder={`Search ${matchesWithMessages.length} Matches`}
-            className="w-44 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm outline-none"
+            placeholder="Search"
+            className="w-40 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm outline-none"
           />
         </div>
 
@@ -203,115 +158,7 @@ const matchesWithMessages = useMemo(() => {
           </div>
         )}
 
-        {/*  NEW MATCHES (Likes + placeholders + new matches) */}
-        <h2 className="mt-6 text-2xl font-extrabold">New Matches</h2>
-
-        <div className="mt-3 flex gap-3 overflow-x-auto pb-1">
-          {/* Likes tile (always) */}
-          <button
-            type="button"
-            onClick={() => router.push("/likes")}
-            className="shrink-0"
-          >
-            <div className="relative h-24 w-20 rounded-3xl bg-white/10 ring-1 ring-white/10 overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-b from-yellow-500/30 to-black/60" />
-              <div className="absolute bottom-2 left-2 flex items-center gap-1 text-sm font-extrabold">
-                <span className="text-yellow-200"> </span>
-                <span>Likes</span>
-              </div>
-            </div>
-          </button>
-
-          {loading ? (
-            // loading placeholders
-            Array.from({ length: 3 }).map((_, i) => (
-              <div
-                key={i}
-                className="shrink-0 h-24 w-20 rounded-3xl bg-white/10 animate-pulse ring-1 ring-white/10"
-              />
-            ))
-          ) : (
-            <>
-              {/* show new matches (no messages yet) */}
-              {matchesNoMessages.map((m) => {
-                const otherId = otherUserId(m);
-                const p = profilesByUser[otherId];
-                const avatar = photoSrc(p?.photo1_url ?? null);
-return (
-<SwipeToDeleteRow
-  key={m.id}
-  onDelete={async () => {
-    if (!uid) return;
-
-    const patch = m.user_a === uid ? { hidden_by_a: true } : { hidden_by_b: true };
-
-    const { error } = await supabase
-      .from("matches")
-      .update(patch)
-      .eq("id", m.id);
-
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    // ✅ UI-შიც დავმალოთ (state-ში დავანიშნოთ hidden)
-    setMatches((prev) =>
-      prev.map((x) => (x.id === m.id ? { ...x, ...patch } : x))
-    );
-
-    // optional: ეს შეგიძლია დატოვო/ამოიღო
-    setLatestByMatch((prev) => ({ ...prev, [m.id]: null }));
-    setUnreadByMatch((prev) => {
-      const next = { ...prev };
-      delete next[m.id];
-      return next;
-    });
-  }}
->
-  <div
-    className="relative flex w-full items-center gap-4 text-left"
-    onClick={() => router.push(`/chat/${m.id}`)}
-  >
-    <div className="h-14 w-14 overflow-hidden rounded-full bg-white/10 ring-1 ring-white/10">
-      {avatar ? (
-        <img src={avatar} className="h-full w-full object-cover" alt="" />
-      ) : (
-        <div className="h-full w-full bg-zinc-800/40" />
-      )}
-    </div>
-
-    <div className="flex-1">
-      <div className="text-xl font-extrabold">{displayNameFor(m)}</div>
-
-      <div className="mt-0.5 text-white/65 line-clamp-1">
-        {
-           "No messages yet"}
-      </div>
-
-      <div className="mt-3 h-px w-full bg-white/10" />
-    </div>
-
-    
-  </div>
-</SwipeToDeleteRow>
-);
-})}
-
-              {/* keep at least 3 slots after Likes, like your screenshot */}
-              {Array.from({
-                length: Math.max(0, 3 - matchesNoMessages.length),
-              }).map((_, i) => (
-                <div
-                  key={`empty-${i}`}
-                  className="shrink-0 h-24 w-20 rounded-3xl bg-white/10 ring-1 ring-white/10"
-                />
-              ))}
-            </>
-          )}
-        </div>
-
-        {/*  MESSAGES */}
+        {/* Messages */}
         <h2 className="mt-6 text-2xl font-extrabold">Messages</h2>
 
         <div className="mt-2">
@@ -322,11 +169,11 @@ return (
               ))}
             </div>
           ) : filteredMatches.length === 0 ? (
-            <p className="mt-4 text-white/60">No chats yet</p>
+            <p className="mt-4 text-white/60">No chats yet  </p>
           ) : (
             <div className="mt-4 space-y-5">
               {filteredMatches.map((m) => {
-                const otherId = otherUserId(m);
+                const otherId = m.user_a === uid ? m.user_b : m.user_a;
                 const p = profilesByUser[otherId];
                 const last = latestByMatch[m.id];
                 const avatar = photoSrc(p?.photo1_url ?? null);
@@ -349,7 +196,7 @@ return (
 
                     <div className="flex-1">
                       <div className="text-xl font-extrabold">
-                        {displayNameFor(m)}
+                        {p?.nickname ?? "Unknown"}
                       </div>
 
                       <div className="mt-0.5 text-white/65 line-clamp-1">

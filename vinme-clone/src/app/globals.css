@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
-
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --brand-font: var(--font-brand);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -18,35 +18,32 @@ body {
   height: 100%;
   margin: 0;
   padding: 0;
+
   background: var(--background);
   color: var(--foreground);
+
+  /*  scroll works (Settings will scroll) */
+  overflow-x: hidden;
+  overflow-y: auto;
+
+  /*  keep bounce under control without killing scroll */
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: contain;
+
+  -webkit-overflow-scrolling: touch;
 }
 
-html, body {
-  height: 100%;
-  overflow: hidden;
-  overscroll-behavior: none;
-}
-
-:root {
-  --brand-font: var(--font-brand);
-}
 .brand-font {
   font-family: var(--brand-font);
 }
 
-
-/* ✅ stop blue selection / highlight while swiping */
+/*  stop blue selection / highlight while swiping */
 * {
   -webkit-tap-highlight-color: transparent;
-}
-
-html,
-body {
-  overscroll-behavior: none;
 }
 
 img {
   -webkit-user-drag: none;
   user-select: none;
 }
+
