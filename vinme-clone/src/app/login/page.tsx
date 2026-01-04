@@ -19,13 +19,13 @@ export default function LoginPage() {
       <div className="relative z-10 flex min-h-[100dvh] items-center justify-center px-6">
         <div className="w-full max-w-sm">
           {/* Card */}
-          <div className="rounded-3xl bg-zinc-950/60 p-6 shadow-[0_0_40px_rgba(255,0,60,0.18)] ring-1 ring-white/10 backdrop-blur-xl">
+          <div className="rounded-3xl bg-zinc-950/60 p-10 shadow-[0_0_800px_rgba(255,0,60,0.18)] ring-1 ring-white/10 backdrop-blur-xl">
             {/* Logo + text */}
             <div className="flex flex-col items-center gap-4 text-center">
               <img
                 src="/logo1.png"
                 alt="Shekhvdi"
-                className="h-28 w-auto object-contain"
+                className="h-36 w-auto object-contain"
               />
 
               <p className="text-sm text-white/70">

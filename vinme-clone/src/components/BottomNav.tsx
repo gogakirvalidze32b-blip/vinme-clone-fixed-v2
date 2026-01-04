@@ -11,6 +11,17 @@ type Props = {
 export default function BottomNav({ chatBadge = 0 }: Props) {
   const pathname = usePathname();
 
+  // ✅ ამ გვერდებზე BottomNav საერთოდ არ გამოჩნდეს
+  if (
+    pathname === "/" ||
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/onboarding") ||
+    pathname.startsWith("/delete-account")
+  ) {
+    return null;
+  }
+
   const isActive = (href: string) =>
     pathname === href || pathname?.startsWith(href + "/");
 
@@ -30,10 +41,7 @@ export default function BottomNav({ chatBadge = 0 }: Props) {
         href={href}
         className={[
           "relative flex h-10 w-10 items-center justify-center transition-opacity",
-          // ✅ მხოლოდ ეს რჩება — როგორც შენ გინდა
           active ? "opacity-100" : "opacity-60",
-
-          // ✅ PHONE FIX (არ ცვლის ვიზუალს კომპზე, მაგრამ ტელეფონზე “highlight/outline” ქრება)
           "select-none touch-manipulation",
           "focus:outline-none focus-visible:outline-none",
           "[-webkit-tap-highlight-color:transparent]",
@@ -53,7 +61,7 @@ export default function BottomNav({ chatBadge = 0 }: Props) {
   return (
     <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+12px)] z-[9999] pointer-events-none">
       <div className="mx-auto w-full max-w-md px-6 pb-[env(safe-area-inset-bottom)]">
-        <div className=" rounded-full  px-3 py-0 pointer-events-auto">
+        <div className="rounded-full px-3 py-0 pointer-events-auto">
           <div className="flex items-center justify-between px-2">
             <Item href="/feed" icon={<span className="text-[18px]">💘</span>} />
             <Item href="/likes" icon={<span className="text-[18px]">🫶</span>} />
@@ -66,6 +74,6 @@ export default function BottomNav({ chatBadge = 0 }: Props) {
           </div>
         </div>
       </div>
-    // </div>
+    </div>
   );
 }
