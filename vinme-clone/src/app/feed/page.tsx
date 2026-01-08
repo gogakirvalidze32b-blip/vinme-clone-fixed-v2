@@ -6,6 +6,7 @@ import { photoSrc } from "@/lib/photos";
 import TinderCard from "@/components/TinderCard";
 import BottomNav from "@/components/BottomNav";
 import { supabase } from "@/lib/supabase";
+import { getLang } from "@/lib/i18n";
 
 type Gender = "" | "male" | "female" | "nonbinary" | "other";
 type Seeking = "everyone" | "male" | "female" | "nonbinary" | "other";
@@ -50,6 +51,41 @@ type CardUser = {
 
 export default function FeedPage() {
   const router = useRouter();
+
+  // ✅ language (client) - state, რომ სწორად დაიჭიროს
+  const [lang, setLangState] = useState<"ka" | "en">("ka");
+
+  useEffect(() => {
+    setLangState(getLang());
+  }, []);
+
+  const t = useMemo(() => {
+    return lang === "ka"
+      ? {
+          loading: "იტვირთება…",
+          finishProfileTitle: "დაასრულე პროფილი 📝",
+          finishProfileBody:
+            "Profiles ცხრილში row ვერ ვიპოვე user_id-ით. შედი Onboarding-ში.",
+          goOnboarding: "გადადი Onboarding-ზე",
+          errorTitle: "შეცდომა",
+          reload: "განახლება",
+          noProfiles: "პროფილები ვერ მოიძებნა 😅",
+          home: "მთავარი",
+          settings: "პარამეტრები",
+        }
+      : {
+          loading: "Loading…",
+          finishProfileTitle: "Finish your profile 📝",
+          finishProfileBody:
+            "Couldn’t find a profiles row for your user_id. Go to Onboarding.",
+          goOnboarding: "Go to Onboarding",
+          errorTitle: "Error",
+          reload: "Reload",
+          noProfiles: "No profiles found 😅",
+          home: "Home",
+          settings: "Settings",
+        };
+  }, [lang]);
 
   const [me, setMe] = useState<ProfileRow | null>(null);
   const [top, setTop] = useState<ProfileRow | null>(null);
@@ -139,7 +175,11 @@ export default function FeedPage() {
           q = q.eq("gender", mySeeking);
         }
 
-        if (myGender === "male" || myGender === "female" || myGender === "nonbinary") {
+        if (
+          myGender === "male" ||
+          myGender === "female" ||
+          myGender === "nonbinary"
+        ) {
           q = q.in("seeking", [myGender, "everyone"]);
         }
 
@@ -178,6 +218,7 @@ export default function FeedPage() {
           return;
         }
 
+        // ✅ geo update once
         if (!geoOnce.current && "geolocation" in navigator) {
           geoOnce.current = true;
 
@@ -198,7 +239,9 @@ export default function FeedPage() {
           );
         }
 
-        const completed = my.onboarding_completed === true && (my.onboarding_step ?? 0) >= 8;
+        const completed =
+          my.onboarding_completed === true && (my.onboarding_step ?? 0) >= 8;
+
         if (!completed) {
           if (alive) setLoading(false);
           router.replace("/onboarding");
@@ -330,7 +373,7 @@ export default function FeedPage() {
   if (loading) {
     return (
       <div className="h-[100dvh] flex items-center justify-center bg-black text-white">
-        Loading…
+        {t.loading}
       </div>
     );
   }
@@ -341,15 +384,15 @@ export default function FeedPage() {
         <div className="mx-auto w-full max-w-[420px] h-full px-4 pt-6">
           <div className="w-full h-full flex items-center justify-center text-center">
             <div>
-              <div className="text-xl font-semibold mb-2">Finish your profile 📝</div>
-              <div className="opacity-80 text-sm">
-                Profiles table-ში row ვერ ვიპოვე user_id-ით. შედი Onboarding-ში.
+              <div className="text-xl font-semibold mb-2">
+                {t.finishProfileTitle}
               </div>
+              <div className="opacity-80 text-sm">{t.finishProfileBody}</div>
               <button
                 className="mt-5 w-full px-5 py-3 rounded-2xl bg-white text-black font-semibold active:scale-[0.99]"
                 onClick={() => router.push("/onboarding")}
               >
-                Go to Onboarding
+                {t.goOnboarding}
               </button>
             </div>
           </div>
@@ -361,43 +404,43 @@ export default function FeedPage() {
 
   return (
     <main className="h-[100dvh] bg-black text-white overflow-hidden">
-      {/* ✅ ეკრანი მთლიანად კარტას — ქვემოთ ადგილი BottomNav-სთვის */}
       <div className="mx-auto w-full max-w-[420px] h-full px-0">
         {err ? (
           <div className="w-full h-full px-6 flex items-center justify-center text-center">
             <div>
-              <div className="text-red-400 font-semibold mb-2">Error</div>
+              <div className="text-red-400 font-semibold mb-2">
+                {t.errorTitle}
+              </div>
               <div className="text-sm opacity-90 break-words">{err}</div>
               <button
                 className="mt-4 px-4 py-2 rounded-lg bg-white text-black active:scale-[0.99]"
                 onClick={() => router.refresh()}
               >
-                Reload
+                {t.reload}
               </button>
             </div>
           </div>
         ) : !cardUser ? (
           <div className="w-full h-full px-6 flex items-center justify-center text-center">
             <div>
-              <div className="text-lg font-semibold">No profiles found 😅</div>
+              <div className="text-lg font-semibold">{t.noProfiles}</div>
               <div className="mt-4 flex gap-3 justify-center">
                 <button
                   className="px-4 py-2 rounded-xl bg-neutral-800 active:scale-[0.99]"
                   onClick={() => router.push("/")}
                 >
-                  Home
+                  {t.home}
                 </button>
                 <button
                   className="px-4 py-2 rounded-xl bg-white text-black active:scale-[0.99]"
                   onClick={() => router.push("/settings")}
                 >
-                  Settings
+                  {t.settings}
                 </button>
               </div>
             </div>
           </div>
         ) : (
-          // ✅ ეს pb არის “ზუსტად” რომ ქვედა UI ლამაზად ჩაჯდეს (როგორც სქრინზე)
           <div className="w-full h-full pb-[92px]">
             <TinderCard
               key={cardUser.id}

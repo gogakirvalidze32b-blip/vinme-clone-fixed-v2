@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
 import OnboardingShell from "@/components/OnboardingShell";
+import LangMenu from "@/components/LangMenu";
+
 import { photoSrc } from "@/lib/photos";
 import { getOrCreateAnonId, generateAnonName } from "@/lib/guest";
 import { supabase } from "@/lib/supabase";
@@ -19,6 +21,8 @@ import {
   Gender,
 } from "@/lib/profile";
 
+import { getLang, type Lang } from "@/lib/i18n";
+
 type Step =
   | "rules"
   | "name"
@@ -29,14 +33,17 @@ type Step =
   | "distance"
   | "photos";
 
-const intents: { id: Intent; label: string; emoji: string }[] = [
-  { id: "long_term", label: "Long-term partner", emoji: "💘" },
-  { id: "long_term_open", label: "Long-term, open to short", emoji: "😍" },
-  { id: "short_term_open", label: "Short-term, open to long", emoji: "🥂" },
-  { id: "short_term", label: "Short-term fun", emoji: "🎉" },
-  { id: "friends", label: "New friends", emoji: "👋" },
-  { id: "figuring_out", label: "Still figuring it out", emoji: "🤔" },
-];
+/** ✅ OUTSIDE component — ასე აღარ “რემაუნთდება” ყოველ ასოზე */
+function WithLang({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="relative">
+      <div className="absolute right-4 top-4 z-50">
+        <LangMenu />
+      </div>
+      {children}
+    </div>
+  );
+}
 
 // ✅ ONLY change: auto-format DD/MM/YYYY, digits-only, auto-insert "/"
 function formatDMYInput(v: string) {
@@ -127,7 +134,137 @@ export default function OnboardingClient() {
   const [userId, setUserId] = useState<string | null>(null);
   const [anonId, setAnonId] = useState<string>("");
 
+  // ✅ LIVE LANG (no reload) — და არ იწვევს input reset-ს
+  const [lang, setLang] = useState<Lang>("ka");
+  useEffect(() => {
+    const sync = () => setLang(getLang());
+    sync();
+    window.addEventListener("app:lang", sync);
+    return () => window.removeEventListener("app:lang", sync);
+  }, []);
+
+  // ✅ texts (hook MUST be up here, always)
+  const copy = useMemo(() => {
+    return lang === "ka"
+      ? {
+          rules_title: "წესები",
+          rules_sub: "იყავი ზრდილობიანი, არ გააკეთო სპამი და იყავი უსაფრთხოდ 🙂",
+          agree: "ვეთანხმები ✅",
+
+          name_title: "შენი სახელი",
+          name_sub: "როგორ მოგმართოთ?",
+          name_ph: "შეიყვანე სახელი",
+          cont: "გაგრძელება →",
+
+          birth_title: "დაბადების თარიღი",
+          birth_sub: "უნდა იყო 18+ (DD/MM/YYYY)",
+          next: "შემდეგი",
+
+          gender_title: "შენი სქესი?",
+          gender_sub: "აირჩიე ერთი.",
+          show_gender: "სქესი გამოჩნდეს პროფილზე",
+
+          seeking_title: "ვის გინდა ნახვა?",
+          seeking_sub: "ეს მართავს feed-ის ფილტრს.",
+
+          intent_title: "რას ეძებ?",
+          intent_sub: "აირჩიე ერთი (შეცვლი მერე).",
+
+          distance_title: "დისტანცია?",
+          distance_sub: "დააყენე მაქსიმალური დისტანცია.",
+          distance_label: "დისტანცია",
+          later_settings: "შემდეგში Settings-ში შეცვლი",
+
+          photos_title: "ატვირთე ფოტოები",
+          photos_sub: "Photo 1 აუცილებელია. მეტი ფოტო უკეთესია.",
+          photo1_req: "Photo 1 (აუცილებელია)",
+          photoX: (i: number) => `Photo ${i}`,
+          finish: "დასრულება & Feed-ზე გადასვლა 🔥",
+
+          loading_title: "იტვირთება...",
+          loading_sub: "მოიცადე 🙏",
+          loading_line: "იტვირთება…",
+
+          age18: "18+ უნდა იყო 🙂",
+          photo1_need: "Photo 1 აუცილებელია ✅",
+        }
+      : {
+          rules_title: "Quick rules",
+          rules_sub: "Be respectful, no spam, and stay safe 🙂",
+          agree: "I agree ✅",
+
+          name_title: "Your name",
+          name_sub: "What should we call you?",
+          name_ph: "Enter your name",
+          cont: "Continue →",
+
+          birth_title: "Your birthday",
+          birth_sub: "You must be 18+ (DD/MM/YYYY)",
+          next: "Next",
+
+          gender_title: "What’s your gender?",
+          gender_sub: "Select one to help us show you to the right people.",
+          show_gender: "Show gender on profile",
+
+          seeking_title: "Who are you interested in seeing?",
+          seeking_sub: "This controls your feed filter.",
+
+          intent_title: "What are you looking for?",
+          intent_sub: "Pick one (you can change later).",
+
+          distance_title: "Your distance preference?",
+          distance_sub: "Set the maximum distance for matches.",
+          distance_label: "Distance Preference",
+          later_settings: "You can change preferences later in Settings",
+
+          photos_title: "Add your recent pics",
+          photos_sub: "Photo 1 is required. Add more to stand out.",
+          photo1_req: "Photo 1 (required)",
+          photoX: (i: number) => `Photo ${i}`,
+          finish: "Finish & Go to Feed 🔥",
+
+          loading_title: "Loading...",
+          loading_sub: "Please wait 🙏",
+          loading_line: "Loading…",
+
+          age18: "You must be 18+ 🙂",
+          photo1_need: "Photo 1 is required ✅",
+        };
+  }, [lang]);
+
+  // ✅ intents dynamic labels — hook is UP HERE (not inside if)
+  const intents: { id: Intent; label: string; emoji: string }[] = useMemo(() => {
+    return lang === "ka"
+      ? [
+          { id: "long_term", label: "გრძელვადიანი პარტნიორი", emoji: "💘" },
+          { id: "long_term_open", label: "გრძელვადიანი, შეიძლება მოკლეც", emoji: "😍" },
+          { id: "short_term_open", label: "მოკლე, შეიძლება გრძელიც", emoji: "🥂" },
+          { id: "short_term", label: "მოკლე გართობა", emoji: "🎉" },
+          { id: "friends", label: "ახალი მეგობრები", emoji: "👋" },
+          { id: "figuring_out", label: "ჯერ ვარკვევ", emoji: "🤔" },
+        ]
+      : [
+          { id: "long_term", label: "Long-term partner", emoji: "💘" },
+          { id: "long_term_open", label: "Long-term, open to short", emoji: "😍" },
+          { id: "short_term_open", label: "Short-term, open to long", emoji: "🥂" },
+          { id: "short_term", label: "Short-term fun", emoji: "🎉" },
+          { id: "friends", label: "New friends", emoji: "👋" },
+          { id: "figuring_out", label: "Still figuring it out", emoji: "🤔" },
+        ];
+  }, [lang]);
+
+  // ✅ focus fix refs
+  const nameRef = useRef<HTMLInputElement | null>(null);
+  const birthRef = useRef<HTMLInputElement | null>(null);
+
   useEffect(() => setMounted(true), []);
+
+  // ✅ whenever step becomes name/birth → focus once
+  useEffect(() => {
+    if (!mounted) return;
+    if (step === "name") requestAnimationFrame(() => nameRef.current?.focus());
+    if (step === "birth") requestAnimationFrame(() => birthRef.current?.focus());
+  }, [step, mounted]);
 
   // keep userId synced
   useEffect(() => {
@@ -157,7 +294,7 @@ export default function OnboardingClient() {
         const a = getOrCreateAnonId();
         if (alive) setAnonId(a);
 
-        // ✅ ensure profile row exists (user or guest)
+        // ensure profile row exists (user or guest)
         await upsertProfileByIdentity({
           user_id: uid ?? null,
           anon_id: a,
@@ -264,32 +401,35 @@ export default function OnboardingClient() {
     return true;
   }, [step, p, birthInput]);
 
-  async function savePartial(payload: Partial<Profile>) {
-    setSaving(true);
-    setMsg("");
+  const savePartial = useCallback(
+    async (payload: Partial<Profile>) => {
+      setSaving(true);
+      setMsg("");
 
-    try {
-      const uid =
-        userId ?? (await supabase.auth.getUser()).data.user?.id ?? null;
+      try {
+        const uid =
+          userId ?? (await supabase.auth.getUser()).data.user?.id ?? null;
 
-      const patch = stripNullish({
-        ...(payload as any),
-        user_id: uid,
-        anon_id: anonId || (p as any).anon_id,
-      });
+        const patch = stripNullish({
+          ...(payload as any),
+          user_id: uid,
+          anon_id: anonId || (p as any).anon_id,
+        });
 
-      const { data, error } = await upsertProfileByIdentity(patch as any);
-      if (error) throw error;
+        const { data, error } = await upsertProfileByIdentity(patch as any);
+        if (error) throw error;
 
-      if (data) setP((prev) => ({ ...prev, ...(data as any) }));
-      else setP((prev) => ({ ...prev, ...(payload as any) }));
-    } catch (e: any) {
-      console.error("savePartial error:", e);
-      setMsg(e?.message ?? "Save failed");
-    } finally {
-      setSaving(false);
-    }
-  }
+        if (data) setP((prev) => ({ ...prev, ...(data as any) }));
+        else setP((prev) => ({ ...prev, ...(payload as any) }));
+      } catch (e: any) {
+        console.error("savePartial error:", e);
+        setMsg(e?.message ?? "Save failed");
+      } finally {
+        setSaving(false);
+      }
+    },
+    [anonId, p, userId]
+  );
 
   async function uploadToStorage(file: File, slot: 1 | 2 | 3 | 4 | 5 | 6) {
     if (!file) return;
@@ -310,9 +450,8 @@ export default function OnboardingClient() {
 
       const key = `photo${slot}_url` as const;
       const objectKey = `${owner}/photo${slot}-${stamp}.${ext}`;
-      const dbPath = `${bucket}/${objectKey}`; // ✅ DB-ში PATH ინახება
+      const dbPath = `${bucket}/${objectKey}`; // ✅ DB-ში PATH
 
-      // ✅ upload inside bucket (NO "photos/" prefix here)
       const { error: upErr } = await supabase.storage
         .from(bucket)
         .upload(objectKey, file, { upsert: true });
@@ -334,25 +473,23 @@ export default function OnboardingClient() {
   async function goNext() {
     setMsg("");
 
-    // 1) rules
     if (step === "rules") {
       setStep("name");
       return;
     }
 
-    // 2) name
     if (step === "name") {
       const first_name = (p.first_name ?? "").trim();
       if (first_name.length < 2) return;
 
-      setP((prev) => ({ ...prev, first_name, nickname: prev.nickname ?? first_name }));
-      await savePartial({ first_name, nickname: p.nickname ?? first_name, onboarding_step: 2 } as any);
+      const nick = (p.nickname ?? "").trim() || first_name;
+      setP((prev) => ({ ...prev, first_name, nickname: nick }));
+      await savePartial({ first_name, nickname: nick, onboarding_step: 2 } as any);
 
       setStep("birth");
       return;
     }
 
-    // 3) birth
     if (step === "birth") {
       const iso = formatBirthInputToISO(birthInput);
       if (!iso) return;
@@ -361,7 +498,7 @@ export default function OnboardingClient() {
       if (age == null) return;
 
       if (age < 18) {
-        setMsg("18+ უნდა იყო 🙂");
+        setMsg(copy.age18);
         return;
       }
 
@@ -372,7 +509,6 @@ export default function OnboardingClient() {
       return;
     }
 
-    // 4) gender
     if (step === "gender") {
       await savePartial({
         gender: (p as any).gender,
@@ -384,21 +520,18 @@ export default function OnboardingClient() {
       return;
     }
 
-    // 5) seeking
     if (step === "seeking") {
       await savePartial({ seeking: (p as any).seeking, onboarding_step: 5 } as any);
       setStep("intent");
       return;
     }
 
-    // 6) intent
     if (step === "intent") {
       await savePartial({ intent: (p as any).intent, onboarding_step: 6 } as any);
       setStep("distance");
       return;
     }
 
-    // 7) distance
     if (step === "distance") {
       await savePartial({
         distance_km: (p as any).distance_km ?? 50,
@@ -408,10 +541,9 @@ export default function OnboardingClient() {
       return;
     }
 
-    // 8) photos finish -> feed
     if (step === "photos") {
       if (!(p as any).photo1_url) {
-        setMsg("Photo 1 აუცილებელია ✅");
+        setMsg(copy.photo1_need);
         return;
       }
 
@@ -419,11 +551,21 @@ export default function OnboardingClient() {
       setMsg("");
 
       try {
-        const { data: sess, error: sErr } = await supabase.auth.getSession();
-        if (sErr) throw sErr;
+      const { data: sess, error: sErr } = await supabase.auth.getSession();
+if (sErr) throw sErr;
 
-        const uid = sess.session?.user?.id ?? null;
-        if (!uid) throw new Error("Auth session missing ❌");
+const uid = sess.session?.user?.id ?? null;
+
+// ✅ თუ არ ხარ დალოგინებული → ჯერ Login და დავიმახსოვროთ დაბრუნება
+if (!uid) {
+  try {
+    localStorage.setItem("after_login", "/onboarding"); 
+    localStorage.setItem("after_login_reason", "finish_onboarding");
+  } catch {}
+  setMsg("გაგრძელებისთვის საჭიროა Login ✅");
+  router.replace("/login");
+  return;
+}
 
         const finalPayload = stripNullish({
           user_id: uid,
@@ -475,296 +617,293 @@ export default function OnboardingClient() {
 
   if (loading) {
     return (
-      <OnboardingShell title="Loading..." subtitle="Please wait 🙏">
-        <div className="text-center text-zinc-400">Loading…</div>
-        {msg && <p className="mt-3 text-sm text-zinc-300">{msg}</p>}
-      </OnboardingShell>
+      <WithLang>
+        <OnboardingShell title={copy.loading_title} subtitle={copy.loading_sub}>
+          <div className="text-center text-zinc-400">{copy.loading_line}</div>
+          {msg && <p className="mt-3 text-sm text-zinc-300">{msg}</p>}
+        </OnboardingShell>
+      </WithLang>
     );
   }
 
-  // ----------------------------
-  // UI STEPS
-  // ----------------------------
-
   if (step === "rules") {
     return (
-      <OnboardingShell
-        title="Quick rules"
-        subtitle="Be respectful, no spam, and stay safe 🙂"
-      >
-        <div className="space-y-3 text-sm text-zinc-300">
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
-            ✅ No hate / harassment <br />
-            ✅ No scams / spam <br />
-            ✅ Use recent photos
+      <WithLang>
+        <OnboardingShell title={copy.rules_title} subtitle={copy.rules_sub}>
+          <div className="space-y-3 text-sm text-zinc-300">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+              ✅ No hate / harassment <br />
+              ✅ No scams / spam <br />
+              ✅ Use recent photos
+            </div>
+
+            <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
+              {copy.agree}
+            </PrimaryButton>
+
+            {msg && <p className="text-sm text-zinc-300">{msg}</p>}
           </div>
-
-          <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
-            I agree ✅
-          </PrimaryButton>
-
-          {msg && <p className="text-sm text-zinc-300">{msg}</p>}
-        </div>
-      </OnboardingShell>
+        </OnboardingShell>
+      </WithLang>
     );
   }
 
   if (step === "name") {
     return (
-      <OnboardingShell title="Your name" subtitle="What should we call you?">
-        <div className="space-y-4">
-          <input
-            value={p.first_name ?? ""}
-            onChange={(e) =>
-              setP((prev) => ({ ...prev, first_name: e.target.value } as any))
-            }
-            placeholder="Enter your name"
-            className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/40 px-4 py-4 text-white outline-none"
-          />
+      <WithLang>
+        <OnboardingShell title={copy.name_title} subtitle={copy.name_sub}>
+          <div className="space-y-4">
+            <input
+              ref={nameRef}
+              autoFocus
+              value={p.first_name ?? ""}
+              onChange={(e) =>
+                setP((prev) => ({ ...prev, first_name: e.target.value } as any))
+              }
+              placeholder={copy.name_ph}
+              className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/40 px-4 py-4 text-white outline-none"
+            />
 
-          <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
-            Continue →
-          </PrimaryButton>
+            <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
+              {copy.cont}
+            </PrimaryButton>
 
-          {msg && <p className="text-sm text-zinc-300">{msg}</p>}
-        </div>
-      </OnboardingShell>
+            {msg && <p className="text-sm text-zinc-300">{msg}</p>}
+          </div>
+        </OnboardingShell>
+      </WithLang>
     );
   }
 
   if (step === "birth") {
     return (
-      <OnboardingShell
-        title="Your birthday"
-        subtitle="You must be 18+ (DD/MM/YYYY)"
-      >
-        <div className="space-y-4">
-          <input
-            value={birthInput}
-            onChange={(e) => setBirthInput(formatDMYInput(e.target.value))}
-            placeholder="DD/MM/YYYY"
-            inputMode="numeric"
-            maxLength={10}
-            className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/40 px-4 py-4 text-white outline-none"
-          />
+      <WithLang>
+        <OnboardingShell title={copy.birth_title} subtitle={copy.birth_sub}>
+          <div className="space-y-4">
+            <input
+              ref={birthRef}
+              autoFocus
+              value={birthInput}
+              onChange={(e) => setBirthInput(formatDMYInput(e.target.value))}
+              placeholder="DD/MM/YYYY"
+              inputMode="numeric"
+              maxLength={10}
+              className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/40 px-4 py-4 text-white outline-none"
+            />
 
-          <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
-            Continue →
-          </PrimaryButton>
+            <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
+              {copy.cont}
+            </PrimaryButton>
 
-          {msg && <p className="text-sm text-zinc-300">{msg}</p>}
-        </div>
-      </OnboardingShell>
+            {msg && <p className="text-sm text-zinc-300">{msg}</p>}
+          </div>
+        </OnboardingShell>
+      </WithLang>
     );
   }
 
   if (step === "gender") {
     return (
-      <OnboardingShell
-        title="What’s your gender?"
-        subtitle="Select one to help us show you to the right people."
-      >
-        <div className="space-y-3">
-          {(["male", "female", "nonbinary"] as Gender[]).map((g) => (
-            <Pill
-              key={g}
-              active={(p as any).gender === g}
-              onClick={() => setP((prev) => ({ ...prev, gender: g } as any))}
-            >
-              <div className="text-lg font-semibold capitalize">{g}</div>
-            </Pill>
-          ))}
-        </div>
+      <WithLang>
+        <OnboardingShell title={copy.gender_title} subtitle={copy.gender_sub}>
+          <div className="space-y-3">
+            {(["male", "female", "nonbinary"] as Gender[]).map((g) => (
+              <Pill
+                key={g}
+                active={(p as any).gender === g}
+                onClick={() => setP((prev) => ({ ...prev, gender: g } as any))}
+              >
+                <div className="text-lg font-semibold capitalize">{g}</div>
+              </Pill>
+            ))}
+          </div>
 
-        <label className="mt-4 flex items-center gap-2 text-sm text-zinc-300">
-          <input
-            type="checkbox"
-            checked={(p as any).show_gender ?? false}
-            onChange={(e) =>
-              setP((prev) => ({ ...prev, show_gender: e.target.checked } as any))
-            }
-          />
-          Show gender on profile
-        </label>
+          <label className="mt-4 flex items-center gap-2 text-sm text-zinc-300">
+            <input
+              type="checkbox"
+              checked={(p as any).show_gender ?? false}
+              onChange={(e) =>
+                setP((prev) => ({ ...prev, show_gender: e.target.checked } as any))
+              }
+            />
+            {copy.show_gender}
+          </label>
 
-        <div className="mt-4">
-          <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
-            Next
-          </PrimaryButton>
-        </div>
+          <div className="mt-4">
+            <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
+              {copy.next}
+            </PrimaryButton>
+          </div>
 
-        {msg && <p className="mt-3 text-sm text-zinc-300">{msg}</p>}
-      </OnboardingShell>
+          {msg && <p className="mt-3 text-sm text-zinc-300">{msg}</p>}
+        </OnboardingShell>
+      </WithLang>
     );
   }
 
   if (step === "seeking") {
     return (
-      <OnboardingShell
-        title="Who are you interested in seeing?"
-        subtitle="This controls your feed filter."
-      >
-        <div className="space-y-3">
-          {(["male", "female", "nonbinary", "everyone"] as const).map((s) => (
-            <Pill
-              key={s}
-              active={(p as any).seeking === s}
-              onClick={() => setP((prev) => ({ ...prev, seeking: s } as any))}
-            >
-              <div className="text-lg font-semibold capitalize">{s}</div>
-            </Pill>
-          ))}
-        </div>
+      <WithLang>
+        <OnboardingShell title={copy.seeking_title} subtitle={copy.seeking_sub}>
+          <div className="space-y-3">
+            {(["male", "female", "nonbinary", "everyone"] as const).map((s) => (
+              <Pill
+                key={s}
+                active={(p as any).seeking === s}
+                onClick={() => setP((prev) => ({ ...prev, seeking: s } as any))}
+              >
+                <div className="text-lg font-semibold capitalize">{s}</div>
+              </Pill>
+            ))}
+          </div>
 
-        <div className="mt-4">
-          <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
-            Next
-          </PrimaryButton>
-        </div>
+          <div className="mt-4">
+            <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
+              {copy.next}
+            </PrimaryButton>
+          </div>
 
-        {msg && <p className="mt-3 text-sm text-zinc-300">{msg}</p>}
-      </OnboardingShell>
+          {msg && <p className="mt-3 text-sm text-zinc-300">{msg}</p>}
+        </OnboardingShell>
+      </WithLang>
     );
   }
 
   if (step === "intent") {
     return (
-      <OnboardingShell
-        title="What are you looking for?"
-        subtitle="Pick one (you can change later)."
-      >
-        <div className="grid grid-cols-2 gap-3">
-          {intents.map((it) => (
-            <button
-              key={it.id}
-              type="button"
-              onClick={() => setP((prev) => ({ ...prev, intent: it.id } as any))}
-              className={`rounded-2xl border p-4 text-left transition ${
-                (p as any).intent === it.id
-                  ? "border-pink-500 bg-pink-500/10"
-                  : "border-zinc-800 bg-zinc-900/40 hover:bg-zinc-900/70"
-              }`}
-            >
-              <div className="text-2xl">{it.emoji}</div>
-              <div className="mt-2 text-sm font-semibold">{it.label}</div>
-            </button>
-          ))}
-        </div>
+      <WithLang>
+        <OnboardingShell title={copy.intent_title} subtitle={copy.intent_sub}>
+          <div className="grid grid-cols-2 gap-3">
+            {intents.map((it) => (
+              <button
+                key={it.id}
+                type="button"
+                onClick={() => setP((prev) => ({ ...prev, intent: it.id } as any))}
+                className={`rounded-2xl border p-4 text-left transition ${
+                  (p as any).intent === it.id
+                    ? "border-pink-500 bg-pink-500/10"
+                    : "border-zinc-800 bg-zinc-900/40 hover:bg-zinc-900/70"
+                }`}
+              >
+                <div className="text-2xl">{it.emoji}</div>
+                <div className="mt-2 text-sm font-semibold">{it.label}</div>
+              </button>
+            ))}
+          </div>
 
-        <div className="mt-4">
-          <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
-            Next
-          </PrimaryButton>
-        </div>
+          <div className="mt-4">
+            <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
+              {copy.next}
+            </PrimaryButton>
+          </div>
 
-        {msg && <p className="mt-3 text-sm text-zinc-300">{msg}</p>}
-      </OnboardingShell>
+          {msg && <p className="mt-3 text-sm text-zinc-300">{msg}</p>}
+        </OnboardingShell>
+      </WithLang>
     );
   }
 
   if (step === "distance") {
     return (
-      <OnboardingShell
-        title="Your distance preference?"
-        subtitle="Set the maximum distance for matches."
-      >
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
-          <div className="flex items-center justify-between text-sm text-zinc-300">
-            <span>Distance Preference</span>
-            <span className="text-white">{(p as any).distance_km ?? 50} km</span>
+      <WithLang>
+        <OnboardingShell title={copy.distance_title} subtitle={copy.distance_sub}>
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+            <div className="flex items-center justify-between text-sm text-zinc-300">
+              <span>{copy.distance_label}</span>
+              <span className="text-white">{(p as any).distance_km ?? 50} km</span>
+            </div>
+
+            <input
+              type="range"
+              min={5}
+              max={200}
+              value={(p as any).distance_km ?? 50}
+              onChange={(e) =>
+                setP((prev) => ({
+                  ...prev,
+                  distance_km: Number(e.target.value),
+                } as any))
+              }
+              className="mt-4 w-full"
+            />
+
+            <div className="mt-2 text-center text-xs text-zinc-500">
+              {copy.later_settings}
+            </div>
           </div>
 
-          <input
-            type="range"
-            min={5}
-            max={200}
-            value={(p as any).distance_km ?? 50}
-            onChange={(e) =>
-              setP((prev) => ({
-                ...prev,
-                distance_km: Number(e.target.value),
-              } as any))
-            }
-            className="mt-4 w-full"
-          />
-
-          <div className="mt-2 text-center text-xs text-zinc-500">
-            You can change preferences later in Settings
+          <div className="mt-4">
+            <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
+              {copy.next}
+            </PrimaryButton>
           </div>
-        </div>
 
-        <div className="mt-4">
-          <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
-            Next
-          </PrimaryButton>
-        </div>
-
-        {msg && <p className="mt-3 text-sm text-zinc-300">{msg}</p>}
-      </OnboardingShell>
+          {msg && <p className="mt-3 text-sm text-zinc-300">{msg}</p>}
+        </OnboardingShell>
+      </WithLang>
     );
   }
 
   // photos
   return (
-    <OnboardingShell
-      title="Add your recent pics"
-      subtitle="Photo 1 is required. Add more to stand out."
-    >
-      <div className="grid grid-cols-3 gap-3">
-        {([1, 2, 3, 4, 5, 6] as const).map((i) => {
-          const key = `photo${i}_url` as const;
-          const path = (p as any)[key] as string;
-          const url = photoSrc(path);
+    <WithLang>
+      <OnboardingShell title={copy.photos_title} subtitle={copy.photos_sub}>
+        <div className="grid grid-cols-3 gap-3">
+          {([1, 2, 3, 4, 5, 6] as const).map((i) => {
+            const key = `photo${i}_url` as const;
+            const path = (p as any)[key] as string;
+            const url = photoSrc(path);
 
-          return (
-            <label
-              key={i}
-              className={`relative aspect-[3/4] cursor-pointer overflow-hidden rounded-2xl border ${
-                i === 1 && !(p as any).photo1_url
-                  ? "border-pink-500/70"
-                  : "border-zinc-800"
-              } bg-zinc-900/30`}
-              title={`Upload Photo ${i}`}
-            >
-              {path ? (
-                <img
-                  src={url}
-                  alt=""
-                  className="h-full w-full object-cover"
-                  draggable={false}
+            return (
+              <label
+                key={i}
+                className={`relative aspect-[3/4] cursor-pointer overflow-hidden rounded-2xl border ${
+                  i === 1 && !(p as any).photo1_url
+                    ? "border-pink-500/70"
+                    : "border-zinc-800"
+                } bg-zinc-900/30`}
+                title={`Upload Photo ${i}`}
+              >
+                {path ? (
+                  <img
+                    src={url}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    draggable={false}
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-zinc-500">
+                    <span className="text-2xl">＋</span>
+                  </div>
+                )}
+
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) uploadToStorage(f, i);
+                    e.currentTarget.value = "";
+                  }}
                 />
-              ) : (
-                <div className="flex h-full items-center justify-center text-zinc-500">
-                  <span className="text-2xl">＋</span>
+
+                <div className="absolute bottom-2 left-2 rounded-full bg-black/50 px-2 py-1 text-[10px] text-white">
+                  {i === 1 ? copy.photo1_req : copy.photoX(i)}
                 </div>
-              )}
+              </label>
+            );
+          })}
+        </div>
 
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) uploadToStorage(f, i);
-                  e.currentTarget.value = "";
-                }}
-              />
+        <div className="mt-4">
+          <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
+            {copy.finish}
+          </PrimaryButton>
+        </div>
 
-              <div className="absolute bottom-2 left-2 rounded-full bg-black/50 px-2 py-1 text-[10px] text-white">
-                {i === 1 ? "Photo 1 (required)" : `Photo ${i}`}
-              </div>
-            </label>
-          );
-        })}
-      </div>
-
-      <div className="mt-4">
-        <PrimaryButton disabled={!canNext || saving} onClick={goNext}>
-          Finish & Go to Feed 🔥
-        </PrimaryButton>
-      </div>
-
-      {msg && <p className="mt-3 text-sm text-zinc-300">{msg}</p>}
-    </OnboardingShell>
+        {msg && <p className="mt-3 text-sm text-zinc-300">{msg}</p>}
+      </OnboardingShell>
+    </WithLang>
   );
 }
