@@ -1,9 +1,6 @@
-import dynamic from "next/dynamic";
+"use client";
 
-const MessagesClient = dynamic(
-  () => import("./MessagesClient"),
-  { ssr: false }
-);
+import MessagesClient from "./MessagesClient";
 
 export default function Page() {
   return <MessagesClient />;
