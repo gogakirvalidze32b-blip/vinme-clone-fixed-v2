@@ -1,7 +1,8 @@
+/** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    optimizePackageImports: ["@supabase/supabase-js"],
+    turbo: false,
   },
 };
 
-export default nextConfig;
+module.exports = nextConfig;
