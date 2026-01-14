@@ -1,5 +1,8 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { photoSrc } from "@/lib/photos";
@@ -53,10 +56,9 @@ export default function FeedPage() {
   const router = useRouter();
 
   // ✅ language (client) - state, რომ სწორად დაიჭიროს
-  const [lang, setLangState] = useState<"ka" | "en">("ka");
-
+  const [lang, setLang] = useState<"ka" | "en">("ka");
   useEffect(() => {
-    setLangState(getLang());
+    setLang(getLang());
   }, []);
 
   const t = useMemo(() => {
@@ -91,7 +93,6 @@ export default function FeedPage() {
   const [top, setTop] = useState<ProfileRow | null>(null);
 
   const myGender = me?.gender ?? null;
-
   const geoOnce = useRef(false);
 
   const [loading, setLoading] = useState(true);
@@ -267,7 +268,6 @@ export default function FeedPage() {
 
       const payload = { from_id: me.user_id, to_id: targetUserId, action };
       const { error } = await supabase.from("swipes").insert(payload as any);
-
       if (error) console.warn("swipe insert error:", error.message);
       return !error;
     },
@@ -330,7 +330,6 @@ export default function FeedPage() {
     setTop(null);
 
     const ok = await writeSwipe("like", top.user_id);
-
     if (!ok) {
       requestAnimationFrame(() => {
         loadTop(me.user_id, me.seeking);
@@ -388,6 +387,7 @@ export default function FeedPage() {
                 {t.finishProfileTitle}
               </div>
               <div className="opacity-80 text-sm">{t.finishProfileBody}</div>
+
               <button
                 className="mt-5 w-full px-5 py-3 rounded-2xl bg-white text-black font-semibold active:scale-[0.99]"
                 onClick={() => router.push("/onboarding")}
@@ -397,6 +397,7 @@ export default function FeedPage() {
             </div>
           </div>
         </div>
+
         <BottomNav />
       </main>
     );
@@ -412,6 +413,7 @@ export default function FeedPage() {
                 {t.errorTitle}
               </div>
               <div className="text-sm opacity-90 break-words">{err}</div>
+
               <button
                 className="mt-4 px-4 py-2 rounded-lg bg-white text-black active:scale-[0.99]"
                 onClick={() => router.refresh()}
