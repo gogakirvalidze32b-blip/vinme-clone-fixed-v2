@@ -9,31 +9,20 @@ export function getSupabase(): SupabaseClient {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url || !key) {
-    throw new Error(
-      "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY"
-    );
+    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
   }
 
   _client = createClient(url, key, {
-    auth: {
-      persistSession: true, // ✅ ინახავს session-ს
-      autoRefreshToken: true, // ✅ refresh token
-      detectSessionInUrl: true, // ✅ OAuth callback-ისთვის (ძალიან მნიშვნელოვანია)
-    },
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
   });
 
   return _client;
 }
 
-/**
- * ✅ backward-compatible export
- * რომ ძველი კოდი არ დაგენგრეს:
- * import { supabase } from "@/lib/supabase";
- */
 export const supabase: SupabaseClient = new Proxy({} as SupabaseClient, {
-  get(_target, prop) {
+  get(_t, prop) {
     const real = getSupabase();
-    // @ts-expect-error – proxy forwarding
+    // @ts-expect-error
     return real[prop];
   },
 });

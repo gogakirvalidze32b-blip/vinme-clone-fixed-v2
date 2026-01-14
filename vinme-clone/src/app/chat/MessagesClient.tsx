@@ -1,6 +1,7 @@
 "use client";
+import dynamic from "next/dynamic";
 
-import MessagesData from "./MessagesData";
+const MessagesData = dynamic(() => import("./MessagesData"), { ssr: false });
 
 export default function MessagesClient() {
   return <MessagesData />;

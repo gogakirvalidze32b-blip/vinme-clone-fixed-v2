@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-"build": "node -e \"console.log('NODE_OPTIONS=', process.env.NODE_OPTIONS)\" && next build"
+"build": "next build --no-turbo" 
 },
 
   "dependencies": {
