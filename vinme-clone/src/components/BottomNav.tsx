@@ -9,9 +9,9 @@ type Props = {
 };
 
 export default function BottomNav({ chatBadge = 0 }: Props) {
-  const pathname = usePathname();
+  const pathname = usePathname() || "";
 
-  // ✅ ამ გვერდებზე BottomNav საერთოდ არ გამოჩნდეს
+  // ამ გვერდებზე BottomNav არ გამოჩნდეს
   if (
     pathname === "/" ||
     pathname.startsWith("/login") ||
@@ -23,7 +23,7 @@ export default function BottomNav({ chatBadge = 0 }: Props) {
   }
 
   const isActive = (href: string) =>
-    pathname === href || pathname?.startsWith(href + "/");
+    pathname === href || pathname.startsWith(href + "/");
 
   const Item = ({
     href,
@@ -43,8 +43,7 @@ export default function BottomNav({ chatBadge = 0 }: Props) {
           "relative flex h-10 w-10 items-center justify-center transition-opacity",
           active ? "opacity-100" : "opacity-60",
           "select-none touch-manipulation",
-          "focus:outline-none focus-visible:outline-none",
-          "[-webkit-tap-highlight-color:transparent]",
+          "focus:outline-none",
         ].join(" ")}
       >
         {icon}
@@ -59,19 +58,13 @@ export default function BottomNav({ chatBadge = 0 }: Props) {
   };
 
   return (
-    <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+12px)] z-[9999] pointer-events-none">
-      <div className="mx-auto w-full max-w-md px-6 pb-[env(safe-area-inset-bottom)]">
-        <div className="rounded-full px-3 py-0 pointer-events-auto">
-          <div className="flex items-center justify-between px-2">
-            <Item href="/feed" icon={<span className="text-[18px]">💘</span>} />
-            <Item href="/likes" icon={<span className="text-[18px]">🫶</span>} />
-            <Item
-              href="/chat"
-              badge={chatBadge}
-              icon={<span className="text-[18px]">💬</span>}
-            />
-            <Item href="/profile" icon={<span className="text-[18px]">👤</span>} />
-          </div>
+    <div className="fixed inset-x-0 bottom-4 z-50">
+      <div className="mx-auto w-full max-w-md px-6">
+        <div className="flex items-center justify-between rounded-full bg-zinc-900/80 backdrop-blur px-4 py-3">
+          <Item href="/feed" icon={<span>💘</span>} />
+          <Item href="/likes" icon={<span>🫶</span>} />
+          <Item href="/chat" badge={chatBadge} icon={<span>💬</span>} />
+          <Item href="/profile" icon={<span>👤</span>} />
         </div>
       </div>
     </div>

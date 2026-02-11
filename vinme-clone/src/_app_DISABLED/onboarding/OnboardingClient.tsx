@@ -368,7 +368,7 @@ export default function OnboardingClient() {
       } catch (e: any) {
         console.error("ONBOARDING INIT ERROR:", e);
         if (alive) setMsg(e?.message ?? "Init failed");
-      } {
+      }  {
         if (alive) setLoading(false);
       }
     })();
@@ -427,7 +427,7 @@ export default function OnboardingClient() {
       } catch (e: any) {
         console.error("savePartial error:", e);
         setMsg(e?.message ?? "Save failed");
-      }  {
+      } {
         setSaving(false);
       }
     },
@@ -468,7 +468,7 @@ export default function OnboardingClient() {
     } catch (e: any) {
       console.error("upload error:", e);
       setMsg(e?.message ?? "Upload failed");
-    }  {
+    } {
       setSaving(false);
     }
   }

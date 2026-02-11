@@ -7,7 +7,6 @@ import { getOrCreateAnonId } from "@/lib/guest";
 import { photoSrc } from "@/lib/photos";
 import BottomNav from "@/components/BottomNav";
 
-
 type MatchRow = {
   id: number;
   user_a: string;
@@ -253,7 +252,7 @@ export default function ChatThreadPage() {
     } catch (e: any) {
       console.error("Send error:", e);
       setErr(e?.message ?? "Send failed");
-    } {
+    }  {
       setSending(false);
     }
   }

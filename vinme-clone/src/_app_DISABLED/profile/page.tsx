@@ -38,8 +38,8 @@ export default function ProfilePage() {
 
   const [loading, setLoading] = useState(true);
   const [me, setMe] = useState<ProfileRow | null>(null);
-    const [otherUser, setOtherUser] = useState<ProfileRow | null>(null);
-  
+  const [otherUser, setOtherUser] = useState<ProfileRow | null>(null);
+
   const [loadErr, setLoadErr] = useState<string | null>(null);
 
   useEffect(() => {

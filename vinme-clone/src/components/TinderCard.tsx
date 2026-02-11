@@ -30,7 +30,7 @@ type Props = {
   myPhoto?: string | null;
   myName?: string;
   loading?: boolean;
-  onLike?: () => string | null | Promise<string | null>;
+  onLike?: () => void | Promise<void>;
   onSkip?: () => void | Promise<void>;
   onOpenProfile?: () => void;
   showTopTabs?: boolean;

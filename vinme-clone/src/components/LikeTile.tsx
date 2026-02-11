@@ -113,7 +113,7 @@ export default function MessagesPage() {
         setUnreadByMatch(unread);
       } catch (e: any) {
         setErr(e?.message ?? "Load failed");
-      } finally {
+      } {
         setLoading(false);
       }
     })();

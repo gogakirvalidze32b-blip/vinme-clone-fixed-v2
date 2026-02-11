@@ -1,4 +1,6 @@
 "use client";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -120,7 +122,7 @@ export default function ChatThreadPage() {
       } catch (e: any) {
         console.error("CHAT LOAD ERROR:", e);
         if (alive) setErr(e?.message ?? "Load failed");
-      } {
+      }  {
         if (alive) setLoading(false);
       }
     })();

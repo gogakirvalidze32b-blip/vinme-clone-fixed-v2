@@ -135,7 +135,7 @@ export default function MatchesPage() {
         if (alive) setRows(out);
       } catch (e: any) {
         if (alive) setMsg(e?.message ?? "Unknown error");
-      } {
+      }  {
         if (alive) setLoading(false);
       }
     })();

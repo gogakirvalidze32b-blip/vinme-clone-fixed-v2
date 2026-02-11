@@ -1,6 +1,6 @@
 import "./globals.css";
 import { Noto_Sans_Georgian } from "next/font/google";
-import BottomNav from "@/components/BottomNav";
+import AppShell from "@/components/AppShell";
 
 const notoGeo = Noto_Sans_Georgian({
   subsets: ["georgian"],
@@ -15,10 +15,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ka" className={notoGeo.variable}>
-      <body className="min-h-screen bg-black text-white">
-        {children}
-        <BottomNav />
+      <body>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );
 }
+
