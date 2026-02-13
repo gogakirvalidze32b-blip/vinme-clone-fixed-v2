@@ -38,11 +38,22 @@ export default function FeedPage() {
     setMe(row);
     return row;
   }, [router]);
+
+  
 const loadTop = useCallback(async (myId: string) => {
   if (loadingTopRef.current) return;
   loadingTopRef.current = true;
 
-  // 1️⃣ ამოიღე უკვე სვაიპებული user-ები
+  // ჩემი პროფილი (რათა ვიცოდეთ show_me)
+  const { data: meProfile } = await supabase
+    .from("profiles")
+    .select("show_me")
+    .eq("user_id", myId)
+    .single();
+
+  const showMe = meProfile?.show_me ?? "everyone";
+
+  // უკვე ვის გაუკეთე swipe
   const { data: swiped } = await supabase
     .from("swipes")
     .select("to_id")
@@ -50,15 +61,24 @@ const loadTop = useCallback(async (myId: string) => {
 
   const excludedIds = swiped?.map((s) => s.to_id) ?? [];
 
-  // 2️⃣ მოძებნე ახალი პროფილი რომელიც:
-  // - არაა მე
-  // - არაა უკვე სვაიპებული
-  const { data } = await supabase
+  let query = supabase
     .from("profiles")
     .select("*")
     .eq("onboarding_completed", true)
     .neq("user_id", myId)
-    .not("user_id", "in", `(${excludedIds.join(",") || "null"})`)
+    .not("photo1_url", "is", null);
+
+  // ❗ gender filter
+  if (showMe !== "everyone") {
+    query = query.eq("gender", showMe);
+  }
+
+  // ❗ უკვე swipe-ულები არ გამოჩნდეს
+  if (excludedIds.length > 0) {
+    query = query.not("user_id", "in", `(${excludedIds.join(",")})`);
+  }
+
+  const { data } = await query
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
