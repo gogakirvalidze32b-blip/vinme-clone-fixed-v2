@@ -73,31 +73,29 @@ export default function FeedPage() {
     };
   }, [loadMe, loadTop]);
 
-  // ✅ აქ არის მთავარი გასწორება
-const onLike = async (): Promise<void> => {
-  if (!me || !top) return;
+  const onLike = async (): Promise<void> => {
+    if (!me || !top) return;
 
-  await supabase.from("swipes").insert({
-    from_id: me.user_id,
-    to_id: top.user_id,
-    action: "like",
-  });
+    await supabase.from("swipes").insert({
+      from_id: me.user_id,
+      to_id: top.user_id,
+      action: "like",
+    });
 
-  await loadTop(me.user_id);
-};
+    await loadTop(me.user_id);
+  };
 
-const onSkip = async (): Promise<void> => {
-  if (!me || !top) return;
+  const onSkip = async (): Promise<void> => {
+    if (!me || !top) return;
 
-  await supabase.from("swipes").insert({
-    from_id: me.user_id,
-    to_id: top.user_id,
-    action: "skip",
-  });
+    await supabase.from("swipes").insert({
+      from_id: me.user_id,
+      to_id: top.user_id,
+      action: "skip",
+    });
 
-  await loadTop(me.user_id);
-};
-
+    await loadTop(me.user_id);
+  };
 
   const cardUser = useMemo(() => {
     if (!top) return null;
@@ -129,15 +127,18 @@ const onSkip = async (): Promise<void> => {
     );
   }
 
-  return (
-    <div className="h-[100dvh] bg-black text-white pb-[92px]">
-     <TinderCard
+return (
+  <div className="bg-black min-h-screen flex justify-center">
+    <div className="w-full max-w-md h-screen">
+<TinderCard
+  key={cardUser.id}
   user={cardUser}
+  otherUserId={cardUser.user_id} // ← ეს დაამატე
   onLike={onLike}
   onSkip={onSkip}
   onOpenProfile={() => router.push(`/profile/${cardUser.user_id}`)}
 />
-
     </div>
-  );
+  </div>
+);
 }
