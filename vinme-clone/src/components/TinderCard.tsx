@@ -180,125 +180,69 @@ const imgSrc = useMemo(() => {
     setX(dx);
     setRot(Math.max(-12, Math.min(12, dx / 18)));
   }
-async function finish(action: "like" | "skip") {
-  if (animating) return;
-  setAnimating(true);
 
-  const off =
-    action === "like"
-      ? window.innerWidth + 400
-      : -window.innerWidth - 400;
+  async function finish(action: "like" | "skip") {
+    if (animating) return;
+    setAnimating(true);
 
-  setX(off);
-  setRot(action === "like" ? 18 : -18);
+    const off = action === "like" ? window.innerWidth : -window.innerWidth;
+    setX(off);
+    setRot(action === "like" ? 14 : -14);
 
-  await new Promise((r) => setTimeout(r, 260));
+    await new Promise((r) => setTimeout(r, 220));
 
-  try {
-    if (action === "like") {
-      const id = await onLike?.();
-      if (id) {
-        setMatchId(String(id));
-        setShowMatch(true);
+    try {
+      if (action === "like") {
+        const id = await onLike?.();
+        if (id) {
+          setMatchId(String(id));
+          setShowMatch(true);
+        }
+      } else {
+        await onSkip?.();
       }
-    } else {
-      await onSkip?.();
+    } finally {
+      setX(0);
+      setRot(0);
+      setDragging(false);
+      setAnimating(false);
     }
-  } catch (err) {
-    console.error("Swipe error:", err);
   }
 
-  // reset — FeedPage უკვე ჩატვირთავს ახალ პროფილს
-  setX(0);
-  setRot(0);
-  setDragging(false);
-  setAnimating(false);
-}
+  function onPointerUp() {
+    if (!dragging || animating) return;
+    setDragging(false);
 
-function onPointerUp() {
-  if (!dragging || animating) return;
-  setDragging(false);
+    const quick = Date.now() - downAt.current < 180;
+    const t = quick ? threshold * 0.75 : threshold;
 
-  const quick = Date.now() - downAt.current < 180;
-  const t = quick ? threshold * 0.75 : threshold;
+    if (x > t) return void finish("like");
+    if (x < -t) return void finish("skip");
 
-  if (x > t) {
-    finish("like");
-    return;
+    setX(0);
+    setRot(0);
   }
 
-  if (x < -t) {
-    finish("skip");
-    return;
-  }
-
-  setX(0);
-  setRot(0);
-}
-
-return (
-  <div className="relative w-full h-full bg-black text-white overflow-hidden">
-    <div className="mx-auto w-full max-w-[480px]">
-      <div
-        className="relative w-full overflow-hidden bg-black ring-1 ring-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.55)]"
-        style={{
-          height: `calc(100dvh - (${NAV_H}px + env(safe-area-inset-bottom)))`,
-          transform: `translateX(${x}px) rotate(${rot}deg)`,
-          transition: dragging
-            ? "none"
-            : "transform 220ms cubic-bezier(.22,1,.36,1)",
-          willChange: "transform",
-          touchAction: "pan-y",
-          userSelect: "none",
-          WebkitUserSelect: "none",
-        }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-      >
-
-        {/* IMAGE */}
-        {imgSrc && (
-          <img
-            src={imgSrc}
-            alt=""
-            draggable={false}
-            className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none select-none"
-          />
-        )}
-
-        {/* GRADIENT */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/80" />
-
-        {/* INFO */}
-        <div className="absolute bottom-[140px] left-0 right-0 px-5 z-20">
-          <div className="text-3xl font-extrabold">
-            {user.nickname}{" "}
-            <span className="text-white/90 font-semibold">
-              {user.age}
-            </span>
-          </div>
-
-          <div className="mt-1 text-sm text-white/80">
-            📍 {user.distanceKm ?? 0} km away
-          </div>
-        </div>
-
-        {/* ACTION BUTTONS */}
-        <div className="absolute bottom-[70px] left-0 right-0 flex justify-center gap-10 z-30">
-          <CircleBtn
-            label="❌"
-            onClick={() => finish("skip")}
-            disabled={animating}
-          />
-          <CircleBtn
-            label="💚"
-            primary
-            onClick={() => finish("like")}
-            disabled={animating}
-          />
-        </div>
+  return (
+    <div className="relative w-full h-full bg-black text-white overflow-hidden">
+      {/* ✅ CARD WRAPPER: height = viewport - BottomNav */}
+      <div className="mx-auto w-full max-w-[480px] px-0">
+        <div
+          className="relative w-full overflow-hidden bg-black ring-1 ring-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.55)]"
+          style={{
+            height: `calc(100dvh - (${NAV_H}px + env(safe-area-inset-bottom)))`,
+            transform: `translateX(${x}px) rotate(${rot}deg)`,
+            transition: dragging ? "none" : "transform 180ms ease-out",
+            willChange: "transform",
+            touchAction: "pan-y",
+            userSelect: "none",
+            WebkitUserSelect: "none",
+          }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+        >
           {/* ✅ IMAGE */}
 {imgSrc && (
   <div className="absolute inset-0">

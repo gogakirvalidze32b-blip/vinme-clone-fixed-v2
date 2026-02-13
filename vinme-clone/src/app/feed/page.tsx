@@ -38,24 +38,34 @@ export default function FeedPage() {
     setMe(row);
     return row;
   }, [router]);
+const loadTop = useCallback(async (myId: string) => {
+  if (loadingTopRef.current) return;
+  loadingTopRef.current = true;
 
-  const loadTop = useCallback(async (myId: string) => {
-    if (loadingTopRef.current) return;
-    loadingTopRef.current = true;
+  // 1️⃣ ამოიღე უკვე სვაიპებული user-ები
+  const { data: swiped } = await supabase
+    .from("swipes")
+    .select("to_id")
+    .eq("from_id", myId);
 
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("onboarding_completed", true)
-      .neq("user_id", myId)
-      .not("photo1_url", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+  const excludedIds = swiped?.map((s) => s.to_id) ?? [];
 
-    setTop(data ?? null);
-    loadingTopRef.current = false;
-  }, []);
+  // 2️⃣ მოძებნე ახალი პროფილი რომელიც:
+  // - არაა მე
+  // - არაა უკვე სვაიპებული
+  const { data } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("onboarding_completed", true)
+    .neq("user_id", myId)
+    .not("user_id", "in", `(${excludedIds.join(",") || "null"})`)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  setTop(data ?? null);
+  loadingTopRef.current = false;
+}, []);
 
   useEffect(() => {
     let alive = true;
