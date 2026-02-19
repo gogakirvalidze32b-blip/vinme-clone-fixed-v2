@@ -1,134 +1,186 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 import { photoSrc } from "@/lib/photos";
+import BottomNav from "@/components/BottomNav";
+
+type Profile = {
+  user_id: string;
+  nickname: string | null;
+  first_name: string | null;
+  photo1_url: string | null;
+};
+
+type Match = {
+  id: string;
+  user_a: string;
+  user_b: string;
+  created_at: string;
+  other: Profile;
+};
 
 export default function ChatPage() {
   const router = useRouter();
-
-  const [matches, setMatches] = useState<any[]>([]);
-  const [messages, setMessages] = useState<any[]>([]);
-  const [meId, setMeId] = useState<string | null>(null);
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    load();
-  }, []);
+    let alive = true;
 
-  async function load() {
-    const { data } = await supabase.auth.getUser();
-    const uid = data.user?.id ?? null;
-    if (!uid) return;
+    (async () => {
+      const { data: sess } = await supabase.auth.getSession();
+      const myId = sess.session?.user?.id;
 
-    setMeId(uid);
+      if (!myId) {
+        router.replace("/login");
+        return;
+      }
 
-    // MATCHES
-    const { data: m } = await supabase
-      .from("matches")
-      .select("*, user_a:profiles!matches_user_a_fkey(*), user_b:profiles!matches_user_b_fkey(*)")
-      .or(`user_a.eq.${uid},user_b.eq.${uid}`);
+      const { data: rows } = await supabase
+        .from("matches")
+        .select("*")
+        .or(`user_a.eq.${myId},user_b.eq.${myId}`)
+        .order("created_at", { ascending: false });
 
-    setMatches(m ?? []);
+      if (!rows) {
+        setLoading(false);
+        return;
+      }
 
-    // ბოლო მესიჯები თითო match-ზე
-    const { data: msgs } = await supabase
-      .from("messages")
-      .select("*")
-      .in(
-        "match_id",
-        (m ?? []).map((x) => x.id)
-      )
-      .order("created_at", { ascending: false });
+      const result: Match[] = [];
 
-    setMessages(msgs ?? []);
-  }
+      for (const row of rows) {
+        const otherId =
+          row.user_a === myId ? row.user_b : row.user_a;
 
-  function otherUser(match: any) {
-    return match.user_a.user_id === meId
-      ? match.user_b
-      : match.user_a;
-  }
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("user_id,nickname,first_name,photo1_url")
+          .eq("user_id", otherId)
+          .maybeSingle();
 
-  function lastMessage(matchId: string) {
-    return messages.find((m) => m.match_id === matchId);
+        if (!profile) continue;
+
+        result.push({
+          ...row,
+          other: profile,
+        });
+      }
+
+      if (alive) {
+        setMatches(result);
+        setLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [router]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center text-white">
+        Loading...
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-[100dvh] bg-black text-white px-4 pt-6 pb-28">
+    <main className="min-h-[100dvh] bg-black text-white pb-28">
+      <div className="mx-auto w-full max-w-md px-4 pt-6">
 
-      {/* HEADER */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Chats</h1>
-        <input
-          placeholder="Search"
-          className="bg-white/10 rounded-full px-4 py-2 text-sm outline-none"
-        />
-      </div>
+        {/* HEADER */}
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-3xl font-extrabold">Chats</h1>
 
-      {/* MATCHES */}
-      <div className="mt-6">
-        <h2 className="text-sm text-white/60 mb-3">Matches</h2>
-
-        <div className="flex gap-4 overflow-x-auto pb-2">
-          {matches.map((match) => {
-            const user = otherUser(match);
-            return (
-              <div
-                key={match.id}
-                onClick={() => router.push(`/chat/${match.id}`)}
-                className="flex-shrink-0 w-20 text-center cursor-pointer"
-              >
-                <img
-                  src={user.photo1_url}
-                  className="w-20 h-20 object-cover rounded-xl"
-                />
-                <p className="mt-2 text-xs truncate">{user.nickname}</p>
-              </div>
-            );
-          })}
+          <input
+            placeholder="Search"
+            className="bg-white/10 px-4 py-2 rounded-full text-sm outline-none text-white placeholder-white/40"
+          />
         </div>
-      </div>
 
-      {/* MESSAGES */}
-      <div className="mt-8">
-        <h2 className="text-xl font-semibold mb-4">Messages</h2>
+        {/* MATCH STRIP */}
+        {matches.length > 0 && (
+          <>
+            <h2 className="text-sm text-white/50 mb-3">Matches</h2>
 
-        <div className="space-y-5">
-          {matches.map((match) => {
-            const user = otherUser(match);
-            const msg = lastMessage(match.id);
+            <div className="flex gap-4 overflow-x-auto pb-4 mb-6">
+              {matches.map((m) => {
+                const name =
+                  m.other.nickname ??
+                  m.other.first_name ??
+                  "User";
+
+                return (
+                  <div
+                    key={m.id}
+                    className="flex flex-col items-center min-w-[72px]"
+                  >
+                    <img
+                      src={photoSrc(m.other.photo1_url)}
+                      alt=""
+                      className="w-16 h-16 rounded-2xl object-cover cursor-pointer ring-2 ring-pink-500/40"
+                      onClick={() =>
+                        router.push(`/profile/${m.other.user_id}`)
+                      }
+                    />
+                    <span className="text-xs mt-2 text-white/80 truncate w-16 text-center">
+                      {name}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {/* MESSAGE LIST */}
+        <div className="flex flex-col gap-2">
+          {matches.map((m) => {
+            const name =
+              m.other.nickname ??
+              m.other.first_name ??
+              "User";
 
             return (
               <div
-                key={match.id}
-                onClick={() => router.push(`/chat/${match.id}`)}
-                className="flex items-center gap-4 cursor-pointer"
+                key={m.id}
+                onClick={() => router.push(`/chat/${m.id}`)}
+                className="flex items-center gap-4 px-3 py-3 rounded-2xl hover:bg-white/5 cursor-pointer transition"
               >
                 <img
-                  src={user.photo1_url}
-                  className="w-14 h-14 object-cover rounded-full"
+                  src={photoSrc(m.other.photo1_url)}
+                  alt=""
+                  className="w-14 h-14 rounded-full object-cover"
                 />
 
-                <div className="flex-1 border-b border-white/10 pb-3">
-                  <p className="font-semibold">{user.nickname}</p>
-                  <p className="text-sm text-white/60 truncate">
-                    {msg?.content ?? "Say hi 👋"}
-                  </p>
+                <div className="flex-1">
+                  <div className="font-semibold">{name}</div>
+                  <div className="text-sm text-white/50">
+                    Tap to open chat
+                  </div>
+                </div>
+
+                <div className="text-xs text-white/30">
+                  →
                 </div>
               </div>
             );
           })}
         </div>
+
+        {matches.length === 0 && (
+          <div className="text-center text-white/40 mt-16">
+            No matches yet  
+          </div>
+        )}
       </div>
 
-      {/* BOTTOM NAV */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-md bg-white/10 backdrop-blur-xl rounded-full py-4 flex justify-around">
-        <button onClick={() => router.push("/feed")}>💖</button>
-        <button>🎮</button>
-        <button className="text-white">💬</button>
-        <button onClick={() => router.push("/profile")}>👤</button>
-      </div>
-    </div>
+      <BottomNav chatBadge={0} />
+    </main>
   );
 }
+
