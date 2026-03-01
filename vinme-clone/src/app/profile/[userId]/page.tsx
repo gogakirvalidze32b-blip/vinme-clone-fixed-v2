@@ -118,15 +118,16 @@ export default function UserProfilePage() {
   const name = profile.nickname ?? profile.first_name ?? "User";
 
   return (
-    <div className="bg-black text-white min-h-[100dvh]" style={{ paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))" }}>
+    <div className="bg-black text-white" style={{ minHeight: "100dvh", overflowX: "hidden" }}>
       <div className="mx-auto w-full max-w-lg">
 
-        {/* ===== TINDER-STYLE FULLSCREEN PHOTO ===== */}
-        <div className="relative w-full" style={{ height: "100dvh" }}>
+        {/* ===== TINDER-STYLE PHOTO - fits screen, no scroll ===== */}
+        <div className="relative w-full" style={{ height: "min(100dvh, 100vw * 1.5)", maxHeight: "100dvh", overflow: "hidden" }}>
 
           {/* Photo */}
           {photos.length > 0 ? (
-            <img src={photos[activePhoto]} className="absolute inset-0 w-full h-full object-cover" alt=""
+            <img src={photos[activePhoto]} className="absolute inset-0 w-full h-full object-contain" alt=""
+              style={{ backgroundColor: "#000" }}
               onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
           ) : (
             <div className="absolute inset-0 bg-zinc-900 flex items-center justify-center">
@@ -206,7 +207,7 @@ export default function UserProfilePage() {
 
         {/* ===== DETAILS SECTION (expands below photo) ===== */}
         <div ref={detailsRef} className={`transition-all duration-300 ${showDetails ? "opacity-100" : "opacity-0 h-0 overflow-hidden"}`}>
-          <div className="px-4 py-5 space-y-3">
+          <div className="px-4 py-5 space-y-3" style={{ paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))" }}>
 
             {/* BIO */}
             {profile.bio && (

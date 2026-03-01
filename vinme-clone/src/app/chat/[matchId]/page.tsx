@@ -420,9 +420,8 @@ export default function ChatThreadPage() {
           </div>
         </div>
 
-        {/* INPUT - full bottom, no BottomNav overlay */}
-        <div className="shrink-0 bg-zinc-950 border-t border-white/8 px-3 pt-2"
-          style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)" }}
+        {/* INPUT - sticks to keyboard */}
+        <div className="shrink-0 bg-zinc-950 border-t border-white/8 px-3 pt-2 pb-2"
           onClick={e => e.stopPropagation()}>
           
           {showEmoji && (
@@ -463,6 +462,7 @@ export default function ChatThreadPage() {
                 className="shrink-0 w-9 h-9 flex items-center justify-center text-xl text-white/35 hover:text-white/60 transition">😊</button>
               <div className="flex-1 flex items-center bg-zinc-800 rounded-full px-4 py-2.5 gap-2 min-w-0">
                 <input ref={inputRef} value={text} onChange={e => setText(e.target.value)}
+                  autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
                   onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
                   className="flex-1 bg-transparent outline-none text-white text-sm placeholder-white/25 min-w-0"
                   placeholder={ka ? "შეიყვანე მესიჯი..." : "Message..."} />
