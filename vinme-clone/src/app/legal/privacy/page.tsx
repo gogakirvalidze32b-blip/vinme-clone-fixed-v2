@@ -1,104 +1,109 @@
+"use client";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { getLang } from "@/lib/i18n";
+import BottomNav from "@/components/BottomNav";
+
 export default function PrivacyPage() {
+  const router = useRouter();
+  const lang = getLang();
+  const ka = lang !== "en";
+
   return (
-    <main className="min-h-[100dvh] bg-black text-white">
-      <div className="mx-auto w-full max-w-md px-4 py-6">
-        <h1 className="text-2xl font-extrabold">Privacy Policy</h1>
-        <p className="mt-2 text-sm text-white/60">Last updated: January 2026</p>
+    <div className="min-h-[100dvh] bg-black text-white">
+      <div className="mx-auto w-full max-w-lg px-4 py-6 pb-28">
+        <button onClick={() => router.back()} className="text-pink-400 mb-4 block">← {ka ? "უკან" : "Back"}</button>
+        <h1 className="text-2xl font-extrabold">{ka ? "კონფიდენციალურობის პოლიტიკა" : "Privacy Policy"}</h1>
+        <p className="mt-1 text-xs text-white/40">{ka ? "ბოლო განახლება: 2025 წლის 1 იანვარი" : "Last updated: January 1, 2025"}</p>
 
-        <div className="mt-6 space-y-6 text-sm leading-relaxed text-white/80">
-          <p>
-            This Privacy Policy explains how <b>Shekhvdi</b> (“we”, “our”, “us”)
-            collects, uses, and protects your information when you use our
-            application and website.
-          </p>
-
-          <section>
-            <h2 className="text-base font-extrabold text-white">1. Information We Collect</h2>
-            <ul className="mt-2 list-disc pl-5 space-y-1 text-white/75">
-              <li>Account information (name, nickname, email, profile details)</li>
-              <li>Photos you upload</li>
-              <li>Messages and interactions inside the app</li>
-              <li>Technical data (device type, IP address, app usage data)</li>
-            </ul>
-          </section>
-
-          <section>
-            <h2 className="text-base font-extrabold text-white">2. How We Use Your Information</h2>
-            <ul className="mt-2 list-disc pl-5 space-y-1 text-white/75">
-              <li>Provide and improve the Shekhvdi service</li>
-              <li>Match users and enable messaging</li>
-              <li>Ensure safety, security, and fraud prevention</li>
-              <li>Communicate important updates related to your account</li>
-            </ul>
-          </section>
-
-          <section>
-            <h2 className="text-base font-extrabold text-white">3. Messages & Privacy</h2>
-            <p className="mt-2 text-white/75">
-              Messages are private between matched users. We do not read messages
-              unless required for safety, moderation, or legal obligations.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-base font-extrabold text-white">4. Account Pause & Deletion</h2>
-            <ul className="mt-2 list-disc pl-5 space-y-1 text-white/75">
-              <li>You can pause your account anytime. Your profile will be hidden.</li>
-              <li>
-                You can schedule deletion. After 30 days your data will be deleted
-                unless you sign in to restore it.
-              </li>
-            </ul>
-          </section>
-
-          <section>
-            <h2 className="text-base font-extrabold text-white">5. Data Storage & Security</h2>
-            <p className="mt-2 text-white/75">
-              We use industry-standard security measures to protect your data.
-              However, no system is 100% secure.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-base font-extrabold text-white">6. Sharing of Information</h2>
-            <p className="mt-2 text-white/75">
-              We do not sell your personal data. We may share data only with
-              trusted service providers or if required by law.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-base font-extrabold text-white">7. Cookies</h2>
-            <p className="mt-2 text-white/75">
-              We may use cookies or similar technologies to improve user
-              experience and app performance.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-base font-extrabold text-white">8. Your Rights</h2>
-            <p className="mt-2 text-white/75">
-              Depending on your location, you may have rights to access, correct,
-              or delete your data. You can manage most of these in app settings.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-base font-extrabold text-white">9. Changes to This Policy</h2>
-            <p className="mt-2 text-white/75">
-              We may update this policy from time to time. Changes will be posted
-              here with an updated date.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-base font-extrabold text-white">10. Contact Us</h2>
-            <p className="mt-2 text-white/75">
-              Questions? Email: <b>support@shekhvdi.app</b>
-            </p>
-          </section>
+        <div className="mt-6 space-y-5 text-sm leading-relaxed text-white/80">
+          {ka ? (
+            <>
+              <p>„შეხვდი" („ჩვენ", „ჩვენი") პატივს სცემს თქვენს კონფიდენციალურობას. ეს პოლიტიკა განმარტავს, თუ როგორ ვაგროვებთ, ვიყენებთ და ვიცავთ თქვენს პერსონალურ მონაცემებს.</p>
+              <Section title="1. რა ინფორმაციას ვაგროვებთ">
+                <Li>სარეგისტრაციო მონაცემები: სახელი, ელ.ფოსტა, დაბადების თარიღი, სქესი</Li>
+                <Li>პროფილის ინფორმაცია: ბიო, ფოტოები, ადგილმდებარეობა, ინტერესები</Li>
+                <Li>შეტყობინებები: ჩათის შინაარსი (დაშიფრული ტრანზიტისას)</Li>
+                <Li>გამოყენების მონაცემები: ლოგინი, სვაიპები, მოწონებები, ტექნიკური ლოგები</Li>
+                <Li>მოწყობილობის მონაცემები: IP მისამართი, ბრაუზერი, ოპერაციული სისტემა</Li>
+              </Section>
+              <Section title="2. როგორ ვიყენებთ ინფორმაციას">
+                <Li>მომსახურების უზრუნველყოფა და გაუმჯობესება</Li>
+                <Li>მომხმარებლების შესაბამისობის გამოთვლა და ჩვენება</Li>
+                <Li>უსაფრთხოების, თაღლითობის პრევენცია</Li>
+                <Li>კანონმდებლობით გათვალისწინებული ვალდებულებების შესრულება</Li>
+                <Li>პროდუქტის ანალიზი და გაუმჯობესება</Li>
+              </Section>
+              <Section title="3. მონაცემთა გაზიარება">
+                <p>ჩვენ არ ვყიდით თქვენს პერსონალურ მონაცემებს. შეიძლება გავუზიაროთ:</p>
+                <Li>ტექნიკური პარტნიორები (Supabase, Vercel) — მხოლოდ სერვისის შესრულებისთვის</Li>
+                <Li>სახელმწიფო ორგანოები — კანონის მოთხოვნის შემთხვევაში</Li>
+              </Section>
+              <Section title="4. მონაცემთა შენახვა">
+                <p>ანგარიშის წაშლის შემდეგ მონაცემები 30 დღის განმავლობაში ინახება სარეზერვო სისტემაში, შემდეგ სრულად იშლება.</p>
+              </Section>
+              <Section title="5. თქვენი უფლებები">
+                <Li>წვდომა — გაიგოთ რა მონაცემები გვაქვს</Li>
+                <Li>გასწორება — შეცვალოთ არასწორი ინფორმაცია</Li>
+                <Li>წაშლა — მოითხოვოთ ანგარიშის სრული წაშლა</Li>
+                <Li>პორტაბელობა — მიიღოთ მონაცემები ფაილის სახით</Li>
+              </Section>
+              <Section title="6. Cookie-ები">
+                <p>ვიყენებთ session cookie-ებს ავტორიზაციისთვის. ანალიტიკური cookie-ები გამოიყენება მხოლოდ თქვენი თანხმობით.</p>
+              </Section>
+              <Section title="7. კონტაქტი">
+                <p>კითხვებისთვის: <span className="text-pink-400">privacy@shekhvdi.ge</span></p>
+              </Section>
+            </>
+          ) : (
+            <>
+              <p>Shekhvdi ("we", "our", "us") respects your privacy. This policy explains how we collect, use and protect your personal data.</p>
+              <Section title="1. Information We Collect">
+                <Li>Registration data: name, email, date of birth, gender</Li>
+                <Li>Profile info: bio, photos, location, interests</Li>
+                <Li>Messages: chat content (encrypted in transit)</Li>
+                <Li>Usage data: logins, swipes, likes, technical logs</Li>
+                <Li>Device data: IP address, browser, operating system</Li>
+              </Section>
+              <Section title="2. How We Use Your Information">
+                <Li>Provide and improve our service</Li>
+                <Li>Calculate and display user matches</Li>
+                <Li>Safety, fraud prevention, and security</Li>
+                <Li>Comply with legal obligations</Li>
+                <Li>Product analytics and improvement</Li>
+              </Section>
+              <Section title="3. Data Sharing">
+                <p>We do not sell your personal data. We may share with:</p>
+                <Li>Technical partners (Supabase, Vercel) — only for service provision</Li>
+                <Li>Government authorities — only when required by law</Li>
+              </Section>
+              <Section title="4. Data Retention">
+                <p>After account deletion, data is kept in backups for 30 days, then permanently deleted.</p>
+              </Section>
+              <Section title="5. Your Rights">
+                <Li>Access — know what data we hold about you</Li>
+                <Li>Correction — fix inaccurate information</Li>
+                <Li>Deletion — request complete account removal</Li>
+                <Li>Portability — receive your data as a file</Li>
+              </Section>
+              <Section title="6. Cookies">
+                <p>We use session cookies for authentication. Analytics cookies are only used with your consent.</p>
+              </Section>
+              <Section title="7. Contact">
+                <p>Questions: <span className="text-pink-400">privacy@shekhvdi.ge</span></p>
+              </Section>
+            </>
+          )}
         </div>
       </div>
-    </main>
+      <BottomNav />
+    </div>
   );
 }
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return <section><h2 className="font-extrabold text-white mb-2">{title}</h2><ul className="space-y-1">{children}</ul></section>;
+}
+function Li({ children }: { children: React.ReactNode }) {
+  return <li className="flex gap-2"><span className="text-pink-400 shrink-0">•</span><span>{children}</span></li>;
+}
+import React from "react";

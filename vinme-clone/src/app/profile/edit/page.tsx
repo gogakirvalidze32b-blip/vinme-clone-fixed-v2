@@ -1,810 +1,439 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { photoSrc } from "@/lib/photos";
+import { getLang } from "@/lib/i18n";
+import BottomNav from "@/components/BottomNav";
 
-type ProfileRow = {
-  user_id: string;
-  first_name: string | null;
-  nickname: string | null;
-  age: number | null;
+const PHOTO_KEYS = ["photo1_url","photo2_url","photo3_url","photo4_url","photo5_url","photo6_url","photo7_url","photo8_url","photo9_url"];
 
-  bio: string | null;
-  city: string | null;
+const GENDER_OPTIONS = [
+  { value: "male", ka: "მამაკაცი", en: "Man" },
+  { value: "female", ka: "ქალი", en: "Woman" },
+  { value: "nonbinary", ka: "არარობინარი", en: "Non-binary" },
+];
+const ORIENTATION_OPTIONS = [
+  { value: "straight", ka: "ჰეტეროსექსუალი", en: "Straight" },
+  { value: "gay", ka: "გეი", en: "Gay" },
+  { value: "lesbian", ka: "ლესბოსელი", en: "Lesbian" },
+  { value: "bisexual", ka: "ბისექსუალი", en: "Bisexual" },
+];
+const INTENT_OPTIONS = [
+  { value: "long_term", ka: "სერიოზული ურთიერთობა", en: "Long-term relationship" },
+  { value: "short_term", ka: "ხანმოკლე ურთიერთობა", en: "Short-term fun" },
+  { value: "friends", ka: "მეგობრობა", en: "Friendship" },
+  { value: "networking", ka: "ნეთვორქინგი", en: "Networking" },
+];
+const PETS_OPTIONS = [{ value: "dog", ka: "ძაღლი", en: "Dog" }, { value: "cat", ka: "კატა", en: "Cat" }, { value: "none", ka: "არ მყავს", en: "None" }];
+const DRINKING_OPTIONS = [{ value: "never", ka: "არ ვსვამ", en: "Never" }, { value: "socially", ka: "სოციალურად", en: "Socially" }, { value: "often", ka: "ხშირად", en: "Often" }];
+const SMOKING_OPTIONS = [{ value: "never", ka: "არ ვწევ", en: "Never" }, { value: "sometimes", ka: "ზოგჯერ", en: "Sometimes" }, { value: "often", ka: "ხშირად", en: "Often" }];
+const WORKOUT_OPTIONS = [{ value: "never", ka: "არა", en: "Never" }, { value: "sometimes", ka: "ზოგჯერ", en: "Sometimes" }, { value: "daily", ka: "ყოველდღე", en: "Daily" }];
 
-  gender: string | null; // "male" | "female" | ...
-  orientation: string | null; // "straight" | "gay" | ...
+// profile completeness fields
+const COMPLETENESS_FIELDS = ["nickname","bio","city","gender","orientation","intent","job_title","company","education","pets","drinking","smoking","workout","photo1_url"];
 
-  show_age: boolean | null;
-  show_distance: boolean | null;
-
-  photo1_url: string | null;
-  photo2_url: string | null;
-  photo3_url: string | null;
-  photo4_url: string | null;
-  photo5_url: string | null;
-  photo6_url: string | null;
-  photo7_url: string | null;
-  photo8_url: string | null;
-  photo9_url: string | null;
-};
-
-
-type Tab = "edit" | "preview";
-
-function normalizeSupabaseError(err: any) {
-  if (!err) return null;
-  const out: any = {};
-  try {
-    for (const k of Object.getOwnPropertyNames(err)) out[k] = err[k];
-  } catch {}
-  out.message = out.message ?? err?.message ?? String(err);
-  out.details = out.details ?? err?.details;
-  out.hint = out.hint ?? err?.hint;
-  out.code = out.code ?? err?.code;
-  return out;
-}
-
-function clampBool(v: any, fallback: boolean) {
-  if (typeof v === "boolean") return v;
-  if (v === null || v === undefined) return fallback;
-  return !!v;
+function calcProgress(p: any): number {
+  if (!p) return 0;
+  const filled = COMPLETENESS_FIELDS.filter(f => p[f] && String(p[f]).trim() !== "").length;
+  return Math.round((filled / COMPLETENESS_FIELDS.length) * 100);
 }
 
 export default function EditProfilePage() {
   const router = useRouter();
+  const lang = getLang();
+  const L = (ka: string, en: string) => lang === "en" ? en : ka;
 
-  const [tab, setTab] = useState<Tab>("edit");
+  const [tab, setTab] = useState<"edit" | "preview">("edit");
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [busyPhoto, setBusyPhoto] = useState<number | null>(null);
 
-  // autosave state
-  const [saving, setSaving] = useState(false);
-  const [saveMsg, setSaveMsg] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-
-  const [p, setP] = useState<ProfileRow | null>(null);
-
-  // form state
+  const [p, setP] = useState<any>(null);
   const [bio, setBio] = useState("");
   const [city, setCity] = useState("");
-  const [gender, setGender] = useState<string>(""); // "male" etc.
-  const [orientation, setOrientation] = useState<string>(""); // "straight" etc.
-  const [showAge, setShowAge] = useState<boolean>(true);
-  const [showDistance, setShowDistance] = useState<boolean>(true);
+  const [jobTitle, setJobTitle] = useState("");
+  const [company, setCompany] = useState("");
+  const [education, setEducation] = useState("");
+  const [gender, setGender] = useState("");
+  const [orientation, setOrientation] = useState("");
+  const [intent, setIntent] = useState("");
+  const [pets, setPets] = useState("");
+  const [drinking, setDrinking] = useState("");
+  const [smoking, setSmoking] = useState("");
+  const [workout, setWorkout] = useState("");
+  const [showAge, setShowAge] = useState(true);
+  const [showDist, setShowDist] = useState(true);
 
-  const hydratedRef = useRef(false);
-  const dirtyRef = useRef(false);
-  const savingRef = useRef(false);
-  const lastSavedPayloadRef = useRef<string>("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadingPhotoIdx = useRef<number>(0);
 
   useEffect(() => {
-    let cancelled = false;
-
     (async () => {
-      try {
-        setLoading(true);
-        setErr(null);
-
-        const { data: sess, error: sErr } = await supabase.auth.getSession();
-        if (sErr) throw sErr;
-
-        const uid = sess.session?.user?.id ?? null;
-        if (!uid) {
-          router.replace("/login");
-          return;
-        }
-
-        const { data, error } = await supabase
-          .from("profiles")
-          .select(
-            `
-            user_id,
-            first_name,
-            nickname,
-            age,
-            bio,
-            city,
-            gender,
-            orientation,
-            show_age,
-            show_distance,
-            photo1_url,
-            photo2_url,
-            photo3_url,
-            photo4_url,
-            photo5_url,
-            photo6_url,
-            photo7_url,
-            photo8_url,
-            photo9_url
-          `
-          )
-          .eq("user_id", uid)
-          .maybeSingle();
-
-        if (cancelled) return;
-
-        if (error) {
-          const e = normalizeSupabaseError(error);
-          console.error("EditProfile load error:", e);
-          setErr(e?.message ?? "Failed to load profile");
-          setP(null);
-          return;
-        }
-
-        if (!data) {
-          router.replace("/onboarding");
-          return;
-        }
-
-        const row: ProfileRow = {
-          user_id: data.user_id,
-          first_name: data.first_name ?? null,
-          nickname: data.nickname ?? null,
-          age: data.age ?? null,
-
-          bio: data.bio ?? null,
-          city: (data as any).city ?? null,
-          
-          gender: (data as any).gender ?? null,
-          orientation: (data as any).orientation ?? null,
-
-          show_age: clampBool((data as any).show_age, true),
-          show_distance: clampBool((data as any).show_distance, true),
-
-          photo1_url: data.photo1_url ?? null,
-          photo2_url: (data as any).photo2_url ?? null,
-          photo3_url: (data as any).photo3_url ?? null,
-          photo4_url: (data as any).photo4_url ?? null,
-          photo5_url: (data as any).photo5_url ?? null,
-          photo6_url: (data as any).photo6_url ?? null,
-          photo7_url: (data as any).photo7_url ?? null,
-          photo8_url: (data as any).photo8_url ?? null,
-          photo9_url: (data as any).photo9_url ?? null,
-        };
-
-        setP(row);
-
-        // hydrate form
-        setBio(row.bio ?? "");
-        setCity(row.city ?? "");
-        setGender(row.gender ?? "");
-        setOrientation(row.orientation ?? "");
-        setShowAge(clampBool(row.show_age, true));
-        setShowDistance(clampBool(row.show_distance, true));
-
-        hydratedRef.current = true;
-        dirtyRef.current = false;
-        setSaveMsg(null);
-      } catch (e: any) {
-        const ex = normalizeSupabaseError(e);
-        console.error("EditProfile fatal:", ex);
-        setErr(ex?.message ?? "Something went wrong");
-      } {
-        if (!cancelled) setLoading(false);
-      }
+      const { data: sess } = await supabase.auth.getSession();
+      const uid = sess.session?.user?.id;
+      if (!uid) { router.replace("/login"); return; }
+      const { data } = await supabase.from("profiles").select("*").eq("user_id", uid).maybeSingle();
+      if (!data) { router.replace("/onboarding"); return; }
+      setP(data);
+      setBio(data.bio ?? "");
+      setCity(data.city ?? "");
+      setJobTitle(data.job_title ?? "");
+      setCompany(data.company ?? "");
+      setEducation(data.education ?? "");
+      setGender(data.gender ?? "");
+      setOrientation(data.orientation ?? "");
+      setIntent(data.intent ?? "");
+      setPets(data.pets ?? "");
+      setDrinking(data.drinking ?? "");
+      setSmoking(data.smoking ?? "");
+      setWorkout(data.workout ?? "");
+      setShowAge(data.show_age !== false);
+      setShowDist(data.show_distance !== false);
+      setLoading(false);
     })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [router]);
 
-  const displayName = useMemo(() => {
-    if (!p) return "";
-    return (p.first_name ?? "").trim() || (p.nickname ?? "").trim() || "Profile";
-  }, [p]);
-
-  const photos = useMemo<(string | null)[]>(() => {
-    if (!p) return Array(9).fill(null);
-    return [
-      p.photo1_url,
-      p.photo2_url,
-      p.photo3_url,
-      p.photo4_url,
-      p.photo5_url,
-      p.photo6_url,
-      p.photo7_url,
-      p.photo8_url,
-      p.photo9_url,
-    ];
-  }, [p]);
-
-  // mark dirty on form changes
-  useEffect(() => {
-    if (!hydratedRef.current) return;
-    dirtyRef.current = true;
-  }, [bio, city,  gender, orientation, showAge, showDistance]);
-
-  function buildPayload() {
-    return {
-      bio: bio.trim() || null,
-      city: city.trim() || null,
-      gender: gender || null,
-      orientation: orientation || null,
-      show_age: !!showAge,
-      show_distance: !!showDistance,
-    };
+  async function handleSave() {
+    if (!p || saving) return;
+    setSaving(true);
+    const patch = { bio, city, job_title: jobTitle, company, education, gender, orientation, intent, pets, drinking, smoking, workout, show_age: showAge, show_distance: showDist };
+    const { error } = await supabase.from("profiles").update(patch).eq("user_id", p.user_id);
+    if (!error) { setP((prev: any) => ({ ...prev, ...patch })); setSaved(true); setTimeout(() => setSaved(false), 2000); }
+    setSaving(false);
   }
 
-  async function flushSave(reason: "debounce" | "back") {
+  async function uploadPhoto(idx: number, file: File) {
     if (!p) return;
-    if (!dirtyRef.current) return;
-    if (savingRef.current) return;
-
-    const payload = buildPayload();
-    const payloadKey = JSON.stringify(payload);
-
-    // prevent spam saves when nothing changed
-    if (payloadKey === lastSavedPayloadRef.current) {
-      dirtyRef.current = false;
-      return;
-    }
-
-    try {
-      savingRef.current = true;
-      setSaving(true);
-      setErr(null);
-      setSaveMsg(reason === "back" ? "Saving…" : null);
-
-      const { error } = await supabase.from("profiles").update(payload).eq("user_id", p.user_id);
-      if (error) throw error;
-
-      lastSavedPayloadRef.current = payloadKey;
-      dirtyRef.current = false;
-      setSaveMsg("Saved ✅");
-      setTimeout(() => setSaveMsg(null), 1200);
-    } catch (e: any) {
-      const ex = normalizeSupabaseError(e);
-      console.error("Auto-save error:", ex);
-      setErr(ex?.message ?? "Failed to save");
-    } {
-      savingRef.current = false;
-      setSaving(false);
-    }
+    setBusyPhoto(idx);
+    const ext = file.name.split(".").pop() ?? "jpg";
+    const path = `photos/${p.user_id}/photo${idx}-${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage.from("photos").upload(path, file, { upsert: true });
+    if (upErr) { setBusyPhoto(null); return; }
+    const key = `photo${idx}_url`;
+    const { error: dbErr } = await supabase.from("profiles").update({ [key]: path }).eq("user_id", p.user_id);
+    if (!dbErr) setP((prev: any) => ({ ...prev, [key]: path }));
+    setBusyPhoto(null);
   }
 
-  // debounce autosave while typing (every ~900ms)
-  useEffect(() => {
-    if (!hydratedRef.current) return;
-    if (!dirtyRef.current) return;
-    const t = setTimeout(() => flushSave("debounce"), 900);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bio, city,  gender, orientation, showAge, showDistance]);
-
-  async function handleBack() {
-    await flushSave("back");
-    router.back();
-  }
-
-  // --- PHOTO UPLOAD ---
-  async function handlePickPhoto(slotIndex: number, file: File) {
+  async function removePhoto(idx: number) {
     if (!p) return;
-
-    try {
-      setErr(null);
-      setSaveMsg(null);
-      setBusyPhoto(slotIndex);
-
-      const { data: sess, error: sErr } = await supabase.auth.getSession();
-      if (sErr) throw sErr;
-
-      const uid = sess.session?.user?.id ?? null;
-      if (!uid) {
-        router.replace("/login");
-        return;
-      }
-
-      const ext = file.name.split(".").pop() || "jpg";
-      const path = `profiles/${uid}/${Date.now()}-${slotIndex}.${ext}`;
-
-      const { error: upErr } = await supabase.storage
-        .from("photos") // ✅ your bucket
-        .upload(path, file, { upsert: true });
-
-      if (upErr) throw upErr;
-
-      const col = `photo${slotIndex + 1}_url`;
-      const payload: Record<string, any> = {};
-      payload[col] = path;
-
-      const { error: dbErr } = await supabase.from("profiles").update(payload).eq("user_id", uid);
-      if (dbErr) throw dbErr;
-
-      setP((prev) => (prev ? ({ ...prev, [col]: path } as ProfileRow) : prev));
-      setSaveMsg("Photo saved ✅");
-      setTimeout(() => setSaveMsg(null), 1200);
-    } catch (e: any) {
-      const ex = normalizeSupabaseError(e);
-      console.error("Photo upload error:", ex);
-      setErr(ex?.message ?? "Photo upload failed");
-    } {
-      setBusyPhoto(null);
-    }
+    const key = `photo${idx}_url`;
+    await supabase.from("profiles").update({ [key]: null }).eq("user_id", p.user_id);
+    setP((prev: any) => ({ ...prev, [key]: null }));
   }
 
-  async function removePhoto(slotIndex: number) {
-    if (!p) return;
+  const progress = calcProgress({ ...p, bio, city, job_title: jobTitle, company, education, gender, orientation, intent, pets, drinking, smoking, workout });
+  const photos = PHOTO_KEYS.map((k, i) => ({ key: k, idx: i + 1, src: p?.[k] ? photoSrc(p[k]) : null }));
+  const name = p?.nickname ?? p?.first_name ?? "User";
+  const age = p?.age ?? null;
 
-    try {
-      setErr(null);
-      setSaveMsg(null);
-      setBusyPhoto(slotIndex);
+  if (loading) return <div className="h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
 
-      const { data: sess, error: sErr } = await supabase.auth.getSession();
-      if (sErr) throw sErr;
+  return (
+    <div className="bg-black text-white min-h-[100dvh]">
+      <div className="mx-auto w-full max-w-lg">
 
-      const uid = sess.session?.user?.id ?? null;
-      if (!uid) {
-        router.replace("/login");
-        return;
-      }
-
-      const col = `photo${slotIndex + 1}_url`;
-      const payload: Record<string, any> = {};
-      payload[col] = null;
-
-      const { error } = await supabase.from("profiles").update(payload).eq("user_id", uid);
-      if (error) throw error;
-
-      setP((prev) => (prev ? ({ ...prev, [col]: null } as ProfileRow) : prev));
-      setSaveMsg("Removed ✅");
-      setTimeout(() => setSaveMsg(null), 1200);
-    } catch (e: any) {
-      const ex = normalizeSupabaseError(e);
-      console.error("Remove photo error:", ex);
-      setErr(ex?.message ?? "Failed to remove photo");
-    } {
-      setBusyPhoto(null);
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-black text-white">
-        Loading…
-      </div>
-    );
-  }
-
-  if (err && !p) {
-    return (
-      <div className="min-h-[100svh] bg-black text-white px-4 pt-6 pb-24 flex items-center justify-center">
-        <div className="w-full max-w-md rounded-3xl bg-zinc-950/90 p-6 ring-1 ring-white/10 text-center">
-          <div className="text-red-400 font-semibold mb-2">Error</div>
-          <div className="text-sm text-white/80 break-words">{err}</div>
-          <div className="mt-4 flex gap-3 justify-center">
-            <button
-              className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black active:scale-[0.99]"
-              onClick={() => router.refresh()}
-            >
-              Reload 🔄
-            </button>
-            <button
-              className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white ring-1 ring-white/10 active:scale-[0.99]"
-              onClick={() => router.push("/profile")}
-            >
-              Back 👤
+        {/* HEADER */}
+        <div className="sticky top-0 z-20 bg-black/90 backdrop-blur border-b border-white/8 px-4 py-3">
+          <div className="flex items-center gap-3 mb-3">
+            <button onClick={() => router.back()} className="text-pink-400 text-2xl shrink-0">←</button>
+            <h1 className="font-extrabold text-base flex-1">{L("პროფილის რედაქტირება", "Edit profile")}</h1>
+            <button onClick={handleSave} disabled={saving}
+              className="rounded-full bg-pink-500 px-4 py-1.5 text-sm font-bold text-white disabled:opacity-50">
+              {saved ? "✓" : saving ? "..." : L("შენახვა", "Save")}
             </button>
           </div>
-        </div>
-      </div>
-    );
-  }
 
-  if (!p) return null;
-
-return (
-  <main className="fixed inset-0 bg-zinc-950 text-white flex flex-col">
-    {/* Header (always visible) */}
-    <div className="shrink-0 bg-zinc-950/90 backdrop-blur border-b border-white/10">
-      <div className="mx-auto w-full max-w-[480px] px-4 pt-4 pb-3">
-        <div className="flex items-center justify-between">
-          <button
-            onClick={handleBack}
-            className="text-2xl text-pink-500 active:scale-[0.99]"
-            aria-label="Back"
-            title="Back"
-          >
-            ←
-          </button>
-
-          <div className="text-lg font-extrabold">Edit profile</div>
-
-          <button
-            onClick={() => router.push("/settings")}
-            className="rounded-full bg-white/10 px-3 py-2 text-sm text-white/80 ring-1 ring-white/10 hover:bg-white/15"
-            aria-label="Settings"
-            title="Settings"
-          >
-            ⚙️
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="mt-4 flex items-center justify-center gap-10 text-sm">
-          <button
-            onClick={() => setTab("edit")}
-            className={tab === "edit" ? "font-semibold" : "text-white/50"}
-          >
-            Edit
-          </button>
-          <div className="h-5 w-px bg-white/15" />
-          <button
-            onClick={() => setTab("preview")}
-            className={tab === "preview" ? "font-semibold" : "text-white/50"}
-          >
-            Preview{" "}
-            <span className="ml-1 inline-block h-2 w-2 rounded-full bg-pink-500 align-middle" />
-          </button>
-        </div>
-
-        {/* save status */}
-        <div className="mt-2 flex items-center justify-between text-xs">
-          <div className="text-white/50">
-            {saving ? "Saving…" : dirtyRef.current ? "Unsaved changes" : " "}
+          {/* TABS */}
+          <div className="flex rounded-full bg-white/8 p-0.5">
+            {(["edit", "preview"] as const).map(t2 => (
+              <button key={t2} onClick={() => setTab(t2)}
+                className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${tab === t2 ? "bg-white text-black" : "text-white/50"}`}>
+                {t2 === "edit" ? L("რედაქტირება", "Edit") : L("გადახედვა", "Preview")}
+              </button>
+            ))}
           </div>
-          <div className="text-white/60">{saveMsg ?? " "}</div>
-        </div>
-      </div>
-    </div>
 
-    {/* ✅ Scroll container (THIS fixes your issue) */}
-    <div className="flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-[480px] px-4 pb-32">
-        {err ? (
-          <div className="mt-4 rounded-2xl bg-red-500/10 p-3 text-sm ring-1 ring-red-500/20 text-red-200">
-            {err}
+          {/* PROGRESS */}
+          <div className="mt-3 flex items-center gap-2">
+            <div className="flex-1 bg-white/10 rounded-full h-1.5 overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-pink-500 to-rose-400 transition-all" style={{ width: `${progress}%` }} />
+            </div>
+            <span className="text-xs font-bold text-pink-400">{progress}%</span>
           </div>
-        ) : null}
+        </div>
 
         {tab === "preview" ? (
-          <PreviewCard
-            name={displayName}
-            age={p.age}
-            bio={bio}
-            photo={photos[0]}
-            city={city}
-          />
+          /* ====== PREVIEW ====== */
+          <PreviewTab p={{ ...p, bio, city, job_title: jobTitle, company, education, gender, orientation, intent, pets, drinking, smoking, workout }} lang={lang} />
         ) : (
-          <>
-            {/* Media */}
-            <section className="mt-6">
-              <div className="text-xl font-extrabold">Media</div>
-              <div className="mt-1 text-sm text-white/70">
-                Add up to 9 photos. Use prompts to share your personality.
-              </div>
+          /* ====== EDIT ====== */
+          <div className="px-4 pt-4 pb-32 space-y-6">
 
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                {photos.map((path, i) => (
-                  <PhotoSlot
-                    key={i}
-                    index={i}
-                    path={path}
-                    busy={busyPhoto === i}
-                    onPick={(file) => handlePickPhoto(i, file)}
-                    onRemove={() => removePhoto(i)}
-                  />
+            {/* PHOTOS */}
+            <Section title={L("ფოტოები", "Photos")}>
+              <div className="grid grid-cols-3 gap-2">
+                {photos.map(({ idx, src }) => (
+                  <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden bg-zinc-800">
+                    {src ? (
+                      <>
+                        <img src={src} className="w-full h-full object-cover" alt="" />
+                        <button onClick={() => removePhoto(idx)}
+                          className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/70 flex items-center justify-center text-xs text-white">✕</button>
+                        {idx === 1 && <div className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-bold text-white">MAIN</div>}
+                      </>
+                    ) : (
+                      <button onClick={() => { uploadingPhotoIdx.current = idx; fileInputRef.current?.click(); }}
+                        disabled={busyPhoto !== null}
+                        className="w-full h-full flex flex-col items-center justify-center gap-1 text-white/30 hover:text-white/60 transition">
+                        {busyPhoto === idx ? <span className="text-xl animate-spin">⏳</span> : <span className="text-3xl">+</span>}
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
-            </section>
-{/* 
-            Photo options / Smart Photos (UI only for now)
-            <section className="mt-10">
-              <div className="text-xl font-extrabold">Photo Options</div>
-              <div className="mt-4 rounded-3xl bg-white/10 ring-1 ring-white/10 overflow-hidden">
-                <div className="flex items-center justify-between px-5 py-5">
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) uploadPhoto(uploadingPhotoIdx.current, f); e.target.value = ""; }} />
+            </Section>
+
+            {/* BIO */}
+            <Section title={L("ჩემ შესახებ", "About me")} dot>
+              <textarea value={bio} onChange={e => setBio(e.target.value)} maxLength={500} rows={4}
+                className="w-full rounded-2xl bg-zinc-900 px-4 py-3 text-sm text-white placeholder-white/30 outline-none resize-none ring-1 ring-white/10 focus:ring-pink-500"
+                placeholder={L("დაწერე ჩემ შესახებ...", "Write about yourself...")} />
+              <div className="text-right text-xs text-white/30 mt-1">{bio.length}/500</div>
+            </Section>
+
+            {/* CITY */}
+            <Section title={L("საცხოვრებელი ადგილი", "Living In")} dot>
+              <input value={city} onChange={e => setCity(e.target.value)}
+                className="w-full rounded-2xl bg-zinc-900 px-4 py-3 text-sm text-white placeholder-white/30 outline-none ring-1 ring-white/10 focus:ring-pink-500"
+                placeholder={L("ქალაქი", "Add City")} />
+            </Section>
+
+            {/* JOB */}
+            <Section title={L("სამსახური", "Job")} badge="+4%">
+              <input value={jobTitle} onChange={e => setJobTitle(e.target.value)}
+                className="w-full rounded-2xl bg-zinc-900 px-4 py-3 text-sm text-white placeholder-white/30 outline-none ring-1 ring-white/10 focus:ring-pink-500 mb-2"
+                placeholder={L("პოზიცია / სამუშაო", "Job Title")} />
+              <input value={company} onChange={e => setCompany(e.target.value)}
+                className="w-full rounded-2xl bg-zinc-900 px-4 py-3 text-sm text-white placeholder-white/30 outline-none ring-1 ring-white/10 focus:ring-pink-500"
+                placeholder={L("კომპანია", "Company")} />
+            </Section>
+
+            {/* EDUCATION */}
+            <Section title={L("განათლება", "Education")} badge="+3%">
+              <input value={education} onChange={e => setEducation(e.target.value)}
+                className="w-full rounded-2xl bg-zinc-900 px-4 py-3 text-sm text-white placeholder-white/30 outline-none ring-1 ring-white/10 focus:ring-pink-500"
+                placeholder={L("სკოლა / უნივერსიტეტი", "School / University")} />
+            </Section>
+
+            {/* GENDER */}
+            <Section title={L("სქესი", "Gender")}>
+              <div className="space-y-2">
+                {GENDER_OPTIONS.map(opt => (
+                  <ChoiceRow key={opt.value} label={lang === "en" ? opt.en : opt.ka}
+                    active={gender === opt.value} onClick={() => setGender(opt.value)} />
+                ))}
+                <div className="flex items-center justify-between rounded-2xl bg-zinc-900 px-4 py-3 ring-1 ring-white/10">
                   <div>
-                    <div className="text-lg font-semibold">Smart Photos</div>
-                    <div className="mt-1 text-sm text-white/70">
-                      Continuously tests all your profile photos to find the best one.
-                    </div>
+                    <div className="text-sm font-medium">{L("სქესის ჩვენება", "Show my gender")}</div>
                   </div>
-
-                  <Toggle value={true} onChange={() => {}} disabled />
+                  <Toggle checked={true} onChange={() => {}} />
                 </div>
               </div>
-              <div className="mt-2 text-xs text-white/50">(Coming soon — ახლა UI only)</div>
-            </section> */}
+            </Section>
 
-            {/* About Me */}
-            <section className="mt-10">
-              <div className="flex items-center justify-between">
-                <div className="text-xl font-extrabold">About Me</div>
-                <div className="text-sm text-white/60">{bio.length}/500</div>
+            {/* ORIENTATION */}
+            <Section title={L("სექსუალური ორიენტაცია", "Sexual Orientation")}>
+              <div className="space-y-2">
+                {ORIENTATION_OPTIONS.map(opt => (
+                  <ChoiceRow key={opt.value} label={lang === "en" ? opt.en : opt.ka}
+                    active={orientation === opt.value} onClick={() => setOrientation(opt.value)} />
+                ))}
               </div>
-              <textarea
-                className="mt-3 w-full rounded-2xl bg-white/10 p-4 text-sm text-white placeholder:text-white/40 ring-1 ring-white/10 outline-none focus:ring-pink-500/50"
-                placeholder="About Me"
-                maxLength={500}
-                value={bio}
-                onChange={(e) => setBio(e.target.value)}
-                rows={5}
-              />
-              <div className="mt-3 text-sm text-sky-400 underline opacity-90 cursor-pointer select-none">
-                Quick ‘About Me’ tips
-              </div>
-            </section>
+            </Section>
 
-            {/* Living in / City */}
-            <section className="mt-10">
-              <div className="flex items-center gap-2 text-xl font-extrabold">
-                <span className="text-pink-500">•</span> Living In
+            {/* INTENT */}
+            <Section title={L("რას ვეძებ", "Looking for")} dot>
+              <div className="space-y-2">
+                {INTENT_OPTIONS.map(opt => (
+                  <ChoiceRow key={opt.value} label={lang === "en" ? opt.en : opt.ka}
+                    active={intent === opt.value} onClick={() => setIntent(opt.value)} />
+                ))}
               </div>
-              <div className="mt-3 rounded-3xl bg-white/10 ring-1 ring-white/10 p-4">
-                <input
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  placeholder="Add City"
-                  className="w-full bg-transparent outline-none text-white placeholder:text-white/40"
-                />
-              </div>
-            </section>
+            </Section>
 
-            {/* Gender */}
-            <section className="mt-10">
-              <div className="text-xl font-extrabold">Gender</div>
-              <div className="mt-3 rounded-3xl bg-white/10 ring-1 ring-white/10 p-4">
-                <select
-                  value={gender}
-                  onChange={(e) => setGender(e.target.value)}
-                  className="w-full bg-transparent outline-none text-white"
-                >
-                  <option value="" className="bg-zinc-950">
-                    Select
-                  </option>
-                  <option value="male" className="bg-zinc-950">
-                    Man
-                  </option>
-                  <option value="female" className="bg-zinc-950">
-                    Woman
-                  </option>
-                  <option value="nonbinary" className="bg-zinc-950">
-                    Non-binary
-                  </option>
-                  <option value="other" className="bg-zinc-950">
-                    Other
-                  </option>
-                </select>
-              </div>
-            </section>
+            {/* LIFESTYLE */}
+            <Section title={L("ცხოვრების სტილი", "Lifestyle")} badge="+5%">
+              <SubSection label={L("შინაური ცხოველი", "Pets")} icon="🐾">
+                <ChoiceRow3 options={PETS_OPTIONS} value={pets} onChange={setPets} lang={lang} />
+              </SubSection>
+              <SubSection label={L("ალკოჰოლი", "Drinking")} icon="🍷">
+                <ChoiceRow3 options={DRINKING_OPTIONS} value={drinking} onChange={setDrinking} lang={lang} />
+              </SubSection>
+              <SubSection label={L("მოწევა", "Smoking")} icon="🚬">
+                <ChoiceRow3 options={SMOKING_OPTIONS} value={smoking} onChange={setSmoking} lang={lang} />
+              </SubSection>
+              <SubSection label={L("ვარჯიში", "Workout")} icon="💪">
+                <ChoiceRow3 options={WORKOUT_OPTIONS} value={workout} onChange={setWorkout} lang={lang} />
+              </SubSection>
+            </Section>
 
-            {/* Sexual Orientation */}
-            <section className="mt-8">
-              <div className="text-xl font-extrabold">Sexual Orientation</div>
-              <div className="mt-3 rounded-3xl bg-white/10 ring-1 ring-white/10 p-4">
-                <select
-                  value={orientation}
-                  onChange={(e) => setOrientation(e.target.value)}
-                  className="w-full bg-transparent outline-none text-white"
-                >
-                  <option value="" className="bg-zinc-950">
-                    Select
-                  </option>
-                  <option value="straight" className="bg-zinc-950">
-                    Straight
-                  </option>
-                  <option value="gay" className="bg-zinc-950">
-                    Gay
-                  </option>
-                  <option value="bisexual" className="bg-zinc-950">
-                    Bisexual
-                  </option>
-                  <option value="other" className="bg-zinc-950">
-                    Other
-                  </option>
-                </select>
-              </div>
-            </section>
-
-            {/* Control toggles */}
-            <section className="mt-10">
-              <div className="flex items-center justify-between">
-                <div className="text-xl font-extrabold">Control Your Profile</div>
-                <div className="rounded-full bg-pink-500/20 px-3 py-1 text-xs text-pink-300 ring-1 ring-pink-500/20">
-                  Shekvhdi Plus®
+            {/* CONTROL */}
+            <Section title={L("პროფილის მართვა", "Control Your Profile")}>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between rounded-2xl bg-zinc-900 px-4 py-3 ring-1 ring-white/10">
+                  <div className="text-sm">{L("ასაკის დამალვა", "Don't Show My Age")}</div>
+                  <Toggle checked={!showAge} onChange={v => setShowAge(!v)} />
+                </div>
+                <div className="flex items-center justify-between rounded-2xl bg-zinc-900 px-4 py-3 ring-1 ring-white/10">
+                  <div className="text-sm">{L("დისტანციის დამალვა", "Don't Show My Distance")}</div>
+                  <Toggle checked={!showDist} onChange={v => setShowDist(!v)} />
                 </div>
               </div>
+            </Section>
 
-              <div className="mt-4 rounded-3xl bg-white/10 ring-1 ring-white/10 overflow-hidden">
-                <RowToggle
-                  title="Don't Show My Age"
-                  value={!showAge}
-                  onChange={(v) => setShowAge(!v)}
-                />
-                <Divider />
-                <RowToggle
-                  title="Don't Show My Distance"
-                  value={!showDistance}
-                  onChange={(v) => setShowDistance(!v)}
-                />
+            {/* PHOTO VERIFICATION */}
+            <Section title={L("ფოტო ვერიფიკაცია", "Photo Verification")}>
+              <div className="rounded-2xl bg-zinc-900 p-4 ring-1 ring-white/10 flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center text-2xl shrink-0">🤳</div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm">{L("ვერიფიცირებული პროფილი", "Verified Profile")}</div>
+                  <div className="text-xs text-white/40 mt-0.5">{L("სელფი გადაიღე პროფილის დასადასტურებლად", "Take a selfie to verify your profile")}</div>
+                </div>
+                <button className="rounded-full bg-blue-500 px-3 py-1.5 text-xs font-bold text-white shrink-0">
+                  {L("დადასტურება", "Verify")}
+                </button>
               </div>
-            </section>
+            </Section>
 
-            {/* Bottom marker */}
-           
-            <div className="h-10" />
-          </>
+          </div>
+        )}
+      </div>
+
+      <BottomNav />
+    </div>
+  );
+}
+
+function PreviewTab({ p, lang }: { p: any; lang: string }) {
+  const photos = ["photo1_url","photo2_url","photo3_url","photo4_url","photo5_url","photo6_url"]
+    .map(k => p?.[k] ? photoSrc(p[k]) : null).filter(Boolean) as string[];
+  const [activePhoto, setActivePhoto] = useState(0);
+  const name = p?.nickname ?? p?.first_name ?? "User";
+
+  return (
+    <div className="pb-32">
+      {/* PHOTO */}
+      <div className="relative" style={{ height: "min(70vh, 520px)" }}>
+        {photos[activePhoto]
+          ? <img src={photos[activePhoto]} className="w-full h-full object-cover" alt="" />
+          : <div className="w-full h-full bg-zinc-800 flex items-center justify-center text-7xl">👤</div>}
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/90" />
+        {photos.length > 1 && (
+          <div className="absolute top-3 left-0 right-0 flex justify-center gap-1.5 px-4">
+            {photos.map((_, i) => (
+              <button key={i} onClick={() => setActivePhoto(i)}
+                className={`h-1 rounded-full transition-all ${i === activePhoto ? "bg-white w-8" : "bg-white/40 w-4"}`} />
+            ))}
+          </div>
+        )}
+        <div className="absolute bottom-4 left-4 right-4">
+          <h1 className="text-3xl font-black">{name}{p?.age ? `, ${p.age}` : ""}</h1>
+          {p?.city && <p className="text-sm text-white/70 mt-0.5">📍 {p.city}</p>}
+        </div>
+      </div>
+      <div className="px-4 pt-4 space-y-3">
+        {p?.bio && (
+          <div className="rounded-2xl bg-zinc-900 p-4 ring-1 ring-white/8">
+            <p className="text-sm leading-relaxed">{p.bio}</p>
+          </div>
+        )}
+        <div className="rounded-2xl bg-zinc-900 p-4 ring-1 ring-white/8 space-y-3">
+          {p?.job_title && <InfoRow2 icon="💼" value={p.job_title} />}
+          {p?.company && <InfoRow2 icon="🏢" value={p.company} />}
+          {p?.education && <InfoRow2 icon="🎓" value={p.education} />}
+          {p?.intent && <InfoRow2 icon="💭" value={p.intent} />}
+        </div>
+        {(p?.pets || p?.drinking || p?.smoking || p?.workout) && (
+          <div className="flex flex-wrap gap-2">
+            {p.pets && <Chip2 icon="🐾" label={p.pets} />}
+            {p.drinking && <Chip2 icon="🍷" label={p.drinking} />}
+            {p.smoking && <Chip2 icon="🚬" label={p.smoking} />}
+            {p.workout && <Chip2 icon="💪" label={p.workout} />}
+          </div>
         )}
       </div>
     </div>
-  </main>
-);
-
+  );
 }
 
-function Divider() {
-  return <div className="h-px bg-white/10" />;
-}
-
-function Toggle({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: boolean;
-  onChange: (v: boolean) => void;
-  disabled?: boolean;
-}) {
+function Section({ title, children, dot, badge }: { title: string; children: React.ReactNode; dot?: boolean; badge?: string }) {
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={() => onChange(!value)}
-      className={`h-8 w-14 rounded-full relative ring-1 ring-white/10 ${
-        value ? "bg-pink-500" : "bg-white/15"
-      } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
-      aria-label="Toggle"
-    >
-      <span
-        className={`absolute top-1 h-6 w-6 rounded-full bg-white transition-all ${
-          value ? "left-7" : "left-1"
-        }`}
-      />
+    <div>
+      <div className="flex items-center gap-2 mb-2">
+        {dot && <span className="h-2 w-2 rounded-full bg-pink-500 shrink-0" />}
+        <span className="font-bold text-sm text-white">{title}</span>
+        {badge && <span className="ml-auto text-xs font-bold text-pink-400">{badge}</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function SubSection({ label, icon, children }: { label: string; icon: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-3">
+      <div className="flex items-center gap-2 mb-1.5">
+        <span>{icon}</span>
+        <span className="text-xs text-white/50">{label}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ChoiceRow({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick}
+      className={`w-full flex items-center justify-between rounded-2xl px-4 py-3 text-sm transition ${active ? "bg-pink-500/20 ring-1 ring-pink-500 text-white" : "bg-zinc-900 ring-1 ring-white/10 text-white/70 hover:bg-zinc-800"}`}>
+      <span>{label}</span>
+      {active && <span className="text-pink-400 font-bold">✓</span>}
     </button>
   );
 }
 
-function RowToggle({
-  title,
-  value,
-  onChange,
-}: {
-  title: string;
-  value: boolean;
-  onChange: (v: boolean) => void;
-}) {
+function ChoiceRow3({ options, value, onChange, lang }: { options: {value:string;ka:string;en:string}[]; value: string; onChange: (v:string)=>void; lang: string }) {
   return (
-    <div className="flex items-center justify-between px-5 py-5">
-      <div className="text-base">{title}</div>
-      <Toggle value={value} onChange={onChange} />
+    <div className="flex flex-wrap gap-2">
+      {options.map(opt => (
+        <button key={opt.value} onClick={() => onChange(opt.value)}
+          className={`rounded-full px-4 py-1.5 text-xs font-medium transition ${value === opt.value ? "bg-pink-500 text-white" : "bg-zinc-800 text-white/60 hover:bg-zinc-700"}`}>
+          {lang === "en" ? opt.en : opt.ka}
+        </button>
+      ))}
     </div>
   );
 }
 
-function SectionRow({
-  title,
-  value,
-  placeholder,
-  onChange,
-}: {
-  title: string;
-  value: string;
-  placeholder: string;
-  onChange: (v: string) => void;
-}) {
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (v:boolean)=>void }) {
   return (
-    <section className="mt-10">
-      <div className="rounded-3xl bg-white/10 ring-1 ring-white/10 p-4">
-        <div className="text-sm text-white/70">{title}</div>
-        <input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className="mt-2 w-full bg-transparent outline-none text-white placeholder:text-white/40"
-        />
-      </div>
-    </section>
+    <button type="button" onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${checked ? "bg-pink-500" : "bg-white/15"}`}>
+      <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition transform ${checked ? "translate-x-5" : "translate-x-0.5"}`} />
+    </button>
   );
 }
 
-function PhotoSlot({
-  index,
-  path,
-  onPick,
-  onRemove,
-  busy,
-}: {
-  index: number;
-  path: string | null;
-  onPick: (file: File) => void;
-  onRemove: () => void;
-  busy?: boolean;
-}) {
-  const inputId = `photo-slot-${index}`;
-  const url = useMemo(() => (path ? photoSrc(path) : ""), [path]);
-
-  return (
-    <div className="relative aspect-[3/4] overflow-hidden rounded-2xl bg-white/10 ring-1 ring-white/10">
-      {path ? (
-        <>
-          <img src={url} alt="" className="h-full w-full object-cover" />
-          <button
-            type="button"
-            onClick={onRemove}
-            className="absolute right-2 top-2 h-9 w-9 rounded-full bg-zinc-950/80 ring-1 ring-white/15 flex items-center justify-center text-white"
-            aria-label="Remove"
-            title="Remove"
-          >
-            ✕
-          </button>
-        </>
-      ) : (
-        <label
-          htmlFor={inputId}
-          className="flex h-full w-full cursor-pointer items-center justify-center text-4xl text-white/40"
-          title="Add photo"
-        >
-          +
-        </label>
-      )}
-
-      {busy ? (
-        <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-sm">
-          Uploading…
-        </div>
-      ) : null}
-
-      <input
-        id={inputId}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0] ?? null;
-          if (f) onPick(f);
-          e.currentTarget.value = "";
-        }}
-      />
-    </div>
-  );
+function InfoRow2({ icon, value }: { icon: string; value: string }) {
+  return <div className="flex items-center gap-3 text-sm"><span>{icon}</span><span className="text-white/80">{value}</span></div>;
+}
+function Chip2({ icon, label }: { icon: string; label: string }) {
+  return <div className="flex items-center gap-1.5 rounded-full bg-white/8 px-3 py-1.5 text-xs text-white/80"><span>{icon}</span><span>{label}</span></div>;
 }
 
-function PreviewCard({
-  name,
-  age,
-  bio,
-  photo,
-  city,
-}: {
-  name: string;
-  age: number | null;
-  bio: string;
-  photo: string | null;
-  city: string;
-}) {
-  const avatar = useMemo(() => (photo ? photoSrc(photo) : ""), [photo]);
-
-  return (
-    <div className="mt-6 rounded-3xl bg-white/10 p-5 ring-1 ring-white/10">
-      <div className="flex items-center gap-4">
-        <div className="h-16 w-16 overflow-hidden rounded-2xl bg-white/10 ring-1 ring-white/10">
-          {photo ? <img src={avatar} className="h-full w-full object-cover" /> : null}
-        </div>
-        <div>
-          <div className="text-lg font-extrabold">
-            {name}
-            {age != null ? `, ${age}` : ""}
-          </div>
-          <div className="text-sm text-white/70">{city || " "}</div>
-        </div>
-      </div>
-
-      {bio ? <div className="mt-4 text-white/85 text-sm whitespace-pre-wrap">{bio}</div> : null}
-    </div>
-  );
-}
+import React from "react";
