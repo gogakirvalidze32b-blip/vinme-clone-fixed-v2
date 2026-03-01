@@ -20,6 +20,9 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
+  // ✅ Makes keyboard resize the viewport on Android Chrome
+  // so 100dvh always = visible area above keyboard
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

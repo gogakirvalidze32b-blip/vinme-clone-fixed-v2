@@ -8,6 +8,9 @@ import { getLang } from "@/lib/i18n";
 
 export default function BottomNav() {
   const pathname = usePathname() || "";
+  
+  // ✅ Hide nav on chat thread pages (like WhatsApp - full screen chat)
+  if (pathname.match(/^\/chat\/.+/)) return null;
   // ✅ unread = number of PEOPLE (matches) with unread messages
   const [unreadPeople, setUnreadPeople] = useState(0);
   const [lang, setLang] = useState<"ka"|"en">("ka");

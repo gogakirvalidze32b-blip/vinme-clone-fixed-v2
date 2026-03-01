@@ -478,104 +478,129 @@ function PreviewTab({ p, lang }: { p: any; lang: string }) {
   const photos = ["photo1_url","photo2_url","photo3_url","photo4_url","photo5_url","photo6_url"]
     .map(k => p?.[k] ? photoSrc(p[k]) : null).filter(Boolean) as string[];
   const [activePhoto, setActivePhoto] = useState(0);
+  const [showDetails, setShowDetails] = useState(false);
   const name = p?.nickname ?? p?.first_name ?? "User";
   const age = p?.age ?? null;
 
-  const GENDER_LABEL: Record<string,Record<string,string>> = {
-    ka: { male: "მამაკაცი", female: "ქალი", nonbinary: "არარობინარი" },
-    en: { male: "Man", female: "Woman", nonbinary: "Non-binary" },
+  const GENDER_LABEL: Record<string,string> = {
+    male: ka ? "მამაკაცი" : "Man",
+    female: ka ? "ქალი" : "Woman",
+    nonbinary: ka ? "არარობინარი" : "Non-binary",
   };
-  const INTENT_LABEL: Record<string,Record<string,string>> = {
-    ka: { long_term: "სერიოზული", short_term: "კაჟუალი", friends: "მეგობრობა", networking: "ნეთვორქინგი", relationship: "ურთიერთობა", short_term_open: "მოკლევადიანი", long_term_open: "გრძელვადიანი" },
-    en: { long_term: "Long-term", short_term: "Casual", friends: "Friends", networking: "Networking", relationship: "Relationship", short_term_open: "Short-term", long_term_open: "Long-term" },
+  const INTENT_LABEL: Record<string,string> = {
+    long_term: ka ? "გრძელვადიანი" : "Long-term",
+    short_term: ka ? "მოკლევადიანი" : "Short-term",
+    friends: ka ? "მეგობრობა" : "Friends",
+    networking: ka ? "ნეთვორქინგი" : "Networking",
+    relationship: ka ? "ურთიერთობა" : "Relationship",
+    short_term_open: ka ? "მოკლევადიანი" : "Short-term",
+    long_term_open: ka ? "გრძელვადიანი" : "Long-term",
+    casual: ka ? "კაჟუალი" : "Casual",
   };
 
   return (
-    <div style={{ paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))" }}>
-      {/* PHOTO FULLWIDTH */}
-      <div className="relative w-full" style={{ height: "55vw", minHeight: 240, maxHeight: 380 }}>
-        {photos.length > 0
-          ? <img src={photos[activePhoto]} className="w-full h-full object-cover" alt=""
-              onError={e => { (e.target as HTMLImageElement).src = ""; (e.target as HTMLImageElement).style.display = "none"; }} />
-          : <div className="w-full h-full bg-zinc-800 flex flex-col items-center justify-center gap-2">
-              <span className="text-5xl opacity-25">👤</span>
-              <span className="text-white/30 text-sm">{ka ? "ფოტო არ არის" : "No photo"}</span>
-            </div>
-        }
-        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/80" />
+    <div className="bg-black text-white" style={{ paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))" }}>
+      {/* ===== FULLSCREEN PHOTO ===== */}
+      <div className="relative w-full" style={{ height: "100dvh" }}>
+        {photos.length > 0 ? (
+          <img src={photos[activePhoto]} className="absolute inset-0 w-full h-full object-cover" alt=""
+            onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+        ) : (
+          <div className="absolute inset-0 bg-zinc-900 flex flex-col items-center justify-center gap-2">
+            <span className="text-6xl opacity-20">👤</span>
+            <span className="text-white/30 text-sm">{ka ? "ფოტო ატვირთე" : "Upload a photo"}</span>
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-transparent to-black/75 pointer-events-none" />
+
+        {/* photo bars */}
         {photos.length > 1 && (
-          <div className="absolute top-2 left-0 right-0 flex gap-1 px-3">
+          <div className="absolute top-3 left-0 right-0 flex gap-1 px-4 z-10">
             {photos.map((_,i) => (
-              <button key={i} onClick={() => setActivePhoto(i)}
-                className={`h-1 flex-1 rounded-full transition ${i===activePhoto ? "bg-white" : "bg-white/30"}`} />
+              <div key={i} className="flex-1 h-0.5 rounded-full bg-white/25 overflow-hidden">
+                <div className={`h-full rounded-full bg-white ${i <= activePhoto ? "w-full" : "w-0"}`} />
+              </div>
             ))}
           </div>
         )}
-        <div className="absolute bottom-3 left-4 right-4">
-          <div className="text-white font-black text-2xl drop-shadow-lg">
-            {name}{age ? `, ${age}` : ""}
+        {photos.length > 1 && (
+          <>
+            <button className="absolute left-0 top-0 bottom-0 w-1/3 z-10"
+              onClick={() => setActivePhoto(i => Math.max(0, i-1))} />
+            <button className="absolute right-0 top-0 bottom-0 w-1/3 z-10"
+              onClick={() => setActivePhoto(i => Math.min(photos.length-1, i+1))} />
+          </>
+        )}
+
+        {/* name + arrow */}
+        <div className="absolute bottom-0 left-0 right-0 z-10 px-5 pb-6">
+          <div className="flex items-end justify-between">
+            <div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-black">{name}</span>
+                {age && <span className="text-3xl font-light text-white/80">{age}</span>}
+              </div>
+              {p?.city && <div className="text-sm text-white/60 mt-1">📍 {p.city}</div>}
+            </div>
+            <button onClick={() => setShowDetails(v => !v)}
+              className="w-11 h-11 rounded-full bg-white flex items-center justify-center shadow-xl transition-transform"
+              style={{ transform: showDetails ? "rotate(180deg)" : "rotate(0deg)" }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M6 9l6 6 6-6" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
           </div>
-          {p?.city && <div className="text-white/70 text-sm mt-0.5 flex items-center gap-1">📍 {p.city}</div>}
+          <div className="flex flex-wrap gap-2 mt-3">
+            {p?.intent && (
+              <span className="rounded-full bg-white/15 backdrop-blur-sm px-3 py-1 text-xs font-medium text-white">
+                🎯 {INTENT_LABEL[p.intent] ?? p.intent}
+              </span>
+            )}
+            {p?.gender && (
+              <span className="rounded-full bg-white/15 backdrop-blur-sm px-3 py-1 text-xs font-medium text-white">
+                {GENDER_LABEL[p.gender] ?? p.gender}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* INFO */}
-      <div className="px-4 pt-3 space-y-2.5">
-        {/* basics card */}
-        <div className="rounded-2xl bg-zinc-900 ring-1 ring-white/8 divide-y divide-white/5 overflow-hidden">
-          {p?.gender && (
-            <div className="flex items-center gap-3 px-4 py-3">
-              <span className="text-base">⚧</span>
-              <div>
-                <div className="text-[10px] text-white/35">{ka ? "სქესი" : "Gender"}</div>
-                <div className="text-sm font-medium">{GENDER_LABEL[lang]?.[p.gender] ?? p.gender}</div>
-              </div>
+      {/* ===== DETAILS SLIDE DOWN ===== */}
+      {showDetails && (
+        <div className="px-4 py-4 space-y-3">
+          {p?.bio && (
+            <div className="rounded-2xl bg-zinc-900 p-4 ring-1 ring-white/8">
+              <div className="text-[11px] text-white/35 mb-1">{ka ? "ბიო" : "About"}</div>
+              <p className="text-sm leading-relaxed text-white/90">{p.bio}</p>
             </div>
           )}
-          {p?.intent && (
-            <div className="flex items-center gap-3 px-4 py-3">
-              <span className="text-base">🎯</span>
-              <div>
-                <div className="text-[10px] text-white/35">{ka ? "მიზანი" : "Intent"}</div>
-                <div className="text-sm font-medium">{INTENT_LABEL[lang]?.[p.intent] ?? p.intent}</div>
-              </div>
-            </div>
-          )}
-          {p?.job_title && (
-            <div className="flex items-center gap-3 px-4 py-3">
-              <span className="text-base">💼</span>
-              <div>
-                <div className="text-[10px] text-white/35">{ka ? "სამსახური" : "Job"}</div>
-                <div className="text-sm font-medium">{p.job_title}{p.company ? ` · ${p.company}` : ""}</div>
-              </div>
-            </div>
-          )}
-          {p?.education && (
-            <div className="flex items-center gap-3 px-4 py-3">
-              <span className="text-base">🎓</span>
-              <div>
-                <div className="text-[10px] text-white/35">{ka ? "განათლება" : "Education"}</div>
-                <div className="text-sm font-medium">{p.education}</div>
-              </div>
+          <div className="rounded-2xl bg-zinc-900 ring-1 ring-white/8 divide-y divide-white/5 overflow-hidden">
+            {p?.gender && <PRow icon="⚧" label={ka?"სქესი":"Gender"} value={GENDER_LABEL[p.gender]??p.gender} />}
+            {p?.intent && <PRow icon="🎯" label={ka?"მიზანი":"Looking for"} value={INTENT_LABEL[p.intent]??p.intent} />}
+            {p?.job_title && <PRow icon="💼" label={ka?"სამსახური":"Job"} value={`${p.job_title}${p.company?" · "+p.company:""}`} />}
+            {p?.education && <PRow icon="🎓" label={ka?"განათლება":"Education"} value={p.education} />}
+          </div>
+          {(p?.pets||p?.drinking||p?.smoking||p?.workout) && (
+            <div className="flex flex-wrap gap-2">
+              {p.pets&&<Chip2 icon="🐾" label={p.pets}/>}
+              {p.drinking&&<Chip2 icon="🍷" label={p.drinking}/>}
+              {p.smoking&&<Chip2 icon="🚬" label={p.smoking}/>}
+              {p.workout&&<Chip2 icon="💪" label={p.workout}/>}
             </div>
           )}
         </div>
+      )}
+    </div>
+  );
+}
 
-        {p?.bio && (
-          <div className="rounded-2xl bg-zinc-900 p-4 ring-1 ring-white/8">
-            <div className="text-[10px] text-white/35 mb-1">{ka ? "ბიო" : "About"}</div>
-            <p className="text-sm leading-relaxed text-white/80">{p.bio}</p>
-          </div>
-        )}
-
-        {(p?.pets || p?.drinking || p?.smoking || p?.workout) && (
-          <div className="flex flex-wrap gap-2">
-            {p.pets && <Chip2 icon="🐾" label={p.pets} />}
-            {p.drinking && <Chip2 icon="🍷" label={p.drinking} />}
-            {p.smoking && <Chip2 icon="🚬" label={p.smoking} />}
-            {p.workout && <Chip2 icon="💪" label={p.workout} />}
-          </div>
-        )}
+function PRow({ icon, label, value }: { icon: string; label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-3 px-4 py-3">
+      <span className="text-base">{icon}</span>
+      <div>
+        <div className="text-[10px] text-white/35">{label}</div>
+        <div className="text-sm font-medium">{value}</div>
       </div>
     </div>
   );

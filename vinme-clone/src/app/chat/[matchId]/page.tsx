@@ -5,7 +5,6 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { photoSrc } from "@/lib/photos";
 import EmojiPicker from "emoji-picker-react";
-import BottomNav from "@/components/BottomNav";
 import { SafeImg } from "@/components/SafeImg";
 import { getLang } from "@/lib/i18n";
 
@@ -301,7 +300,7 @@ export default function ChatThreadPage() {
   const otherName = otherProfile?.nickname ?? otherProfile?.first_name ?? "...";
 
   if (!isLoaded) return (
-    <div className="flex justify-center bg-[#111] min-h-[100dvh]">
+    <div className="flex justify-center bg-[#111]" style={{ height: "100dvh" }}>
       <div className="w-full max-w-lg flex flex-col bg-[#111]" style={{ height: "100dvh" }}>
         <div className="flex items-center gap-3 px-4 py-3 bg-zinc-950 border-b border-white/8 shrink-0">
           <div className="w-9 h-9 rounded-full bg-white/10 animate-pulse" />
@@ -323,9 +322,9 @@ export default function ChatThreadPage() {
   );
 
   return (
-    <div className="flex justify-center bg-[#111] min-h-[100dvh]">
+    <div className="flex justify-center bg-[#111]" style={{ height: "100dvh" }}>
       <div className="w-full max-w-lg flex flex-col bg-[#111] text-white"
-        style={{ height: vpHeight > 0 ? `${vpHeight}px` : "100dvh" }}
+        style={{ height: "100dvh" }}
         onClick={() => { showEmoji && setShowEmoji(false); selectedMsgId && setSelectedMsgId(null); }}>
 
         {/* HEADER */}
@@ -421,8 +420,9 @@ export default function ChatThreadPage() {
           </div>
         </div>
 
-        {/* INPUT - keyboard-aware, no extra bottom padding */}
-        <div className="shrink-0 bg-zinc-950 border-t border-white/8 px-3 pt-2 pb-3"
+        {/* INPUT - full bottom, no BottomNav overlay */}
+        <div className="shrink-0 bg-zinc-950 border-t border-white/8 px-3 pt-2"
+          style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)" }}
           onClick={e => e.stopPropagation()}>
           
           {showEmoji && (
@@ -503,7 +503,6 @@ export default function ChatThreadPage() {
       {selectedMsgId && (
         <div className="fixed inset-0 z-40" onClick={() => setSelectedMsgId(null)} />
       )}
-      <BottomNav />
     </div>
   );
 }
