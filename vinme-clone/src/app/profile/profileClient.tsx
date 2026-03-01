@@ -38,6 +38,27 @@ export default function ProfileClient() {
       if (!data.onboarding_completed) { router.replace("/onboarding"); return; }
       setMe(data);
       setLoading(false);
+      
+      // ✅ Auto-update city from GPS on every visit
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+          try {
+            const lang = typeof window !== "undefined" ? (localStorage.getItem("app_lang") ?? "ka") : "ka";
+            const acceptLang = lang === "en" ? "en" : "ka";
+            const res = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json&accept-language=${acceptLang}`,
+              { headers: { "User-Agent": "Shekhvdi/1.0" } }
+            );
+            const geo = await res.json();
+            const cityName = geo.address?.city || geo.address?.town || geo.address?.village || geo.address?.suburb || geo.address?.county;
+            await supabase.from("profiles").update({
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+              ...(cityName ? { city: cityName } : {}),
+            }).eq("user_id", uid);
+          } catch {}
+        }, () => {});
+      }
     })();
   }, [router]);
 
@@ -50,7 +71,7 @@ export default function ProfileClient() {
   if (!me) return null;
 
   return (
-    <main className="min-h-[100dvh] bg-zinc-950 text-white pb-28">
+    <main className="min-h-[100dvh] bg-zinc-950 text-white" style={{ paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))" }}>
       <div className="mx-auto w-full max-w-lg px-4 pt-5">
 
         {/* TOP ROW */}

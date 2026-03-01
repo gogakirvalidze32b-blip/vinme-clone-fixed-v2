@@ -100,6 +100,22 @@ function OrientationModal({ value, visible, lang, onSave, onClose }: {
   );
 }
 
+
+// ✅ Reverse geocoding - get city from GPS coordinates
+async function getCityFromCoords(lat: number, lon: number, lang: string): Promise<string | null> {
+  try {
+    // fetch both languages in parallel for accuracy
+    const acceptLang = lang === "en" ? "en" : "ka";
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=${acceptLang}`,
+      { headers: { "User-Agent": "Shekhvdi/1.0" } }
+    );
+    const data = await res.json();
+    const city = data.address?.city || data.address?.town || data.address?.village || data.address?.suburb || data.address?.county || data.address?.state;
+    return city ?? null;
+  } catch { return null; }
+}
+
 export default function EditProfilePage() {
   const router = useRouter();
   const lang = getLang();
@@ -142,6 +158,20 @@ export default function EditProfilePage() {
       setP(data);
       setBio(data.bio ?? "");
       setCity(data.city ?? "");
+      // ✅ Always get GPS to keep coords fresh + auto-fill city
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+          const cityName = await getCityFromCoords(pos.coords.latitude, pos.coords.longitude, lang);
+          if (cityName) setCity(cityName);
+          await supabase.from("profiles").update({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            city: cityName ?? data.city,
+          }).eq("user_id", data.user_id);
+        }, () => {
+          // permission denied — keep existing city
+        });
+      }
       setJobTitle(data.job_title ?? "");
       setCompany(data.company ?? "");
       setEducation(data.education ?? "");
@@ -161,6 +191,12 @@ export default function EditProfilePage() {
 
   async function handleSave() {
     if (!p || saving) return;
+    // ✅ mandatory: at least 1 photo
+    if (!p.photo1_url) {
+      const isKa = lang !== "en";
+      alert(isKa ? "⚠️ მინიმუმ 1 ფოტო სავალდებულოა" : "⚠️ At least 1 photo is required");
+      return;
+    }
     setSaving(true);
     const patch = { bio, city, job_title: jobTitle, company, education, gender, orientation, intent, pets, drinking, smoking, workout, show_age: showAge, show_distance: showDist, orientation_visible: orientVisible };
     const { error } = await supabase.from("profiles").update(patch).eq("user_id", p.user_id);
@@ -172,12 +208,13 @@ export default function EditProfilePage() {
     if (!p) return;
     setBusyPhoto(idx);
     const ext = file.name.split(".").pop() ?? "jpg";
-    const path = `photos/${p.user_id}/photo${idx}-${Date.now()}.${ext}`;
-    const { error: upErr } = await supabase.storage.from("photos").upload(path, file, { upsert: true });
-    if (upErr) { setBusyPhoto(null); return; }
+    // Store path WITHOUT bucket prefix so photoSrc works correctly
+    const storagePath = `${p.user_id}/photo${idx}-${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage.from("photos").upload(storagePath, file, { upsert: true, contentType: file.type });
+    if (upErr) { console.error("Upload error:", upErr); setBusyPhoto(null); alert("ატვირთვა ვერ მოხდა. სცადე ისევ."); return; }
     const key = `photo${idx}_url`;
-    const { error: dbErr } = await supabase.from("profiles").update({ [key]: path }).eq("user_id", p.user_id);
-    if (!dbErr) setP((prev: any) => ({ ...prev, [key]: path }));
+    const { error: dbErr } = await supabase.from("profiles").update({ [key]: storagePath }).eq("user_id", p.user_id);
+    if (!dbErr) setP((prev: any) => ({ ...prev, [key]: storagePath }));
     setBusyPhoto(null);
   }
 
@@ -234,7 +271,7 @@ export default function EditProfilePage() {
           <PreviewTab p={{ ...p, bio, city, job_title: jobTitle, company, education, gender, orientation, intent, pets, drinking, smoking, workout }} lang={lang} />
         ) : (
           /* ====== EDIT ====== */
-          <div className="px-4 pt-4 pb-32 space-y-6">
+          <div className="px-4 pt-4 space-y-6" style={{ paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))" }}>
 
             {/* PHOTOS */}
             <Section title={L("ფოტოები", "Photos")}>
@@ -272,9 +309,15 @@ export default function EditProfilePage() {
 
             {/* CITY */}
             <Section title={L("საცხოვრებელი ადგილი", "Living In")} dot>
-              <input value={city} onChange={e => setCity(e.target.value)}
-                className="w-full rounded-2xl bg-zinc-900 px-4 py-3 text-sm text-white placeholder-white/30 outline-none ring-1 ring-white/10 focus:ring-pink-500"
-                placeholder={L("ქალაქი", "Add City")} />
+              <div className="relative">
+                <input value={city} readOnly
+                  className="w-full rounded-2xl bg-zinc-900 px-4 py-3 text-sm text-white placeholder-white/30 outline-none ring-1 ring-white/10 cursor-default"
+                  placeholder={L("ლოკაცია ავტომატურად...", "Auto-detecting location...")} />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                  <span className="text-[10px] text-white/30">📍 {L("ავტო", "Auto")}</span>
+                  <span className="rounded-full bg-amber-400/20 px-2 py-0.5 text-[9px] font-bold text-amber-400">Premium</span>
+                </div>
+              </div>
             </Section>
 
             {/* JOB */}
@@ -396,44 +439,99 @@ export default function EditProfilePage() {
 
 
 function PreviewTab({ p, lang }: { p: any; lang: string }) {
+  const ka = lang !== "en";
   const photos = ["photo1_url","photo2_url","photo3_url","photo4_url","photo5_url","photo6_url"]
     .map(k => p?.[k] ? photoSrc(p[k]) : null).filter(Boolean) as string[];
   const [activePhoto, setActivePhoto] = useState(0);
   const name = p?.nickname ?? p?.first_name ?? "User";
+  const age = p?.age ?? null;
+
+  const GENDER_LABEL: Record<string,Record<string,string>> = {
+    ka: { male: "მამაკაცი", female: "ქალი", nonbinary: "არარობინარი" },
+    en: { male: "Man", female: "Woman", nonbinary: "Non-binary" },
+  };
+  const INTENT_LABEL: Record<string,Record<string,string>> = {
+    ka: { long_term: "სერიოზული", short_term: "კაჟუალი", friends: "მეგობრობა", networking: "ნეთვორქინგი", relationship: "ურთიერთობა", short_term_open: "მოკლევადიანი", long_term_open: "გრძელვადიანი" },
+    en: { long_term: "Long-term", short_term: "Casual", friends: "Friends", networking: "Networking", relationship: "Relationship", short_term_open: "Short-term", long_term_open: "Long-term" },
+  };
 
   return (
-    <div className="pb-32">
-      {/* PHOTO */}
-      <div className="relative" style={{ height: "min(70vh, 520px)" }}>
-        {photos[activePhoto]
+    <div style={{ paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))" }}>
+      {/* PHOTO FULLWIDTH */}
+      <div className="relative w-full" style={{ height: "55vw", minHeight: 240, maxHeight: 380 }}>
+        {photos.length > 0
           ? <img src={photos[activePhoto]} className="w-full h-full object-cover" alt="" />
-          : <div className="w-full h-full bg-zinc-800 flex items-center justify-center text-7xl">👤</div>}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/90" />
+          : <div className="w-full h-full bg-zinc-800 flex flex-col items-center justify-center gap-2">
+              <span className="text-5xl opacity-25">👤</span>
+              <span className="text-white/30 text-sm">{ka ? "ფოტო არ არის" : "No photo"}</span>
+            </div>
+        }
+        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/80" />
         {photos.length > 1 && (
-          <div className="absolute top-3 left-0 right-0 flex justify-center gap-1.5 px-4">
-            {photos.map((_, i) => (
+          <div className="absolute top-2 left-0 right-0 flex gap-1 px-3">
+            {photos.map((_,i) => (
               <button key={i} onClick={() => setActivePhoto(i)}
-                className={`h-1 rounded-full transition-all ${i === activePhoto ? "bg-white w-8" : "bg-white/40 w-4"}`} />
+                className={`h-1 flex-1 rounded-full transition ${i===activePhoto ? "bg-white" : "bg-white/30"}`} />
             ))}
           </div>
         )}
-        <div className="absolute bottom-4 left-4 right-4">
-          <h1 className="text-3xl font-black">{name}{p?.age ? `, ${p.age}` : ""}</h1>
-          {p?.city && <p className="text-sm text-white/70 mt-0.5">📍 {p.city}</p>}
+        <div className="absolute bottom-3 left-4 right-4">
+          <div className="text-white font-black text-2xl drop-shadow-lg">
+            {name}{age ? `, ${age}` : ""}
+          </div>
+          {p?.city && <div className="text-white/70 text-sm mt-0.5 flex items-center gap-1">📍 {p.city}</div>}
         </div>
       </div>
-      <div className="px-4 pt-4 space-y-3">
+
+      {/* INFO */}
+      <div className="px-4 pt-3 space-y-2.5">
+        {/* basics card */}
+        <div className="rounded-2xl bg-zinc-900 ring-1 ring-white/8 divide-y divide-white/5 overflow-hidden">
+          {p?.gender && (
+            <div className="flex items-center gap-3 px-4 py-3">
+              <span className="text-base">⚧</span>
+              <div>
+                <div className="text-[10px] text-white/35">{ka ? "სქესი" : "Gender"}</div>
+                <div className="text-sm font-medium">{GENDER_LABEL[lang]?.[p.gender] ?? p.gender}</div>
+              </div>
+            </div>
+          )}
+          {p?.intent && (
+            <div className="flex items-center gap-3 px-4 py-3">
+              <span className="text-base">🎯</span>
+              <div>
+                <div className="text-[10px] text-white/35">{ka ? "მიზანი" : "Intent"}</div>
+                <div className="text-sm font-medium">{INTENT_LABEL[lang]?.[p.intent] ?? p.intent}</div>
+              </div>
+            </div>
+          )}
+          {p?.job_title && (
+            <div className="flex items-center gap-3 px-4 py-3">
+              <span className="text-base">💼</span>
+              <div>
+                <div className="text-[10px] text-white/35">{ka ? "სამსახური" : "Job"}</div>
+                <div className="text-sm font-medium">{p.job_title}{p.company ? ` · ${p.company}` : ""}</div>
+              </div>
+            </div>
+          )}
+          {p?.education && (
+            <div className="flex items-center gap-3 px-4 py-3">
+              <span className="text-base">🎓</span>
+              <div>
+                <div className="text-[10px] text-white/35">{ka ? "განათლება" : "Education"}</div>
+                <div className="text-sm font-medium">{p.education}</div>
+              </div>
+            </div>
+          )}
+        </div>
+
         {p?.bio && (
           <div className="rounded-2xl bg-zinc-900 p-4 ring-1 ring-white/8">
-            <p className="text-sm leading-relaxed">{p.bio}</p>
+            <div className="text-[10px] text-white/35 mb-1">{ka ? "ბიო" : "About"}</div>
+            <p className="text-sm leading-relaxed text-white/80">{p.bio}</p>
           </div>
         )}
-        <div className="rounded-2xl bg-zinc-900 p-4 ring-1 ring-white/8 space-y-3">
-          {p?.job_title && <InfoRow2 icon="💼" value={p.job_title} />}
-          {p?.company && <InfoRow2 icon="🏢" value={p.company} />}
-          {p?.education && <InfoRow2 icon="🎓" value={p.education} />}
-          {p?.intent && <InfoRow2 icon="💭" value={p.intent} />}
-        </div>
+
         {(p?.pets || p?.drinking || p?.smoking || p?.workout) && (
           <div className="flex flex-wrap gap-2">
             {p.pets && <Chip2 icon="🐾" label={p.pets} />}

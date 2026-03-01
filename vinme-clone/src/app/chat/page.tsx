@@ -46,6 +46,14 @@ export default function ChatPage() {
   const [myId, setMyId] = useState<string | null>(null);
   const [myAnonId, setMyAnonId] = useState<string | null>(null);
   const loadingRef = useRef(false);
+  const [selectedMatchId, setSelectedMatchId] = useState<string|null>(null);
+  const longPressRef = useRef<NodeJS.Timeout|null>(null);
+
+  async function deleteMatch(matchId: string) {
+    await supabase.from("matches").delete().eq("id", matchId);
+    setMatches(prev => prev.filter(m => m.id !== matchId));
+    setSelectedMatchId(null);
+  }
 
   async function loadMatches(uid: string, anonId: string | null) {
     if (loadingRef.current) return;
@@ -194,8 +202,9 @@ export default function ChatPage() {
                   <div key={m.id} className="flex flex-col items-center min-w-[68px] cursor-pointer shrink-0"
                     onClick={() => router.push(`/chat/${m.id}`)}>
                     <div className="relative">
-                      <img src={photoSrc(m.other.photo1_url)} alt=""
-                        className="w-16 h-16 rounded-full object-cover ring-2 ring-pink-500/70" />
+                      {photoSrc(m.other.photo1_url)
+                        ? <img src={photoSrc(m.other.photo1_url)} alt="" className="w-16 h-16 rounded-full object-cover ring-2 ring-pink-500/70" />
+                        : <div className="w-16 h-16 rounded-full bg-zinc-700 ring-2 ring-pink-500/70 flex items-center justify-center text-2xl">👤</div>}
                       {isOnline && <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-green-400 border-2 border-black" />}
                     </div>
                     <span className="text-[11px] mt-1.5 text-white/70 truncate w-16 text-center">{name}</span>
@@ -210,16 +219,30 @@ export default function ChatPage() {
         {conversations.length > 0 && (
           <div>
             <h2 className="text-xs text-white/40 uppercase tracking-wider mb-3">{L("მიმოწერა", "Messages")}</h2>
-            <div className="flex flex-col gap-0.5">
+            <div className="flex flex-col gap-0.5" style={{ WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none", touchAction: "manipulation" }}>
               {conversations.map(m => {
                 const name = m.other.nickname ?? m.other.first_name ?? "User";
                 const isOnline = !!onlineText(m.other.last_seen ?? null, ka);
                 const isMine = m.last_sender_anon && m.last_sender_anon === myAnonId;
                 return (
-                  <div key={m.id} onClick={() => router.push(`/chat/${m.id}`)}
-                    className="flex items-center gap-3 px-3 py-3 rounded-2xl hover:bg-white/5 active:bg-white/8 cursor-pointer transition">
+                  <div key={m.id}
+                    onClick={() => { if (!selectedMatchId) router.push(`/chat/${m.id}`); else setSelectedMatchId(null); }}
+                    onPointerDown={() => { longPressRef.current = setTimeout(() => setSelectedMatchId(m.id), 500); }}
+                    onPointerUp={() => { if (longPressRef.current) clearTimeout(longPressRef.current); }}
+                    onPointerLeave={() => { if (longPressRef.current) clearTimeout(longPressRef.current); }}
+                    onContextMenu={e => e.preventDefault()}
+                    style={{ WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none", touchAction: "manipulation" }}
+                    className={`relative flex items-center gap-3 px-3 py-3 rounded-2xl cursor-pointer transition ${selectedMatchId === m.id ? "bg-white/8 ring-1 ring-red-500/40" : "hover:bg-white/5 active:bg-white/8"}`}>
+                    {selectedMatchId === m.id && (
+                      <button onClick={e => { e.stopPropagation(); deleteMatch(m.id); }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 bg-red-500 rounded-full px-3 py-1.5 text-white text-xs font-bold z-10 shadow-lg">
+                        🗑 {ka ? "წაშლა" : "Delete"}
+                      </button>
+                    )}
                     <div className="relative shrink-0">
-                      <img src={photoSrc(m.other.photo1_url)} alt="" className="w-14 h-14 rounded-full object-cover" />
+                      {photoSrc(m.other.photo1_url)
+                      ? <img src={photoSrc(m.other.photo1_url)} alt="" className="w-14 h-14 rounded-full object-cover" />
+                      : <div className="w-14 h-14 rounded-full bg-zinc-700 flex items-center justify-center text-xl">👤</div>}
                       {isOnline && <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-400 border-2 border-black" />}
                       {m._unreadCount > 0 && (
                         <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-pink-500 px-1 text-[10px] font-black text-white text-center leading-[18px]">
@@ -242,6 +265,11 @@ export default function ChatPage() {
               })}
             </div>
           </div>
+        )}
+
+        {/* DISMISS OVERLAY */}
+        {selectedMatchId && (
+          <div className="fixed inset-0 z-30" onClick={() => setSelectedMatchId(null)} />
         )}
 
         {/* EMPTY */}

@@ -69,6 +69,29 @@ const COPY: Record<string, Record<string, string>> = {
   },
 };
 
+const ORIENTATION_KA: Record<string,string> = {
+  straight: "ჰეტეროსექსუალი", gay: "გეი", lesbian: "ლესბოსელი",
+  bisexual: "ბისექსუალი", asexual: "ასექსუალი", demisexual: "დემისექსუალი",
+  pansexual: "პანსექსუალი", queer: "ქვირი", questioning: "კითხვის ნიშნის ქვეშ",
+  not_listed: "სხვა", other: "სხვა",
+};
+const ORIENTATION_EN: Record<string,string> = {
+  straight: "Straight", gay: "Gay", lesbian: "Lesbian",
+  bisexual: "Bisexual", asexual: "Asexual", demisexual: "Demisexual",
+  pansexual: "Pansexual", queer: "Queer", questioning: "Questioning",
+  not_listed: "Not listed", other: "Other",
+};
+const INTENT_KA: Record<string,string> = {
+  relationship: "ურთიერთობა", friends: "მეგობრობა", casual: "კაჟუალი",
+  short_term_open: "მოკლევადიანი", long_term_open: "გრძელვადიანი",
+  short_term_open_to_long: "ღია ვარ", long_term_open_to_short: "ღია ვარ",
+};
+const INTENT_EN: Record<string,string> = {
+  relationship: "Relationship", friends: "Friends", casual: "Casual",
+  short_term_open: "Short-term", long_term_open: "Long-term",
+  short_term_open_to_long: "Open", long_term_open_to_short: "Open",
+};
+
 export default function UserProfilePage() {
   const router = useRouter();
   const params = useParams();
@@ -200,7 +223,7 @@ export default function UserProfilePage() {
               <InfoRow icon="🏳️‍🌈" label={c.orientation} value={c[profile.orientation] ?? profile.orientation} />
             )}
             {profile.intent && (
-              <InfoRow icon="💭" label={c.intent} value={profile.intent} />
+              <InfoRow icon="💭" label={c.intent} value={lang === "en" ? (INTENT_EN[profile.intent] ?? profile.intent) : (INTENT_KA[profile.intent] ?? profile.intent)} />
             )}
             {profile.job_title && (
               <InfoRow icon="💼" label={c.job} value={profile.job_title} />

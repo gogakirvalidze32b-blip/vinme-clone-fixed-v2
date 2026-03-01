@@ -47,3 +47,35 @@ img {
   user-select: none;
 }
 
+
+/* Keyboard-aware chat input */
+@supports (height: 100dvh) {
+  .chat-container {
+    height: 100dvh;
+  }
+}
+
+/* Prevent text selection context menu on long press */
+.no-select {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Smooth scroll in chat */
+.chat-messages {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent browser text selection UI on long press for chat rows */
+.no-select, .chat-row {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+}
+
+/* Fix BottomNav safe area */
+.bottom-nav-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
