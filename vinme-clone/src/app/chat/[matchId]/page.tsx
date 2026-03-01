@@ -96,6 +96,7 @@ export default function ChatThreadPage() {
   const [showEmoji, setShowEmoji] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [vpHeight, setVpHeight] = useState<number>(0);
 
   // long press delete
   const [selectedMsgId, setSelectedMsgId] = useState<string|null>(null);
@@ -189,6 +190,16 @@ export default function ChatThreadPage() {
   }, [matchId, markRead]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs.length]);
+
+  // ✅ Track visual viewport height for keyboard-aware layout
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) { setVpHeight(window.innerHeight); return; }
+    const handler = () => setVpHeight(vv.height);
+    handler();
+    vv.addEventListener("resize", handler);
+    return () => vv.removeEventListener("resize", handler);
+  }, []);
 
   // pull-to-refresh handlers
   function onTouchStart(e: React.TouchEvent) { pullStartY.current = e.touches[0].clientY; }
@@ -285,7 +296,7 @@ export default function ChatThreadPage() {
     router.replace("/chat");
   }
 
-  const avatar = useMemo(() => photoSrc(otherProfile?.photo1_url ?? null), [otherProfile]);
+  const avatar = useMemo(() => { const src = photoSrc(otherProfile?.photo1_url ?? null); return src || null; }, [otherProfile]);
   const otherName = otherProfile?.nickname ?? otherProfile?.first_name ?? "...";
 
   if (!isLoaded) return (
@@ -306,14 +317,14 @@ export default function ChatThreadPage() {
             <div className={`h-9 rounded-2xl bg-white/8 animate-pulse ${i%2===0?"w-48":"w-36"}`} />
           </div>)}
         </div>
-        <BottomNav />
       </div>
     </div>
   );
 
   return (
     <div className="flex justify-center bg-zinc-950 min-h-[100dvh]">
-      <div className="w-full max-w-lg flex flex-col bg-[#111] text-white" style={{ height: "100dvh" }}
+      <div className="w-full max-w-lg flex flex-col bg-[#111] text-white"
+        style={{ height: vpHeight > 0 ? `${vpHeight}px` : "100dvh" }}
         onClick={() => { showEmoji && setShowEmoji(false); selectedMsgId && setSelectedMsgId(null); }}>
 
         {/* HEADER */}
@@ -367,7 +378,9 @@ export default function ChatThreadPage() {
 
               return (
                 <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"} ${prevSame ? "mt-0.5" : "mt-3"} relative`}
-                  onPointerDown={() => onMsgPointerDown(m.id)} onPointerUp={onMsgPointerUp} onPointerLeave={onMsgPointerUp}>
+                  onPointerDown={() => onMsgPointerDown(m.id)} onPointerUp={onMsgPointerUp} onPointerLeave={onMsgPointerUp}
+                  onContextMenu={e => e.preventDefault()}
+                  style={{ WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none" }}>
                   
                   {/* delete popup on long press */}
                   {isSelected && mine && (
@@ -408,9 +421,8 @@ export default function ChatThreadPage() {
           </div>
         </div>
 
-        {/* INPUT */}
-        <div className="shrink-0 bg-zinc-950 border-t border-white/8 px-3 pt-2"
-          style={{ paddingBottom: `calc(env(safe-area-inset-bottom) + 68px)` }}
+        {/* INPUT - keyboard-aware, no extra bottom padding */}
+        <div className="shrink-0 bg-zinc-950 border-t border-white/8 px-3 pt-2 pb-3"
           onClick={e => e.stopPropagation()}>
           
           {showEmoji && (
@@ -475,7 +487,6 @@ export default function ChatThreadPage() {
           )}
         </div>
 
-        <BottomNav />
       </div>
 
       {/* 3-DOT MENU MODAL */}
@@ -492,6 +503,7 @@ export default function ChatThreadPage() {
       {selectedMsgId && (
         <div className="fixed inset-0 z-40" onClick={() => setSelectedMsgId(null)} />
       )}
+      <BottomNav />
     </div>
   );
 }

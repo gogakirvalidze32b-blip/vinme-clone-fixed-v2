@@ -194,8 +194,9 @@ export default function ChatPage() {
                   <div key={m.id} className="flex flex-col items-center min-w-[68px] cursor-pointer shrink-0"
                     onClick={() => router.push(`/chat/${m.id}`)}>
                     <div className="relative">
-                      <img src={photoSrc(m.other.photo1_url)} alt=""
-                        className="w-16 h-16 rounded-full object-cover ring-2 ring-pink-500/70" />
+                      {photoSrc(m.other.photo1_url)
+                        ? <img src={photoSrc(m.other.photo1_url)} alt="" className="w-16 h-16 rounded-full object-cover ring-2 ring-pink-500/70" />
+                        : <div className="w-16 h-16 rounded-full bg-zinc-700 ring-2 ring-pink-500/70 flex items-center justify-center text-2xl">👤</div>}
                       {isOnline && <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-green-400 border-2 border-black" />}
                     </div>
                     <span className="text-[11px] mt-1.5 text-white/70 truncate w-16 text-center">{name}</span>
@@ -219,7 +220,9 @@ export default function ChatPage() {
                   <div key={m.id} onClick={() => router.push(`/chat/${m.id}`)}
                     className="flex items-center gap-3 px-3 py-3 rounded-2xl hover:bg-white/5 active:bg-white/8 cursor-pointer transition">
                     <div className="relative shrink-0">
-                      <img src={photoSrc(m.other.photo1_url)} alt="" className="w-14 h-14 rounded-full object-cover" />
+                      {photoSrc(m.other.photo1_url)
+                      ? <img src={photoSrc(m.other.photo1_url)} alt="" className="w-14 h-14 rounded-full object-cover" />
+                      : <div className="w-14 h-14 rounded-full bg-zinc-700 flex items-center justify-center text-xl">👤</div>}
                       {isOnline && <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-400 border-2 border-black" />}
                       {m._unreadCount > 0 && (
                         <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-pink-500 px-1 text-[10px] font-black text-white text-center leading-[18px]">

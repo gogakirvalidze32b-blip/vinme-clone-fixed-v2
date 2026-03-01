@@ -1,18 +1,20 @@
 // src/lib/photos.ts
-export function photoSrc(path?: string | null) {
+export function photoSrc(path?: string | null): string {
   if (!path) return "";
-  if (path.startsWith("http")) return path;
+  // already a full URL
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
 
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!base) return "";
 
-  // ✅ accept both formats:
-  // "photos/xxx.webp" OR "profiles/xxx.jpg" (legacy)
   let p = String(path).trim().replace(/^\/+/, "").replace(/\/+$/, "");
 
-  // თუ DB-ში შემთხვევით ინახავ bucket-ით დაწყებულს ("photos/....")
+  // strip bucket prefix if accidentally stored
   if (p.startsWith("photos/")) p = p.slice("photos/".length);
+  if (p.startsWith("profiles/")) {
+    // legacy bucket
+    return `${base}/storage/v1/object/public/profiles/${p.slice("profiles/".length)}`;
+  }
 
-  // ✅ bucket = photos
   return `${base}/storage/v1/object/public/photos/${p}`;
 }
