@@ -195,10 +195,12 @@ export default function ChatThreadPage() {
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) { setVpHeight(window.innerHeight); return; }
-    const handler = () => setVpHeight(vv.height);
+    // Use vv.height which excludes keyboard on all mobile browsers
+    const handler = () => setVpHeight(Math.round(vv.height));
     handler();
     vv.addEventListener("resize", handler);
-    return () => vv.removeEventListener("resize", handler);
+    vv.addEventListener("scroll", handler);
+    return () => { vv.removeEventListener("resize", handler); vv.removeEventListener("scroll", handler); };
   }, []);
 
   // pull-to-refresh handlers
@@ -300,8 +302,8 @@ export default function ChatThreadPage() {
   const otherName = otherProfile?.nickname ?? otherProfile?.first_name ?? "...";
 
   if (!isLoaded) return (
-    <div className="flex justify-center bg-[#111]" style={{ height: "100dvh" }}>
-      <div className="w-full max-w-lg flex flex-col bg-[#111]" style={{ height: "100dvh" }}>
+    <div className="flex justify-center bg-[#111]" style={{ height: vpHeight > 0 ? `${vpHeight}px` : "100dvh" }}>
+      <div className="w-full max-w-lg flex flex-col bg-[#111]" style={{ height: vpHeight > 0 ? `${vpHeight}px` : "100dvh" }}>
         <div className="flex items-center gap-3 px-4 py-3 bg-zinc-950 border-b border-white/8 shrink-0">
           <div className="w-9 h-9 rounded-full bg-white/10 animate-pulse" />
           <div className="flex items-center gap-3 flex-1">
@@ -322,9 +324,9 @@ export default function ChatThreadPage() {
   );
 
   return (
-    <div className="flex justify-center bg-[#111]" style={{ height: "100dvh" }}>
+    <div className="flex justify-center bg-[#111]" style={{ height: vpHeight > 0 ? `${vpHeight}px` : "100dvh" }}>
       <div className="w-full max-w-lg flex flex-col bg-[#111] text-white"
-        style={{ height: "100dvh" }}
+        style={{ height: vpHeight > 0 ? `${vpHeight}px` : "100dvh" }}
         onClick={() => { showEmoji && setShowEmoji(false); selectedMsgId && setSelectedMsgId(null); }}>
 
         {/* HEADER */}

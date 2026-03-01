@@ -118,16 +118,14 @@ export default function UserProfilePage() {
   const name = profile.nickname ?? profile.first_name ?? "User";
 
   return (
-    <div className="bg-black text-white" style={{ minHeight: "100dvh", overflowX: "hidden" }}>
-      <div className="mx-auto w-full max-w-lg">
+    <div className="bg-black text-white" style={{ minHeight: "100dvh" }}>
 
-        {/* ===== TINDER-STYLE PHOTO - fits screen, no scroll ===== */}
-        <div className="relative w-full" style={{ height: "min(100dvh, 100vw * 1.5)", maxHeight: "100dvh", overflow: "hidden" }}>
+        {/* ===== TINDER-STYLE PHOTO ===== */}
+        <div className="relative w-full" style={{ height: "100dvh" }}>
 
-          {/* Photo */}
+          {/* Photo - object-cover like Tinder */}
           {photos.length > 0 ? (
-            <img src={photos[activePhoto]} className="absolute inset-0 w-full h-full object-contain" alt=""
-              style={{ backgroundColor: "#000" }}
+            <img src={photos[activePhoto]} className="absolute inset-0 w-full h-full object-cover" alt=""
               onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
           ) : (
             <div className="absolute inset-0 bg-zinc-900 flex items-center justify-center">
@@ -140,7 +138,7 @@ export default function UserProfilePage() {
 
           {/* Photo progress bars top */}
           {photos.length > 1 && (
-            <div className="absolute top-3 left-0 right-0 flex gap-1 px-4 z-20">
+            <div className="absolute left-0 right-0 flex gap-1 px-4 z-20" style={{ top: "max(env(safe-area-inset-top, 12px), 12px)" }}>
               {photos.map((_, i) => (
                 <div key={i} className="flex-1 h-0.5 rounded-full overflow-hidden bg-white/25">
                   <div className={`h-full rounded-full transition-all ${i === activePhoto ? "bg-white" : i < activePhoto ? "bg-white" : "bg-transparent"}`} />
@@ -159,9 +157,10 @@ export default function UserProfilePage() {
             </>
           )}
 
-          {/* Back button */}
+          {/* Back button - respects status bar */}
           <button onClick={() => router.back()}
-            className="absolute top-12 left-4 z-20 w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white">
+            className="absolute left-4 z-20 w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white font-bold shadow-lg"
+            style={{ top: "max(env(safe-area-inset-top, 16px), 16px)" }}>
             ←
           </button>
 
@@ -207,7 +206,7 @@ export default function UserProfilePage() {
 
         {/* ===== DETAILS SECTION (expands below photo) ===== */}
         <div ref={detailsRef} className={`transition-all duration-300 ${showDetails ? "opacity-100" : "opacity-0 h-0 overflow-hidden"}`}>
-          <div className="px-4 py-5 space-y-3" style={{ paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))" }}>
+          <div className="mx-auto w-full max-w-lg px-4 py-5 space-y-3" style={{ paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))" }}>
 
             {/* BIO */}
             {profile.bio && (
@@ -270,7 +269,6 @@ export default function UserProfilePage() {
           </div>
         </div>
 
-      </div>
       <BottomNav />
     </div>
   );
