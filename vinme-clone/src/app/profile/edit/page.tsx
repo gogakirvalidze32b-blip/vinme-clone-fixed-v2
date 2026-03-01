@@ -100,22 +100,6 @@ function OrientationModal({ value, visible, lang, onSave, onClose }: {
   );
 }
 
-
-// ✅ Reverse geocoding - get city from GPS coordinates
-async function getCityFromCoords(lat: number, lon: number, lang: string): Promise<string | null> {
-  try {
-    // fetch both languages in parallel for accuracy
-    const acceptLang = lang === "en" ? "en" : "ka";
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=${acceptLang}`,
-      { headers: { "User-Agent": "Shekhvdi/1.0" } }
-    );
-    const data = await res.json();
-    const city = data.address?.city || data.address?.town || data.address?.village || data.address?.suburb || data.address?.county || data.address?.state;
-    return city ?? null;
-  } catch { return null; }
-}
-
 export default function EditProfilePage() {
   const router = useRouter();
   const lang = getLang();
@@ -158,20 +142,6 @@ export default function EditProfilePage() {
       setP(data);
       setBio(data.bio ?? "");
       setCity(data.city ?? "");
-      // ✅ Always get GPS to keep coords fresh + auto-fill city
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(async (pos) => {
-          const cityName = await getCityFromCoords(pos.coords.latitude, pos.coords.longitude, lang);
-          if (cityName) setCity(cityName);
-          await supabase.from("profiles").update({
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-            city: cityName ?? data.city,
-          }).eq("user_id", data.user_id);
-        }, () => {
-          // permission denied — keep existing city
-        });
-      }
       setJobTitle(data.job_title ?? "");
       setCompany(data.company ?? "");
       setEducation(data.education ?? "");
@@ -302,15 +272,9 @@ export default function EditProfilePage() {
 
             {/* CITY */}
             <Section title={L("საცხოვრებელი ადგილი", "Living In")} dot>
-              <div className="relative">
-                <input value={city} readOnly
-                  className="w-full rounded-2xl bg-zinc-900 px-4 py-3 text-sm text-white placeholder-white/30 outline-none ring-1 ring-white/10 cursor-default"
-                  placeholder={L("ლოკაცია ავტომატურად...", "Auto-detecting location...")} />
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                  <span className="text-[10px] text-white/30">📍 {L("ავტო", "Auto")}</span>
-                  <span className="rounded-full bg-amber-400/20 px-2 py-0.5 text-[9px] font-bold text-amber-400">Premium</span>
-                </div>
-              </div>
+              <input value={city} onChange={e => setCity(e.target.value)}
+                className="w-full rounded-2xl bg-zinc-900 px-4 py-3 text-sm text-white placeholder-white/30 outline-none ring-1 ring-white/10 focus:ring-pink-500"
+                placeholder={L("ქალაქი", "Add City")} />
             </Section>
 
             {/* JOB */}
