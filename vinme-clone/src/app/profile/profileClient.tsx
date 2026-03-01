@@ -60,10 +60,7 @@ export default function ProfileClient() {
             ← {L("სვაიპი", "Swipe")}
           </button>
           <div className="flex gap-2">
-            <button onClick={() => {}}
-              className="w-10 h-10 rounded-full bg-white/8 flex items-center justify-center hover:bg-white/12 transition">
-              🛡️
-            </button>
+
             <button onClick={() => router.push("/settings")}
               className="w-10 h-10 rounded-full bg-white/8 flex items-center justify-center hover:bg-white/12 transition">
               ⚙️

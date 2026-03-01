@@ -40,6 +40,66 @@ function calcProgress(p: any): number {
   return Math.round((filled / COMPLETENESS_FIELDS.length) * 100);
 }
 
+
+// ===== ORIENTATION MODAL (Tinder style) =====
+const ORIENTATION_FULL = [
+  { value: "straight", ka: "ჰეტეროსექსუალი", en: "Straight", desc_ka: "ადამიანი ვინც იზიდება მოპირდაპირე სქესისკენ", desc_en: "A person who is exclusively attracted to members of the opposite gender" },
+  { value: "gay", ka: "გეი", en: "Gay", desc_ka: "ადამიანი ვინც იზიდება იმავე სქესისკენ", desc_en: "An umbrella term for someone who is attracted to members of their gender" },
+  { value: "lesbian", ka: "ლესბოსელი", en: "Lesbian", desc_ka: "ქალი ვინც იზიდება ქალებისკენ", desc_en: "A woman who is emotionally, romantically, or sexually attracted to other women" },
+  { value: "bisexual", ka: "ბისექსუალი", en: "Bisexual", desc_ka: "ადამიანი ვინც იზიდება ერთზე მეტი სქესისკენ", desc_en: "A person who has potential for attraction to people of more than one gender" },
+  { value: "asexual", ka: "ასექსუალი", en: "Asexual", desc_ka: "ადამიანი ვინც სექსუალურ მიზიდულობას არ განიცდის", desc_en: "A person who does not experience sexual attraction" },
+  { value: "demisexual", ka: "დემისექსუალი", en: "Demisexual", desc_ka: "იზიდება მხოლოდ ემოციური კავშირის შემდეგ", desc_en: "A person who does not experience sexual attraction unless they form a strong emotional connection" },
+  { value: "pansexual", ka: "პანსექსუალი", en: "Pansexual", desc_ka: "იზიდება ნებისმიერი სქესის ადამიანებისკენ", desc_en: "A person who has potential for attraction to people regardless of gender" },
+  { value: "queer", ka: "ქვირი", en: "Queer", desc_ka: "სექსუალური ორიენტაციების სპექტრი", desc_en: "An umbrella term to express a spectrum of sexual orientations and genders" },
+  { value: "questioning", ka: "კითხვის ნიშნის ქვეშ", en: "Questioning", desc_ka: "სქესობრივი ორიენტაციის კვლევის პროცესში", desc_en: "A person exploring their sexual orientation and/or gender" },
+  { value: "not_listed", ka: "სხვა", en: "Not listed", desc_ka: "მიეცი ჩვენ შეხება", desc_en: "Tell us what's missing." },
+];
+
+function OrientationModal({ value, visible, lang, onSave, onClose }: {
+  value: string; visible: boolean; lang: string;
+  onSave: (v: string, vis: boolean) => void; onClose: () => void;
+}) {
+  const ka = lang !== "en";
+  const [selected, setSelected] = React.useState(value);
+  const [vis, setVis] = React.useState(visible);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col text-white">
+      <div className="flex items-center justify-between px-5 pt-12 pb-4">
+        <button onClick={onClose} className="text-white/50 hover:text-white text-2xl leading-none">✕</button>
+        <button onClick={() => onSave(selected, vis)}
+          className="text-blue-400 font-bold text-sm hover:text-blue-300">{ka ? "შენახვა" : "Done"}</button>
+      </div>
+      <div className="px-5 mb-6">
+        <h1 className="text-2xl font-extrabold mb-1">{ka ? "ჩემი სექსუალური ორიენტაცია" : "My sexual orientation"}</h1>
+        <p className="text-sm text-white/50">{ka ? "აირჩიე ყველაფერი რაც გამოხატავს შენ." : "Select all that describe you to reflect your identity."}</p>
+      </div>
+      <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-2">
+        {ORIENTATION_FULL.map(opt => (
+          <button key={opt.value} type="button" onClick={() => setSelected(opt.value)}
+            className={`w-full text-left rounded-2xl px-4 py-3.5 ring-1 transition
+              ${selected === opt.value ? "ring-pink-500 bg-pink-500/10" : "ring-white/12 bg-zinc-900 hover:bg-zinc-800"}`}>
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-sm">{ka ? opt.ka : opt.en}</span>
+              {selected === opt.value && <span className="text-pink-400 text-lg">✓</span>}
+            </div>
+            <p className="text-xs text-white/45 mt-0.5 leading-relaxed">{ka ? opt.desc_ka : opt.desc_en}</p>
+          </button>
+        ))}
+      </div>
+      <div className="px-5 py-4 border-t border-white/8 space-y-3 bg-zinc-950">
+        <p className="text-xs text-center text-white/40">
+          {ka ? `სექსუალური ორიენტაცია პროფილში ${vis ? "ხილულია" : "დამალულია"}.` : `Your sexual orientation is ${vis ? "visible" : "hidden"} in profile.`}
+        </p>
+        <button onClick={() => setVis(!vis)}
+          className="w-full rounded-2xl bg-white py-3.5 font-bold text-black text-sm">
+          {ka ? (vis ? "დამალვა" : "გამოჩენა") : (vis ? "Hide" : "Show")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function EditProfilePage() {
   const router = useRouter();
   const lang = getLang();
@@ -65,6 +125,8 @@ export default function EditProfilePage() {
   const [smoking, setSmoking] = useState("");
   const [workout, setWorkout] = useState("");
   const [showAge, setShowAge] = useState(true);
+  const [showOrientModal, setShowOrientModal] = useState(false);
+  const [orientVisible, setOrientVisible] = useState(false);
   const [showDist, setShowDist] = useState(true);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -92,6 +154,7 @@ export default function EditProfilePage() {
       setWorkout(data.workout ?? "");
       setShowAge(data.show_age !== false);
       setShowDist(data.show_distance !== false);
+      setOrientVisible(data.orientation_visible ?? false);
       setLoading(false);
     })();
   }, [router]);
@@ -99,7 +162,7 @@ export default function EditProfilePage() {
   async function handleSave() {
     if (!p || saving) return;
     setSaving(true);
-    const patch = { bio, city, job_title: jobTitle, company, education, gender, orientation, intent, pets, drinking, smoking, workout, show_age: showAge, show_distance: showDist };
+    const patch = { bio, city, job_title: jobTitle, company, education, gender, orientation, intent, pets, drinking, smoking, workout, show_age: showAge, show_distance: showDist, orientation_visible: orientVisible };
     const { error } = await supabase.from("profiles").update(patch).eq("user_id", p.user_id);
     if (!error) { setP((prev: any) => ({ ...prev, ...patch })); setSaved(true); setTimeout(() => setSaved(false), 2000); }
     setSaving(false);
@@ -247,14 +310,17 @@ export default function EditProfilePage() {
               </div>
             </Section>
 
-            {/* ORIENTATION */}
+            {/* ORIENTATION - Tinder style row that opens modal */}
             <Section title={L("სექსუალური ორიენტაცია", "Sexual Orientation")}>
-              <div className="space-y-2">
-                {ORIENTATION_OPTIONS.map(opt => (
-                  <ChoiceRow key={opt.value} label={lang === "en" ? opt.en : opt.ka}
-                    active={orientation === opt.value} onClick={() => setOrientation(opt.value)} />
-                ))}
-              </div>
+              <button type="button" onClick={() => setShowOrientModal(true)}
+                className="w-full flex items-center justify-between rounded-2xl bg-zinc-900 px-4 py-3.5 ring-1 ring-white/10 hover:bg-zinc-800 transition">
+                <span className="text-sm text-white/80">
+                  {orientation ? (ORIENTATION_OPTIONS.find(o => o.value === orientation)?.[lang === "en" ? "en" : "ka"] ?? orientation) : L("არჩიე", "Select")}
+                </span>
+                <span className="text-white/30 flex items-center gap-1 text-sm">
+                  {orientVisible ? L("ხილული", "Visible") : L("დამალული", "Hidden")} ›
+                </span>
+              </button>
             </Section>
 
             {/* INTENT */}
@@ -316,9 +382,18 @@ export default function EditProfilePage() {
       </div>
 
       <BottomNav />
+
+      {showOrientModal && (
+        <OrientationModal
+          value={orientation} visible={orientVisible} lang={lang}
+          onSave={(v, vis) => { setOrientation(v); setOrientVisible(vis); setShowOrientModal(false); }}
+          onClose={() => setShowOrientModal(false)}
+        />
+      )}
     </div>
   );
 }
+
 
 function PreviewTab({ p, lang }: { p: any; lang: string }) {
   const photos = ["photo1_url","photo2_url","photo3_url","photo4_url","photo5_url","photo6_url"]
