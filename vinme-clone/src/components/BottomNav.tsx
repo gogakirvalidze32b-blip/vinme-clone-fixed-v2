@@ -4,11 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { getLang, t } from "@/lib/i18n";
+import { getLang } from "@/lib/i18n";
 
 export default function BottomNav() {
   const pathname = usePathname() || "";
-  const [unread, setUnread] = useState(0);
+  // ✅ unread = number of PEOPLE (matches) with unread messages
+  const [unreadPeople, setUnreadPeople] = useState(0);
   const [lang, setLang] = useState<"ka"|"en">("ka");
 
   useEffect(() => {
@@ -26,26 +27,29 @@ export default function BottomNav() {
       const uid = sess.session?.user?.id;
       if (!uid || !alive) return;
 
-      const { data: myProfile } = await supabase
-        .from("profiles").select("anon_id").eq("user_id", uid).maybeSingle();
+      const { data: myProfile } = await supabase.from("profiles").select("anon_id").eq("user_id", uid).maybeSingle();
       const anonId = myProfile?.anon_id ?? null;
       if (!anonId) return;
 
       const { data: matchRows } = await supabase
         .from("matches").select("id").or(`user_a.eq.${uid},user_b.eq.${uid}`);
-      if (!matchRows?.length) { if (alive) setUnread(0); return; }
+      if (!matchRows?.length) { if (alive) setUnreadPeople(0); return; }
 
-      const matchIds = matchRows.map((r: any) => r.id);
-      const { count } = await supabase
-        .from("messages").select("id", { count: "exact", head: true })
-        .in("match_id", matchIds).neq("sender_anon", anonId).is("read_at", null);
+      // ✅ count how many matches have at least 1 unread message
+      let count = 0;
+      for (const row of matchRows) {
+        const { count: c } = await supabase
+          .from("messages").select("id", { count: "exact", head: true })
+          .eq("match_id", row.id).neq("sender_anon", anonId).is("read_at", null);
+        if ((c ?? 0) > 0) count++;
+      }
 
-      if (alive) setUnread(count ?? 0);
+      if (alive) setUnreadPeople(count);
     }
 
     refresh();
 
-    const ch = supabase.channel("bottomnav-unread")
+    const ch = supabase.channel(`bottomnav-${Date.now()}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, refresh)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, refresh)
       .subscribe();
@@ -53,52 +57,52 @@ export default function BottomNav() {
     return () => { alive = false; supabase.removeChannel(ch); };
   }, []);
 
-  if (
-    pathname === "/" ||
-    pathname.startsWith("/login") ||
-    pathname.startsWith("/auth") ||
-    pathname.startsWith("/onboarding") ||
-    pathname.startsWith("/delete-account")
-  ) return null;
+  const hide =
+    pathname === "/" || pathname.startsWith("/login") || pathname.startsWith("/auth") ||
+    pathname.startsWith("/onboarding") || pathname.startsWith("/delete-account");
+  if (hide) return null;
 
+  const ka = lang !== "en";
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
-  // Tinder-style icons (Image 3)
   const items = [
     {
       href: "/feed",
-      label: t("nav_swipe", lang),
+      label: ka ? "სვაიპი" : "Swipe",
       icon: (active: boolean) => (
-        // Tinder flame icon
-        <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? "white" : "rgba(255,255,255,0.45)"}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? "white" : "rgba(255,255,255,0.4)"}>
           <path d="M13.5 0.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5 0.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z"/>
         </svg>
       ),
     },
     {
       href: "/likes",
-      label: t("nav_likes", lang),
+      label: ka ? "მოწონება" : "Likes",
       icon: (active: boolean) => (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={active ? "white" : "rgba(255,255,255,0.45)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+          stroke={active ? "white" : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
         </svg>
       ),
     },
     {
       href: "/chat",
-      label: t("nav_chat", lang),
-      badge: unread,
+      label: ka ? "ჩათი" : "Chat",
+      badge: unreadPeople,
       icon: (active: boolean) => (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={active ? "white" : "rgba(255,255,255,0.45)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        // speech bubble icon — Tinder-like
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+          stroke={active ? "white" : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
         </svg>
       ),
     },
     {
       href: "/profile",
-      label: t("nav_profile", lang),
+      label: ka ? "პროფილი" : "Profile",
       icon: (active: boolean) => (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={active ? "white" : "rgba(255,255,255,0.45)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+          stroke={active ? "white" : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
           <circle cx="12" cy="7" r="4"/>
         </svg>
@@ -108,14 +112,14 @@ export default function BottomNav() {
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-50" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-      <div className="bg-zinc-950/95 backdrop-blur border-t border-white/8">
+      <div className="bg-zinc-950/97 backdrop-blur border-t border-white/8">
         <div className="mx-auto w-full max-w-lg">
           <div className="flex items-center justify-around px-2 py-2">
             {items.map((item) => {
               const active = isActive(item.href);
               return (
                 <Link key={item.href} href={item.href}
-                  className="relative flex flex-col items-center gap-1 px-4 py-1 min-w-[60px] touch-manipulation">
+                  className="relative flex flex-col items-center gap-1 px-4 py-1 min-w-[60px] touch-manipulation select-none">
                   <div className="relative">
                     {item.icon(active)}
                     {!!item.badge && item.badge > 0 && (
@@ -124,7 +128,7 @@ export default function BottomNav() {
                       </span>
                     )}
                   </div>
-                  <span className={`text-[10px] font-medium transition-colors ${active ? "text-white" : "text-white/40"}`}>
+                  <span className={`text-[10px] font-medium ${active ? "text-white" : "text-white/40"}`}>
                     {item.label}
                   </span>
                 </Link>

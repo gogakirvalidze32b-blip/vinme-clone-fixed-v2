@@ -48,7 +48,7 @@ const COPY: Record<string, Record<string, string>> = {
   },
   en: {
     back: "← Back",
-    km_away: "km away",
+    km_away: "კმ-ით შორს",
     bio: "About",
     city: "Lives in",
     age: "Age",

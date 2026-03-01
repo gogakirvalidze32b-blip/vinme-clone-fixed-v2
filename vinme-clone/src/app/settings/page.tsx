@@ -195,7 +195,7 @@ export default function SettingsPage() {
           <Card>
             <Row label={L("ქუქი-პოლიტიკა", "Cookie Policy")} onClick={() => router.push("/legal/cookies")} />
             <Row label={L("კონფიდენციალურობის პოლიტიკა", "Privacy Policy")} onClick={() => router.push("/legal/privacy")} />
-            <Row label={L("კონფიდენციალურობის პარამეტრები", "Privacy Preferences")} onClick={() => {}} />
+            <Row label={L("კონფიდენციალურობის პარამეტრები", "Privacy Preferences")} onClick={() => router.push("/legal/privacy-prefs")} />
           </Card>
 
           {/* LEGAL */}
