@@ -207,14 +207,48 @@ export default function EditProfilePage() {
   async function uploadPhoto(idx: number, file: File) {
     if (!p) return;
     setBusyPhoto(idx);
-    const ext = file.name.split(".").pop() ?? "jpg";
-    // Store path WITHOUT bucket prefix so photoSrc works correctly
+    
+    // ✅ Get extension from mime type (more reliable than filename)
+    const mimeToExt: Record<string, string> = {
+      "image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png",
+      "image/webp": "webp", "image/heic": "heic", "image/gif": "gif",
+    };
+    const ext = mimeToExt[file.type] ?? file.name.split(".").pop() ?? "jpg";
+    
+    // ✅ Simple path: userId/photoN-timestamp.ext  (no bucket prefix)
     const storagePath = `${p.user_id}/photo${idx}-${Date.now()}.${ext}`;
-    const { error: upErr } = await supabase.storage.from("photos").upload(storagePath, file, { upsert: true, contentType: file.type });
-    if (upErr) { console.error("Upload error:", upErr); setBusyPhoto(null); alert("ატვირთვა ვერ მოხდა. სცადე ისევ."); return; }
+    
+    // ✅ Upload to "photos" bucket
+    const { data: uploadData, error: upErr } = await supabase.storage
+      .from("photos")
+      .upload(storagePath, file, { 
+        upsert: true, 
+        contentType: file.type || `image/${ext}`,
+        cacheControl: "3600",
+      });
+    
+    if (upErr) {
+      console.error("Upload error:", upErr.message);
+      setBusyPhoto(null);
+      alert(`ატვირთვა ვერ მოხდა: ${upErr.message}`);
+      return;
+    }
+    
+    // ✅ Verify URL works before saving to DB
+    const { data: urlData } = supabase.storage.from("photos").getPublicUrl(storagePath);
+    const publicUrl = urlData.publicUrl;
+    
+    // Save the FULL public URL to DB (most reliable - no path reconstruction needed)
     const key = `photo${idx}_url`;
-    const { error: dbErr } = await supabase.from("profiles").update({ [key]: storagePath }).eq("user_id", p.user_id);
-    if (!dbErr) setP((prev: any) => ({ ...prev, [key]: storagePath }));
+    const { error: dbErr } = await supabase.from("profiles")
+      .update({ [key]: publicUrl })
+      .eq("user_id", p.user_id);
+    
+    if (!dbErr) {
+      setP((prev: any) => ({ ...prev, [key]: publicUrl }));
+    } else {
+      console.error("DB save error:", dbErr.message);
+    }
     setBusyPhoto(null);
   }
 
@@ -280,10 +314,11 @@ export default function EditProfilePage() {
                   <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden bg-zinc-800">
                     {src ? (
                       <>
-                        <img src={src} className="w-full h-full object-cover" alt="" />
+                        <img src={src} className="w-full h-full object-cover" alt=""
+                          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
                         <button onClick={() => removePhoto(idx)}
-                          className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/70 flex items-center justify-center text-xs text-white">✕</button>
-                        {idx === 1 && <div className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-bold text-white">MAIN</div>}
+                          className="absolute top-1 right-1 w-7 h-7 rounded-full bg-black/80 flex items-center justify-center text-sm text-white font-bold z-10">✕</button>
+                        {idx === 1 && <div className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-bold text-white uppercase tracking-wide">MAIN</div>}
                       </>
                     ) : (
                       <button onClick={() => { uploadingPhotoIdx.current = idx; fileInputRef.current?.click(); }}
@@ -460,7 +495,8 @@ function PreviewTab({ p, lang }: { p: any; lang: string }) {
       {/* PHOTO FULLWIDTH */}
       <div className="relative w-full" style={{ height: "55vw", minHeight: 240, maxHeight: 380 }}>
         {photos.length > 0
-          ? <img src={photos[activePhoto]} className="w-full h-full object-cover" alt="" />
+          ? <img src={photos[activePhoto]} className="w-full h-full object-cover" alt=""
+              onError={e => { (e.target as HTMLImageElement).src = ""; (e.target as HTMLImageElement).style.display = "none"; }} />
           : <div className="w-full h-full bg-zinc-800 flex flex-col items-center justify-center gap-2">
               <span className="text-5xl opacity-25">👤</span>
               <span className="text-white/30 text-sm">{ka ? "ფოტო არ არის" : "No photo"}</span>

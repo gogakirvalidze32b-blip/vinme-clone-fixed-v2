@@ -203,7 +203,8 @@ export default function ChatPage() {
                     onClick={() => router.push(`/chat/${m.id}`)}>
                     <div className="relative">
                       {photoSrc(m.other.photo1_url)
-                        ? <img src={photoSrc(m.other.photo1_url)} alt="" className="w-16 h-16 rounded-full object-cover ring-2 ring-pink-500/70" />
+                        ? <img src={photoSrc(m.other.photo1_url)} alt="" className="w-16 h-16 rounded-full object-cover ring-2 ring-pink-500/70"
+                            onError={e => { const t = e.target as HTMLImageElement; t.onerror=null; t.src=""; t.className=""; t.style.display="none"; }} />
                         : <div className="w-16 h-16 rounded-full bg-zinc-700 ring-2 ring-pink-500/70 flex items-center justify-center text-2xl">👤</div>}
                       {isOnline && <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-green-400 border-2 border-black" />}
                     </div>
@@ -241,7 +242,8 @@ export default function ChatPage() {
                     )}
                     <div className="relative shrink-0">
                       {photoSrc(m.other.photo1_url)
-                      ? <img src={photoSrc(m.other.photo1_url)} alt="" className="w-14 h-14 rounded-full object-cover" />
+                      ? <img src={photoSrc(m.other.photo1_url)} alt="" className="w-14 h-14 rounded-full object-cover"
+                          onError={e => { const t = e.target as HTMLImageElement; t.style.display="none"; t.parentElement && (t.parentElement.innerHTML = "<div class=\"w-14 h-14 rounded-full bg-zinc-700 flex items-center justify-center text-xl\">👤</div>"); }} />
                       : <div className="w-14 h-14 rounded-full bg-zinc-700 flex items-center justify-center text-xl">👤</div>}
                       {isOnline && <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-400 border-2 border-black" />}
                       {m._unreadCount > 0 && (
