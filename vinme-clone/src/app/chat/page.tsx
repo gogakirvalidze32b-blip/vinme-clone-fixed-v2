@@ -145,7 +145,29 @@ export default function ChatPage() {
 
   const totalUnread = matches.reduce((s, m) => s + m._unreadCount, 0);
 
-  if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
+  if (loading) return (
+    <main className="min-h-[100dvh] bg-black text-white pb-28">
+      <div className="mx-auto w-full max-w-md px-4 pt-6">
+        <div className="h-8 w-32 bg-white/10 rounded-xl animate-pulse mb-6" />
+        <div className="h-3 w-24 bg-white/8 rounded animate-pulse mb-3" />
+        <div className="flex gap-4 mb-6">
+          {[1,2,3].map(i => <div key={i} className="flex flex-col items-center gap-1.5">
+            <div className="w-16 h-16 rounded-full bg-white/10 animate-pulse" />
+            <div className="w-12 h-2 bg-white/8 rounded animate-pulse" />
+          </div>)}
+        </div>
+        <div className="h-3 w-20 bg-white/8 rounded animate-pulse mb-3" />
+        {[1,2,3].map(i => <div key={i} className="flex items-center gap-3 py-3">
+          <div className="w-14 h-14 rounded-full bg-white/10 animate-pulse shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3 w-28 bg-white/10 rounded animate-pulse" />
+            <div className="h-2.5 w-48 bg-white/8 rounded animate-pulse" />
+          </div>
+        </div>)}
+      </div>
+      <BottomNav />
+    </main>
+  );
 
   return (
     <main className="min-h-[100dvh] bg-black text-white pb-28">

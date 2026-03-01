@@ -98,7 +98,7 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-[100dvh] bg-zinc-950 text-white flex justify-center">
-      <div className="w-full max-w-lg flex flex-col" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 80px)" }}>
+      <div className="w-full max-w-lg flex flex-col" style={{ paddingBottom: "0" }}>
 
         {/* HEADER */}
         <div className="sticky top-0 z-20 bg-zinc-950/90 backdrop-blur border-b border-white/8 px-4 py-3 flex items-center gap-3">
@@ -108,7 +108,7 @@ export default function SettingsPage() {
           <h1 className="text-lg font-extrabold flex-1">{L("პარამეტრები", "Settings")}</h1>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 pt-3">
+        <div className="flex-1 overflow-y-auto px-4 pt-3 pb-32">
 
           {/* PREMIUM */}
           <div className="rounded-2xl bg-gradient-to-r from-pink-500/20 to-orange-400/20 ring-1 ring-pink-500/30 p-4 flex items-center justify-between mt-2">

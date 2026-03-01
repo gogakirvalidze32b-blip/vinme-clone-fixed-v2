@@ -11,6 +11,7 @@ export default function BottomNav() {
   // ✅ unread = number of PEOPLE (matches) with unread messages
   const [unreadPeople, setUnreadPeople] = useState(0);
   const [lang, setLang] = useState<"ka"|"en">("ka");
+  const pathname2 = usePathname();
 
   useEffect(() => {
     setLang(getLang());
@@ -55,7 +56,7 @@ export default function BottomNav() {
       .subscribe();
 
     return () => { alive = false; supabase.removeChannel(ch); };
-  }, []);
+  }, [pathname2]);
 
   const hide =
     pathname === "/" || pathname.startsWith("/login") || pathname.startsWith("/auth") ||

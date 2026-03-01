@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { photoSrc } from "@/lib/photos";
 import EmojiPicker from "emoji-picker-react";
 import BottomNav from "@/components/BottomNav";
-import { getLang, t } from "@/lib/i18n";
+import { getLang } from "@/lib/i18n";
 
 type MsgRow = {
   id: string;
@@ -26,55 +26,41 @@ function fmtTimer(sec: number) {
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
-
-// ✅ Online status: last_seen field
-function useOnlineStatus(userId: string | null) {
-  const [status, setStatus] = useState<"online" | string>("online");
-
-  useEffect(() => {
-    if (!userId) return;
-
-    // subscribe to presence
-    const ch = supabase.channel(`presence-${userId}`)
-      .on("presence", { event: "sync" }, () => {
-        const state = ch.presenceState();
-        const isOnline = Object.keys(state).length > 0;
-        setStatus(isOnline ? "online" : "offline");
-      })
-      .subscribe(async (status2) => {
-        if (status2 === "SUBSCRIBED") {
-          // also check last_seen from DB
-          const { data } = await supabase.from("profiles")
-            .select("last_seen").eq("user_id", userId).maybeSingle();
-          if (data?.last_seen) {
-            const diff = Date.now() - new Date(data.last_seen).getTime();
-            if (diff < 3 * 60 * 1000) setStatus("online");
-            else setStatus(data.last_seen);
-          }
-        }
-      });
-
-    return () => { supabase.removeChannel(ch); };
-  }, [userId]);
-
-  return status;
+function formatLastSeen(lastSeen: string | null, ka: boolean): string {
+  if (!lastSeen) return ka ? "ოფლაინ" : "Offline";
+  const diff = Date.now() - new Date(lastSeen).getTime();
+  if (diff < 3 * 60 * 1000) return ka ? "ონლაინ" : "Online";
+  const mins = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  if (mins < 60) return ka ? `${mins} წუთის წინ` : `${mins}m ago`;
+  if (hours < 24) return ka ? `${hours} საათის წინ` : `${hours}h ago`;
+  return ka ? `${days} დღის წინ` : `${days}d ago`;
 }
 
-function formatLastSeen(status: string, lang: string): string {
-  const ka = lang !== "en";
-  if (status === "online") return ka ? "ონლაინ" : "Online";
-  if (status === "offline") return ka ? "ოფლაინ" : "Offline";
-  // ISO timestamp
-  try {
-    const diff = Date.now() - new Date(status).getTime();
-    const mins = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-    if (mins < 1) return ka ? "ახლახან" : "Just now";
-    if (mins < 60) return ka ? `${mins} წუთის წინ` : `${mins}m ago`;
-    if (hours < 24) return ka ? `${hours} საათის წინ` : `${hours}h ago`;
-    return ka ? `${days} დღის წინ` : `${days}d ago`;
-  } catch { return ""; }
+// ✅ Double tick component
+function Ticks({ sent, read, mine }: { sent: boolean; read: boolean; mine: boolean }) {
+  if (!mine || !sent) return null;
+  if (read) {
+    // ✅✅ გალურჯებული
+    return (
+      <span className="inline-flex items-center ml-1 shrink-0">
+        <svg width="14" height="10" viewBox="0 0 18 12" fill="none">
+          <path d="M1 6l4 4L13 1" stroke="#60A5FA" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M6 10l7-7" stroke="#60A5FA" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M9 10l7-7" stroke="#60A5FA" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </span>
+    );
+  }
+  // ✓ single white
+  return (
+    <span className="inline-flex items-center ml-1 shrink-0">
+      <svg width="12" height="10" viewBox="0 0 14 10" fill="none">
+        <path d="M1 5l4 4L13 1" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    </span>
+  );
 }
 
 export default function ChatThreadPage() {
@@ -92,6 +78,7 @@ export default function ChatThreadPage() {
   const [otherUserId, setOtherUserId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   const [recording, setRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -104,15 +91,26 @@ export default function ChatThreadPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const onlineStatus = useOnlineStatus(otherUserId);
-  const statusText = formatLastSeen(onlineStatus, lang);
+  const isOnline = useMemo(() => {
+    if (!otherProfile?.last_seen) return false;
+    return Date.now() - new Date(otherProfile.last_seen).getTime() < 3 * 60 * 1000;
+  }, [otherProfile]);
 
+  const statusText = formatLastSeen(otherProfile?.last_seen ?? null, ka);
+
+  // ✅ mark read immediately when chat opens, and update badge in real-time
   const markRead = useCallback(async (anonId: string | null, uid: string | null) => {
-    if (!anonId) return;
+    if (!anonId || !uid) return;
     await supabase.from("messages")
       .update({ read_at: new Date().toISOString() })
       .eq("match_id", matchId).neq("sender_anon", anonId).is("read_at", null);
-    if (uid) await supabase.from("matches").update({ has_unread: false }).eq("id", matchId);
+    await supabase.from("matches").update({ has_unread: false }).eq("id", matchId);
+    // update msgs state locally so ticks go blue instantly
+    setMsgs(prev => prev.map(m =>
+      m.sender_anon !== anonId && !m.read_at
+        ? { ...m, read_at: new Date().toISOString() }
+        : m
+    ));
   }, [matchId]);
 
   useEffect(() => {
@@ -122,29 +120,38 @@ export default function ChatThreadPage() {
       if (!user) { router.replace("/login"); return; }
       setMyUserId(user.id);
 
-      const { data: me } = await supabase.from("profiles").select("anon_id").eq("user_id", user.id).maybeSingle();
-      const anonId = me?.anon_id ?? null;
+      // ✅ load fast — parallel queries
+      const [meRes, matchRes] = await Promise.all([
+        supabase.from("profiles").select("anon_id").eq("user_id", user.id).maybeSingle(),
+        supabase.from("matches").select("user_a,user_b").eq("id", matchId).maybeSingle(),
+      ]);
+
+      const anonId = meRes.data?.anon_id ?? null;
       setMyAnonId(anonId);
 
-      const { data: matchRow } = await supabase.from("matches").select("user_a,user_b").eq("id", matchId).maybeSingle();
+      const matchRow = matchRes.data;
       if (!matchRow) return;
       const otherId = matchRow.user_a === user.id ? matchRow.user_b : matchRow.user_a;
       setOtherUserId(otherId);
 
-      const { data: profile } = await supabase.from("profiles").select("user_id,nickname,photo1_url,last_seen").eq("user_id", otherId).maybeSingle();
-      setOtherProfile(profile ?? null);
+      // ✅ parallel: load profile + messages
+      const [profileRes, msgsRes] = await Promise.all([
+        supabase.from("profiles").select("user_id,nickname,photo1_url,last_seen").eq("user_id", otherId).maybeSingle(),
+        supabase.from("messages").select("*").eq("match_id", matchId).order("created_at", { ascending: true }),
+      ]);
 
-      // ✅ load messages for THIS match only, ordered ascending
-      const { data: messages } = await supabase.from("messages")
-        .select("*").eq("match_id", matchId).order("created_at", { ascending: true });
-      setMsgs(messages ?? []);
-      markRead(anonId, user.id);
+      setOtherProfile(profileRes.data ?? null);
+      setMsgs(msgsRes.data ?? []);
+      setIsLoaded(true);
 
+      // mark read immediately
+      await markRead(anonId, user.id);
       // update my last_seen
       await supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("user_id", user.id);
     })();
   }, [matchId, router, markRead]);
 
+  // realtime subscription
   useEffect(() => {
     if (!matchId) return;
     const ch = supabase.channel(`chat-thread-${matchId}-${Date.now()}`)
@@ -152,18 +159,22 @@ export default function ChatThreadPage() {
         { event: "INSERT", schema: "public", table: "messages", filter: `match_id=eq.${matchId}` },
         (payload) => {
           const row = payload.new as MsgRow;
-          // ✅ only add if it belongs to THIS match
           if (row.match_id !== matchId) return;
-          setMsgs(prev => {
-            if (prev.some(m => m.id === row.id)) return prev;
-            return [...prev, row];
-          });
+          setMsgs(prev => prev.some(m => m.id === row.id) ? prev : [...prev, row]);
+          // if incoming → mark read immediately
           setMyAnonId(anon => {
             if (anon && row.sender_anon !== anon) {
               setMyUserId(uid => { markRead(anon, uid); return uid; });
             }
             return anon;
           });
+        })
+      // ✅ listen for read_at updates (when other person reads our messages)
+      .on("postgres_changes",
+        { event: "UPDATE", schema: "public", table: "messages", filter: `match_id=eq.${matchId}` },
+        (payload) => {
+          const updated = payload.new as MsgRow;
+          setMsgs(prev => prev.map(m => m.id === updated.id ? { ...m, read_at: updated.read_at } : m));
         })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -179,11 +190,9 @@ export default function ChatThreadPage() {
     const tempId = `temp-${Date.now()}`;
     setMsgs(prev => [...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: t2, created_at: new Date().toISOString(), read_at: null, type: "text" }]);
     const { data } = await supabase.from("messages")
-      .insert({ match_id: matchId, sender_anon: myAnonId, content: t2, type: "text" })
-      .select().single();
+      .insert({ match_id: matchId, sender_anon: myAnonId, content: t2, type: "text" }).select().single();
     if (data) setMsgs(prev => prev.map(m => m.id === tempId ? (data as MsgRow) : m));
     await supabase.from("matches").update({ has_unread: true }).eq("id", matchId);
-    // update last_seen
     if (myUserId) await supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("user_id", myUserId);
     setSending(false);
     setTimeout(() => inputRef.current?.focus(), 50);
@@ -205,7 +214,7 @@ export default function ChatThreadPage() {
       setRecording(true); setRecordTime(0);
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => setRecordTime(p => p + 1), 1000);
-    } catch { alert(ka ? "მიკროფონზე წვდომა შეუძლებელია" : "Microphone access denied"); }
+    } catch { alert(ka ? "მიკროფონი მიუწვდომელია" : "Microphone unavailable"); }
   }
 
   function stopRecording() {
@@ -219,7 +228,7 @@ export default function ChatThreadPage() {
     setUploadingVoice(true);
     const fileName = `${myAnonId}-${Date.now()}.webm`;
     const { error } = await supabase.storage.from("voices").upload(fileName, audioBlob, { contentType: "audio/webm", upsert: true });
-    if (error) { console.error(error); setUploadingVoice(false); return; }
+    if (error) { setUploadingVoice(false); return; }
     const { data: urlData } = supabase.storage.from("voices").getPublicUrl(fileName);
     const tempId = `tempv-${Date.now()}`;
     setMsgs(prev => [...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: urlData.publicUrl, created_at: new Date().toISOString(), read_at: null, type: "voice" }]);
@@ -230,6 +239,36 @@ export default function ChatThreadPage() {
   }
 
   const avatar = useMemo(() => photoSrc(otherProfile?.photo1_url ?? null), [otherProfile]);
+
+  // ✅ Skeleton loader — instant UI while loading
+  if (!isLoaded) {
+    return (
+      <div className="flex justify-center bg-zinc-950 min-h-[100dvh]">
+        <div className="w-full max-w-lg flex flex-col bg-[#111] text-white" style={{ height: "100dvh" }}>
+          {/* skeleton header */}
+          <div className="flex items-center gap-3 px-4 py-3 bg-zinc-950 border-b border-white/8 shrink-0">
+            <div className="w-9 h-9 rounded-full bg-white/10 animate-pulse" />
+            <div className="flex items-center gap-3 flex-1">
+              <div className="w-10 h-10 rounded-full bg-white/10 animate-pulse" />
+              <div className="space-y-1.5">
+                <div className="h-3 w-24 bg-white/10 rounded animate-pulse" />
+                <div className="h-2 w-16 bg-white/8 rounded animate-pulse" />
+              </div>
+            </div>
+          </div>
+          {/* skeleton messages */}
+          <div className="flex-1 px-4 py-4 space-y-3">
+            {[1,2,3,4].map(i => (
+              <div key={i} className={`flex ${i % 2 === 0 ? "justify-end" : "justify-start"}`}>
+                <div className={`h-9 rounded-2xl bg-white/8 animate-pulse ${i % 2 === 0 ? "w-48" : "w-36"}`} />
+              </div>
+            ))}
+          </div>
+          <BottomNav />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex justify-center bg-zinc-950 min-h-[100dvh]">
@@ -243,15 +282,11 @@ export default function ChatThreadPage() {
             <div className="relative">
               {avatar ? <img src={avatar} className="w-10 h-10 rounded-full object-cover" alt="" />
                 : <div className="w-10 h-10 rounded-full bg-zinc-700" />}
-              {onlineStatus === "online" && (
-                <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-400 border-2 border-zinc-950" />
-              )}
+              {isOnline && <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-400 border-2 border-zinc-950" />}
             </div>
             <div>
               <div className="font-semibold text-sm">{otherProfile?.nickname ?? "..."}</div>
-              <div className={`text-[11px] ${onlineStatus === "online" ? "text-green-400" : "text-white/40"}`}>
-                {statusText}
-              </div>
+              <div className={`text-[11px] ${isOnline ? "text-green-400" : "text-white/40"}`}>{statusText}</div>
             </div>
           </div>
           <button className="text-white/30 text-2xl px-1 leading-none">⋯</button>
@@ -262,6 +297,7 @@ export default function ChatThreadPage() {
           {msgs.map((m, i) => {
             const mine = m.sender_anon === myAnonId;
             const isTemp = m.id.startsWith("temp");
+            const isRead = !!m.read_at;
             const prevSame = i > 0 && msgs[i - 1].sender_anon === m.sender_anon;
 
             return (
@@ -271,16 +307,22 @@ export default function ChatThreadPage() {
                     ${mine ? "bg-[#7C3AED] rounded-tr-sm" : "bg-zinc-800 rounded-tl-sm"}
                     ${isTemp ? "opacity-60" : ""}`}>
                     <span>🎤</span>
-                    <audio controls src={m.content} className="h-8 max-w-[170px]" />
-                    <span className="text-[10px] text-white/40 shrink-0">{fmtTime(m.created_at)}</span>
+                    <audio controls src={m.content} className="h-8 max-w-[160px]" />
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <span className="text-[10px] text-white/40">{fmtTime(m.created_at)}</span>
+                      <Ticks sent={!isTemp} read={isRead} mine={mine} />
+                    </div>
                   </div>
                 ) : (
                   <div className={`px-3.5 py-2 text-sm leading-relaxed break-words max-w-[78%]
                     ${mine ? "bg-[#7C3AED] rounded-2xl rounded-tr-sm" : "bg-zinc-800 rounded-2xl rounded-tl-sm"}
                     ${isTemp ? "opacity-60" : ""}`}>
-                    {m.content}
-                    <span className={`ml-2 text-[10px] ${mine ? "text-purple-200/50" : "text-white/25"}`}>
-                      {fmtTime(m.created_at)}{mine && !isTemp && " ✓"}
+                    <span>{m.content}</span>
+                    <span className="inline-flex items-center gap-0.5 ml-2">
+                      <span className={`text-[10px] ${mine ? "text-purple-200/50" : "text-white/25"}`}>
+                        {fmtTime(m.created_at)}
+                      </span>
+                      <Ticks sent={!isTemp} read={isRead} mine={mine} />
                     </span>
                   </div>
                 )}
