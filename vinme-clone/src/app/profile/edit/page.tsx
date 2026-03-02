@@ -500,10 +500,10 @@ function PreviewTab({ p, lang }: { p: any; lang: string }) {
 
   return (
     <div className="bg-black text-white" style={{ paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))" }}>
-      {/* ===== FULLSCREEN PHOTO ===== */}
-      <div className="relative w-full" style={{ height: "100dvh" }}>
+      {/* ===== PHOTO — 80dvh like Tinder ===== */}
+      <div className="relative w-full" style={{ height: "80dvh" }}>
         {photos.length > 0 ? (
-          <img src={photos[activePhoto]} className="absolute inset-0 w-full h-full object-cover" alt=""
+          <img src={photos[activePhoto]} className="absolute inset-0 w-full h-full object-cover object-top" alt=""
             onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
         ) : (
           <div className="absolute inset-0 bg-zinc-900 flex flex-col items-center justify-center gap-2">
