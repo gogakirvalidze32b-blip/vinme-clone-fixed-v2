@@ -7,14 +7,11 @@ import { getLang, type Lang } from "@/lib/i18n";
 
 export default function LoginPage() {
   const [lang, setLang] = useState<Lang>("ka");
-  const [view, setView] = useState<"main" | "email">("main");
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [view, setView] = useState<"main" | "email" | "otp">("main");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-
   const ka = lang !== "en";
 
   useEffect(() => {
@@ -31,30 +28,67 @@ export default function LoginPage() {
     });
   }
 
-  async function handleEmail() {
-    if (!email || !password) { setError(ka ? "შეავსე ყველა ველი" : "Fill in all fields"); return; }
-    setLoading(true); setError(null); setSuccess(null);
-    if (mode === "register") {
-      const { error: e } = await supabase.auth.signUp({
-        email, password,
-        options: { emailRedirectTo: `${window.location.origin}/auth/callback` }
-      });
-      if (e) setError(e.message);
-      else setSuccess(ka ? "დაადასტურე მეილი ✉️" : "Check your email to confirm ✉️");
-    } else {
-      const { error: e } = await supabase.auth.signInWithPassword({ email, password });
-      if (e) setError(ka ? "არასწორი მეილი ან პაროლი" : "Invalid email or password");
-      else window.location.href = "/";
-    }
+  async function sendOtp() {
+    if (!email.trim()) { setError(ka ? "შეიყვანე მეილი" : "Enter your email"); return; }
+    setLoading(true); setError(null);
+    const { error: e } = await supabase.auth.signInWithOtp({
+      email: email.trim(),
+      options: { shouldCreateUser: true }
+    });
+    if (e) { setError(e.message); setLoading(false); return; }
+    setView("otp");
     setLoading(false);
+  }
+
+  async function verifyOtp() {
+    const code = otp.join("");
+    if (code.length < 6) { setError(ka ? "შეიყვანე 6-ნიშნა კოდი" : "Enter the 6-digit code"); return; }
+    setLoading(true); setError(null);
+    const { error: e } = await supabase.auth.verifyOtp({
+      email: email.trim(),
+      token: code,
+      type: "email"
+    });
+    if (e) { setError(ka ? "არასწორი კოდი, სცადე თავიდან" : "Wrong code, try again"); setLoading(false); return; }
+    window.location.href = "/";
+  }
+
+  function handleOtpInput(val: string, idx: number) {
+    if (!/^[0-9]?$/.test(val)) return;
+    const next = [...otp];
+    next[idx] = val;
+    setOtp(next);
+    setError(null);
+    if (val && idx < 5) {
+      const el = document.getElementById(`otp-${idx + 1}`);
+      el?.focus();
+    }
+    if (val && idx === 5) {
+      const code = next.join("");
+      if (code.length === 6) setTimeout(() => verifyOtpDirect(code), 100);
+    }
+  }
+
+  function handleOtpKeyDown(e: React.KeyboardEvent, idx: number) {
+    if (e.key === "Backspace" && !otp[idx] && idx > 0) {
+      document.getElementById(`otp-${idx - 1}`)?.focus();
+    }
+  }
+
+  async function verifyOtpDirect(code: string) {
+    setLoading(true); setError(null);
+    const { error: e } = await supabase.auth.verifyOtp({
+      email: email.trim(), token: code, type: "email"
+    });
+    if (e) { setError(ka ? "არასწორი კოდი, სცადე თავიდან" : "Wrong code, try again"); setLoading(false); return; }
+    window.location.href = "/";
   }
 
   return (
     <div className="relative min-h-[100dvh] w-full overflow-hidden text-white" style={{
       background: "linear-gradient(135deg, #0f0f1a 0%, #1a0a2e 40%, #0d1117 100%)"
     }}>
-
-      {/* Animated blobs background */}
+      {/* Animated blobs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute w-96 h-96 rounded-full opacity-20 blur-3xl animate-pulse"
           style={{ background: "radial-gradient(circle, #7C3AED, transparent)", top: "-10%", left: "-10%" }} />
@@ -62,35 +96,29 @@ export default function LoginPage() {
           style={{ background: "radial-gradient(circle, #ec4899, transparent)", bottom: "10%", right: "-5%",
             animation: "pulse 4s ease-in-out infinite 1s" }} />
         <div className="absolute w-64 h-64 rounded-full opacity-10 blur-3xl"
-          style={{ background: "radial-gradient(circle, #6366f1, transparent)", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
-            animation: "pulse 6s ease-in-out infinite 2s" }} />
+          style={{ background: "radial-gradient(circle, #6366f1, transparent)", top: "50%", left: "50%",
+            transform: "translate(-50%,-50%)", animation: "pulse 6s ease-in-out infinite 2s" }} />
       </div>
 
-      {/* Lang menu */}
-      <div className="absolute right-4 top-4 z-50">
-        <LangMenu />
-      </div>
+      <div className="absolute right-4 top-4 z-50"><LangMenu /></div>
 
       <div className="flex min-h-[100dvh] items-center justify-center px-4">
-        <div className="w-full max-w-[400px]">
+        <div className="w-full max-w-[380px]">
 
-          {view === "main" ? (
+          {/* ── MAIN VIEW ── */}
+          {view === "main" && (
             <>
-              {/* Logo + tagline */}
-              <div className="flex flex-col items-center mb-10">
-                <img src="/logo1.png" className="h-32 drop-shadow-2xl mb-4" />
-                <p className="text-white/50 text-sm tracking-wide">
-                  {ka ? "შეხვდი ახალ ადამიანებს" : "Meet new people"}
+              <div className="flex flex-col items-center mb-12">
+                <img src="/logo1.png" className="h-32 drop-shadow-2xl mb-5" />
+                <p className="text-white/45 text-sm tracking-wide text-center">
+                  {ka ? "შეხვდი ახალ ადამიანებს — მარტივად." : "Meet new people — easily."}
                 </p>
               </div>
 
-              {/* Buttons */}
               <div className="flex flex-col gap-3">
-
                 {/* Google */}
                 <button onClick={signInGoogle}
-                  className="relative w-full flex items-center justify-center gap-3 rounded-2xl py-4 font-semibold text-sm transition active:scale-95"
-                  style={{ background: "white", color: "#111" }}>
+                  className="w-full flex items-center justify-center gap-3 rounded-2xl py-4 font-semibold text-sm bg-white text-black transition active:scale-95 shadow-lg">
                   <svg width="20" height="20" viewBox="0 0 24 24">
                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                     <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -100,85 +128,121 @@ export default function LoginPage() {
                   {ka ? "Google-ით შესვლა" : "Continue with Google"}
                 </button>
 
-                {/* Divider */}
-                <div className="flex items-center gap-3 my-1">
+                <div className="flex items-center gap-3">
                   <div className="flex-1 h-px bg-white/10" />
-                  <span className="text-white/30 text-xs">{ka ? "ან" : "or"}</span>
+                  <span className="text-white/25 text-xs">{ka ? "ან" : "or"}</span>
                   <div className="flex-1 h-px bg-white/10" />
                 </div>
 
-                {/* Email */}
-                <button onClick={() => { setView("email"); setMode("login"); }}
-                  className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 font-semibold text-sm transition active:scale-95 ring-1 ring-white/15 hover:ring-white/30"
+                {/* Email OTP */}
+                <button onClick={() => setView("email")}
+                  className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 font-semibold text-sm transition active:scale-95 ring-1 ring-white/15"
                   style={{ background: "rgba(255,255,255,0.06)" }}>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+                    <rect x="2" y="4" width="20" height="16" rx="2"/>
+                    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
                   </svg>
                   {ka ? "მეილით შესვლა" : "Continue with Email"}
                 </button>
-
-                {/* Register */}
-                <button onClick={() => { setView("email"); setMode("register"); }}
-                  className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 font-semibold text-sm transition active:scale-95"
-                  style={{ background: "linear-gradient(135deg, #7C3AED, #ec4899)", boxShadow: "0 4px 24px rgba(124,58,237,0.4)" }}>
-                  ✨ {ka ? "რეგისტრაცია" : "Create Account"}
-                </button>
               </div>
 
-              <p className="mt-8 text-center text-[11px] text-white/25">
-                {ka ? "გაგრძელებით ეთანხმები წესებს და კონფიდენციალურობას." : "By continuing you agree to our Terms & Privacy Policy."}
+              <p className="mt-8 text-center text-[11px] text-white/20">
+                {ka ? "შესვლით ეთანხმები წესებს და კონფიდენციალურობას." : "By continuing you agree to our Terms & Privacy Policy."}
               </p>
             </>
+          )}
 
-          ) : (
+          {/* ── EMAIL VIEW ── */}
+          {view === "email" && (
             <>
-              {/* Email form */}
-              <button onClick={() => { setView("main"); setError(null); setSuccess(null); }}
-                className="flex items-center gap-2 text-white/50 hover:text-white mb-8 transition text-sm">
+              <button onClick={() => { setView("main"); setError(null); }}
+                className="flex items-center gap-2 text-white/40 hover:text-white mb-10 transition text-sm">
                 ← {ka ? "უკან" : "Back"}
               </button>
 
               <div className="mb-8">
-                <h1 className="text-2xl font-black mb-1">
-                  {mode === "login" ? (ka ? "კეთილი იყოს შენი დაბრუნება 👋" : "Welcome back 👋") : (ka ? "მოდი გაგიცნო 🔥" : "Let's get started 🔥")}
+                <h1 className="text-2xl font-black mb-2">
+                  {ka ? "შეიყვანე მეილი 📧" : "Enter your email 📧"}
                 </h1>
                 <p className="text-white/40 text-sm">
-                  {mode === "login" ? (ka ? "შეიყვანე შენი მეილი და პაროლი" : "Enter your email and password") : (ka ? "შექმენი ანგარიში" : "Create your account")}
+                  {ka ? "გამოგიგზავნით 6-ნიშნა კოდს" : "We'll send you a 6-digit code"}
                 </p>
               </div>
 
               <div className="flex flex-col gap-3">
-                <div className="rounded-2xl overflow-hidden ring-1 ring-white/10 focus-within:ring-[#7C3AED] transition"
+                <div className="rounded-2xl ring-1 ring-white/10 focus-within:ring-[#7C3AED] transition overflow-hidden"
                   style={{ background: "rgba(255,255,255,0.06)" }}>
-                  <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-                    placeholder={ka ? "მეილი" : "Email"}
-                    className="w-full bg-transparent px-4 py-4 text-sm outline-none placeholder-white/25" />
-                </div>
-
-                <div className="rounded-2xl overflow-hidden ring-1 ring-white/10 focus-within:ring-[#7C3AED] transition"
-                  style={{ background: "rgba(255,255,255,0.06)" }}>
-                  <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                    placeholder={ka ? "პაროლი" : "Password"}
-                    onKeyDown={e => e.key === "Enter" && handleEmail()}
-                    className="w-full bg-transparent px-4 py-4 text-sm outline-none placeholder-white/25" />
+                  <input
+                    type="email" value={email}
+                    onChange={e => { setEmail(e.target.value); setError(null); }}
+                    onKeyDown={e => e.key === "Enter" && sendOtp()}
+                    placeholder={ka ? "შენი მეილი" : "your@email.com"}
+                    className="w-full bg-transparent px-4 py-4 text-sm outline-none placeholder-white/25"
+                    autoComplete="email" autoFocus
+                  />
                 </div>
 
                 {error && <p className="text-red-400 text-xs px-1">{error}</p>}
-                {success && <p className="text-green-400 text-xs px-1">{success}</p>}
 
-                <button onClick={handleEmail} disabled={loading}
-                  className="w-full rounded-2xl py-4 font-bold text-sm transition active:scale-95 disabled:opacity-50 mt-1"
-                  style={{ background: "linear-gradient(135deg, #7C3AED, #ec4899)", boxShadow: "0 4px 24px rgba(124,58,237,0.4)" }}>
-                  {loading ? "..." : mode === "login" ? (ka ? "შესვლა" : "Sign In") : (ka ? "რეგისტრაცია" : "Sign Up")}
-                </button>
-
-                <button onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(null); setSuccess(null); }}
-                  className="text-center text-sm text-white/40 hover:text-white/70 transition mt-1">
-                  {mode === "login"
-                    ? (ka ? "ანგარიში არ გაქვს? რეგისტრაცია" : "No account? Sign up")
-                    : (ka ? "უკვე გაქვს ანგარიში? შესვლა" : "Already have an account? Sign in")}
+                <button onClick={sendOtp} disabled={loading}
+                  className="w-full rounded-2xl py-4 font-bold text-sm transition active:scale-95 disabled:opacity-50"
+                  style={{ background: "linear-gradient(135deg, #7C3AED, #ec4899)", boxShadow: "0 4px 24px rgba(124,58,237,0.35)" }}>
+                  {loading ? "..." : (ka ? "კოდის გაგზავნა" : "Send Code")}
                 </button>
               </div>
+            </>
+          )}
+
+          {/* ── OTP VIEW ── */}
+          {view === "otp" && (
+            <>
+              <button onClick={() => { setView("email"); setOtp(["","","","","",""]); setError(null); }}
+                className="flex items-center gap-2 text-white/40 hover:text-white mb-10 transition text-sm">
+                ← {ka ? "უკან" : "Back"}
+              </button>
+
+              <div className="mb-8">
+                <h1 className="text-2xl font-black mb-2">
+                  {ka ? "კოდი გამოგიგზავნეთ ✉️" : "Check your email ✉️"}
+                </h1>
+                <p className="text-white/40 text-sm">
+                  {ka ? `კოდი გაგზავნილია ${email}-ზე` : `Code sent to ${email}`}
+                </p>
+              </div>
+
+              {/* 6 OTP boxes */}
+              <div className="flex gap-2 justify-center mb-4">
+                {otp.map((digit, i) => (
+                  <input
+                    key={i}
+                    id={`otp-${i}`}
+                    type="text" inputMode="numeric" maxLength={1}
+                    value={digit}
+                    onChange={e => handleOtpInput(e.target.value, i)}
+                    onKeyDown={e => handleOtpKeyDown(e, i)}
+                    className="w-12 h-14 rounded-2xl text-center text-xl font-black outline-none transition"
+                    style={{
+                      background: digit ? "rgba(124,58,237,0.3)" : "rgba(255,255,255,0.06)",
+                      border: digit ? "1.5px solid #7C3AED" : "1.5px solid rgba(255,255,255,0.1)",
+                      color: "white"
+                    }}
+                    autoFocus={i === 0}
+                  />
+                ))}
+              </div>
+
+              {error && <p className="text-red-400 text-xs text-center mb-3">{error}</p>}
+
+              <button onClick={verifyOtp} disabled={loading || otp.join("").length < 6}
+                className="w-full rounded-2xl py-4 font-bold text-sm transition active:scale-95 disabled:opacity-40"
+                style={{ background: "linear-gradient(135deg, #7C3AED, #ec4899)", boxShadow: "0 4px 24px rgba(124,58,237,0.35)" }}>
+                {loading ? "..." : (ka ? "შესვლა" : "Verify & Sign In")}
+              </button>
+
+              <button onClick={sendOtp} disabled={loading}
+                className="w-full mt-3 text-center text-sm text-white/30 hover:text-white/60 transition">
+                {ka ? "კოდი არ მოვიდა? თავიდან გაგზავნა" : "Didn't receive? Resend"}
+              </button>
             </>
           )}
 
