@@ -86,7 +86,11 @@ export default function SettingsPage() {
   async function handleDelete() {
     const ok = confirm(ka ? "ანგარიში წაიშლება. დარწმუნებული ხარ?" : "Delete your account? This cannot be undone.");
     if (!ok) return;
-    const { error } = await supabase.rpc("delete_my_account").catch(() => ({ error: null }));
+    let error = null;
+    try {
+      const res = await supabase.rpc("delete_my_account");
+      error = res.error;
+    } catch {};
     if (error) {
       // fallback: just sign out
       await supabase.auth.signOut();

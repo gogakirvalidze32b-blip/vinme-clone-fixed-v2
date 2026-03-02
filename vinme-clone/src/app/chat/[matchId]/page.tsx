@@ -93,6 +93,9 @@ export default function ChatThreadPage() {
   const [otherProfile, setOtherProfile] = useState<any>(null);
   const [otherUserId, setOtherUserId] = useState<string|null>(null);
   const [sending, setSending] = useState(false);
+  const [uploadingImg, setUploadingImg] = useState(false);
+  const [imagePreview, setImagePreview] = useState<{file: File, url: string} | null>(null);
+  const imgInputRef = useRef<HTMLInputElement>(null);
   const [showEmoji, setShowEmoji] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -193,10 +196,14 @@ export default function ChatThreadPage() {
 
   // ✅ Track visual viewport height for keyboard-aware layout
   useEffect(() => {
+    // Only apply on mobile (keyboard-aware layout)
+    if (window.innerWidth > 768) return;
     const vv = window.visualViewport;
     if (!vv) { setVpHeight(window.innerHeight); return; }
-    // Use vv.height which excludes keyboard on all mobile browsers
-    const handler = () => setVpHeight(Math.round(vv.height));
+    const handler = () => {
+      const h = Math.round(vv.height);
+      setVpHeight(h);
+    };
     handler();
     vv.addEventListener("resize", handler);
     vv.addEventListener("scroll", handler);
@@ -230,6 +237,21 @@ export default function ChatThreadPage() {
     await supabase.from("messages").delete().eq("id", msgId);
     setMsgs(prev => prev.filter(m => m.id !== msgId));
     setSelectedMsgId(null);
+  }
+
+  async function uploadImage(file: File) {
+    if (!matchId || !myUserId || !file) return;
+    setUploadingImg(true);
+    try {
+      const ext = file.type.split("/")[1] || "jpg";
+      const path = `${myUserId}/chat-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("photos").upload(path, file, { upsert: true, contentType: file.type });
+      if (upErr) throw upErr;
+      const { data: urlData } = supabase.storage.from("photos").getPublicUrl(path);
+      const imgUrl = urlData.publicUrl;
+      await supabase.from("messages").insert({ match_id: matchId, sender_anon: myAnonId, content: imgUrl, type: "image" });
+    } catch (e) { console.error(e); }
+    setUploadingImg(false);
   }
 
   async function send() {
@@ -302,8 +324,8 @@ export default function ChatThreadPage() {
   const otherName = otherProfile?.nickname ?? otherProfile?.first_name ?? "...";
 
   if (!isLoaded) return (
-    <div className="flex justify-center bg-[#111]" style={{ height: vpHeight > 0 ? `${vpHeight}px` : "100dvh" }}>
-      <div className="w-full max-w-lg flex flex-col bg-[#111]" style={{ height: vpHeight > 0 ? `${vpHeight}px` : "100dvh" }}>
+    <div className="flex justify-center bg-[#111]" style={{ height: "100dvh", overflow: "hidden" }}>
+      <div className="w-full max-w-lg flex flex-col bg-[#111]" style={{ height: "100%"  }}>
         <div className="flex items-center gap-3 px-4 py-3 bg-zinc-950 border-b border-white/8 shrink-0">
           <div className="w-9 h-9 rounded-full bg-white/10 animate-pulse" />
           <div className="flex items-center gap-3 flex-1">
@@ -405,14 +427,29 @@ export default function ChatThreadPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words max-w-[78%] select-none
+                    <div className={`text-sm leading-relaxed max-w-[78%] select-none overflow-hidden
+                      ${m.type === "image" ? "rounded-2xl" : "px-3.5 py-2.5 break-words"}
                       ${mine ? "bg-[#7C3AED] rounded-2xl rounded-tr-sm" : "bg-zinc-800 rounded-2xl rounded-tl-sm"}
                       ${isTemp ? "opacity-60" : ""} ${isSelected ? "ring-2 ring-red-400 opacity-80" : ""}`}>
-                      <span>{m.content}</span>
-                      <span className="inline-flex items-center gap-0.5 ml-2">
-                        <span className={`text-[10px] ${mine ? "text-purple-200/50" : "text-white/25"}`}>{fmtTime(m.created_at)}</span>
-                        <Ticks sent={!isTemp} read={isRead} mine={mine} />
-                      </span>
+                      {m.type === "image" ? (
+                        <div>
+                          <img src={m.content} className="max-w-full max-h-[280px] object-cover block" alt=""
+                            onClick={() => window.open(m.content, "_blank")}
+                            onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
+                          <div className="px-2 py-1 flex justify-end items-center gap-1">
+                            <span className={`text-[10px] ${mine ? "text-purple-200/50" : "text-white/25"}`}>{fmtTime(m.created_at)}</span>
+                            <Ticks sent={!isTemp} read={isRead} mine={mine} />
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <span>{m.content}</span>
+                          <span className="inline-flex items-center gap-0.5 ml-2">
+                            <span className={`text-[10px] ${mine ? "text-purple-200/50" : "text-white/25"}`}>{fmtTime(m.created_at)}</span>
+                            <Ticks sent={!isTemp} read={isRead} mine={mine} />
+                          </span>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -422,9 +459,30 @@ export default function ChatThreadPage() {
           </div>
         </div>
 
-        {/* INPUT - sticks to keyboard */}
-        <div className="shrink-0 bg-zinc-950 border-t border-white/8 px-3 pt-2 pb-3"
-          style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 12px)" }}
+        {/* IMAGE PREVIEW MODAL */}
+        {imagePreview && (
+          <div className="fixed inset-0 z-50 bg-black">
+            {/* Full screen photo */}
+            <img src={imagePreview.url} className="absolute inset-0 w-full h-full object-contain" alt="" />
+            {/* X button top-left */}
+            <button onClick={() => setImagePreview(null)}
+              className="absolute top-4 left-4 w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white text-lg z-10"
+              style={{ marginTop: "env(safe-area-inset-top, 0px)" }}>
+              ✕
+            </button>
+            {/* Send button bottom-right like image 2 */}
+            <button
+              onClick={async () => { const f = imagePreview.file; setImagePreview(null); await uploadImage(f); }}
+              disabled={uploadingImg}
+              className="absolute bottom-8 right-6 w-14 h-14 rounded-full bg-[#7C3AED] flex items-center justify-center shadow-2xl z-10 disabled:opacity-50">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+            </button>
+          </div>
+        )}
+
+        {/* INPUT - fixed to bottom on mobile, flex on desktop */}
+        <div className="shrink-0 bg-zinc-950 border-t border-white/8 px-3 pt-2"
+          style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 8px)" }}
           onClick={e => e.stopPropagation()}>
           
           {showEmoji && (
@@ -461,6 +519,22 @@ export default function ChatThreadPage() {
 
           {!recording && (
             <div className="flex items-center gap-2">
+              {/* Hidden image input */}
+              <input ref={imgInputRef} type="file" accept="image/*" className="hidden"
+                onChange={e => { 
+                  const f = e.target.files?.[0]; 
+                  if (f) setImagePreview({ file: f, url: URL.createObjectURL(f) }); 
+                  e.target.value=""; 
+                }} />
+              
+              <button onClick={e => { e.stopPropagation(); imgInputRef.current?.click(); }}
+                className="shrink-0 w-9 h-9 flex items-center justify-center text-white/35 hover:text-white/60 transition"
+                disabled={uploadingImg}>
+                {uploadingImg
+                  ? <span className="text-xs">⏳</span>
+                  : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                }
+              </button>
               <button onClick={e => { e.stopPropagation(); setShowEmoji(!showEmoji); }}
                 className="shrink-0 w-9 h-9 flex items-center justify-center text-xl text-white/35 hover:text-white/60 transition">😊</button>
               <div className="flex-1 flex items-center bg-zinc-800 rounded-full px-4 py-2.5 gap-2 min-w-0">

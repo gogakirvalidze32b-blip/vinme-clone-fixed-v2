@@ -1,3 +1,13 @@
+
+/* Prevent body scroll - keyboard shrinks viewport instead */
+@media (max-width: 768px) {
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+  }
+}
 @import "tailwindcss";
 
 :root {
@@ -48,10 +58,11 @@ img {
 }
 
 
-/* Keyboard-aware chat input */
-@supports (height: 100dvh) {
+/* Chat container - mobile only gets 100dvh, desktop keeps explicit height */
+@media (max-width: 768px) {
   .chat-container {
-    height: 100dvh;
+    height: 100dvh !important;
+    height: 100svh !important;
   }
 }
 

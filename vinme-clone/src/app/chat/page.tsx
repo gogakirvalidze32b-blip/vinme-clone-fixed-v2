@@ -100,7 +100,11 @@ export default function ChatPage() {
         ...row,
         _unreadCount: unreadCount,
         _hasMessages: !!lastMsg,
-        last_message: lastMsg?.type === "voice" ? (ka ? "🎤 ხმოვანი" : "🎤 Voice") : (lastMsg?.content ?? null),
+        last_message: lastMsg?.type === "voice" 
+          ? (ka ? "🎤 ხმოვანი" : "🎤 Voice") 
+          : lastMsg?.type === "image"
+          ? (ka ? "📷 ფოტო" : "📷 Photo")
+          : (lastMsg?.content ?? null),
         last_message_time: lastMsg?.created_at ?? null,
         last_sender_anon: lastMsg?.sender_anon ?? null,
         other: profile,
@@ -233,7 +237,7 @@ export default function ChatPage() {
                     onPointerLeave={() => { if (longPressRef.current) clearTimeout(longPressRef.current); }}
                     onContextMenu={e => e.preventDefault()}
                     style={{ WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none", touchAction: "manipulation" }}
-                    className={`relative flex items-center gap-3 px-3 py-3 rounded-2xl cursor-pointer transition ${selectedMatchId === m.id ? "bg-white/8 ring-1 ring-red-500/40" : "hover:bg-white/5 active:bg-white/8"}`}>
+                    className={`relative flex items-center gap-3 px-3 py-3.5 rounded-2xl cursor-pointer transition ${selectedMatchId === m.id ? "bg-white/10 ring-1 ring-red-500/40" : "bg-white/5 hover:bg-white/8 active:bg-white/10"}`}>
                     {selectedMatchId === m.id && (
                       <button onClick={e => { e.stopPropagation(); deleteMatch(m.id); }}
                         className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 bg-red-500 rounded-full px-3 py-1.5 text-white text-xs font-bold z-10 shadow-lg">
