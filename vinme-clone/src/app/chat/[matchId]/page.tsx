@@ -423,7 +423,8 @@ export default function ChatThreadPage() {
         </div>
 
         {/* INPUT - sticks to keyboard */}
-        <div className="shrink-0 bg-zinc-950 border-t border-white/8 px-3 pt-2 pb-2"
+        <div className="shrink-0 bg-zinc-950 border-t border-white/8 px-3 pt-2 pb-3"
+          style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 12px)" }}
           onClick={e => e.stopPropagation()}>
           
           {showEmoji && (
