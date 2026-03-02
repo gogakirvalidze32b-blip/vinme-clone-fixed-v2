@@ -18,6 +18,10 @@ export default function LoginPage() {
     setLang(getLang());
     const h = () => setLang(getLang());
     window.addEventListener("app:lang", h);
+    // If already logged in, skip login
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) window.location.href = "/";
+    });
     return () => window.removeEventListener("app:lang", h);
   }, []);
 
@@ -35,7 +39,14 @@ export default function LoginPage() {
       email: email.trim(),
       options: { shouldCreateUser: true }
     });
-    if (e) { setError(e.message); setLoading(false); return; }
+    if (e) { 
+      if (e.message.includes("rate limit") || e.message.includes("too many")) {
+        setError(ka ? "ძალიან ბევრი მცდელობა, სცადე 1 საათში" : "Too many attempts, try again in 1 hour");
+      } else {
+        setError(e.message);
+      }
+      setLoading(false); return; 
+    }
     setView("otp");
     setLoading(false);
   }
