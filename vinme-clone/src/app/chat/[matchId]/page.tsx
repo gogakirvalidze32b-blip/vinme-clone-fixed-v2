@@ -93,6 +93,7 @@ export default function ChatThreadPage() {
   const [otherProfile, setOtherProfile] = useState<any>(null);
   const [otherUserId, setOtherUserId] = useState<string|null>(null);
   const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
   const [uploadingImg, setUploadingImg] = useState(false);
   const [imagePreview, setImagePreview] = useState<{file: File, url: string} | null>(null);
   const imgInputRef = useRef<HTMLInputElement>(null);
@@ -256,7 +257,8 @@ export default function ChatThreadPage() {
 
   async function send() {
     const t2 = text.trim();
-    if (!t2 || !myAnonId || sending) return;
+    if (!t2 || !myAnonId || sending || sendingRef.current) return;
+    sendingRef.current = true;
     setSending(true); setText("");
     const tempId = `temp-${Date.now()}`;
     setMsgs(prev => [...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: t2, created_at: new Date().toISOString(), read_at: null, type: "text" }]);

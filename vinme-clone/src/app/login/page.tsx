@@ -18,10 +18,7 @@ export default function LoginPage() {
     setLang(getLang());
     const h = () => setLang(getLang());
     window.addEventListener("app:lang", h);
-    // If already logged in, skip login
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) window.location.href = "/";
-    });
+    // Session check removed - user must always authenticate via OTP/Google
     return () => window.removeEventListener("app:lang", h);
   }, []);
 
