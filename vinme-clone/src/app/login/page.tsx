@@ -9,7 +9,7 @@ export default function LoginPage() {
   const [lang, setLang] = useState<Lang>("ka");
   const [view, setView] = useState<"main" | "email" | "otp">("main");
   const [email, setEmail] = useState("");
-  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ka = lang !== "en";
@@ -49,41 +49,8 @@ export default function LoginPage() {
   }
 
   async function verifyOtp() {
-    const code = otp.join("");
-    if (code.length < 6) { setError(ka ? "შეიყვანე 6-ნიშნა კოდი" : "Enter the 6-digit code"); return; }
-    setLoading(true); setError(null);
-    const { error: e } = await supabase.auth.verifyOtp({
-      email: email.trim(),
-      token: code,
-      type: "email"
-    });
-    if (e) { setError(ka ? "არასწორი კოდი, სცადე თავიდან" : "Wrong code, try again"); setLoading(false); return; }
-    window.location.href = "/";
-  }
-
-  function handleOtpInput(val: string, idx: number) {
-    if (!/^[0-9]?$/.test(val)) return;
-    const next = [...otp];
-    next[idx] = val;
-    setOtp(next);
-    setError(null);
-    if (val && idx < 5) {
-      const el = document.getElementById(`otp-${idx + 1}`);
-      el?.focus();
-    }
-    if (val && idx === 5) {
-      const code = next.join("");
-      if (code.length === 6) setTimeout(() => verifyOtpDirect(code), 100);
-    }
-  }
-
-  function handleOtpKeyDown(e: React.KeyboardEvent, idx: number) {
-    if (e.key === "Backspace" && !otp[idx] && idx > 0) {
-      document.getElementById(`otp-${idx - 1}`)?.focus();
-    }
-  }
-
-  async function verifyOtpDirect(code: string) {
+    const code = otp.replace(/\s/g, "").trim();
+    if (code.length < 6) { setError(ka ? "შეიყვანე კოდი" : "Enter the code"); return; }
     setLoading(true); setError(null);
     const { error: e } = await supabase.auth.verifyOtp({
       email: email.trim(), token: code, type: "email"
@@ -218,30 +185,27 @@ export default function LoginPage() {
                 </p>
               </div>
 
-              {/* 6 OTP boxes */}
-              <div className="flex gap-2 justify-center mb-4">
-                {otp.map((digit, i) => (
-                  <input
-                    key={i}
-                    id={`otp-${i}`}
-                    type="text" inputMode="numeric" maxLength={1}
-                    value={digit}
-                    onChange={e => handleOtpInput(e.target.value, i)}
-                    onKeyDown={e => handleOtpKeyDown(e, i)}
-                    className="w-12 h-14 rounded-2xl text-center text-xl font-black outline-none transition"
-                    style={{
-                      background: digit ? "rgba(124,58,237,0.3)" : "rgba(255,255,255,0.06)",
-                      border: digit ? "1.5px solid #7C3AED" : "1.5px solid rgba(255,255,255,0.1)",
-                      color: "white"
-                    }}
-                    autoFocus={i === 0}
-                  />
-                ))}
+              {/* Single OTP input - supports paste */}
+              <div className="rounded-2xl ring-1 ring-white/10 focus-within:ring-[#7C3AED] transition overflow-hidden mb-4"
+                style={{ background: "rgba(255,255,255,0.06)" }}>
+                <input
+                  type="text" inputMode="numeric"
+                  value={otp}
+                  onChange={e => {
+                    const val = e.target.value.replace(/[^0-9]/g, "").slice(0, 8);
+                    setOtp(val);
+                    setError(null);
+                    if (val.length >= 6) setTimeout(() => verifyOtp(), 100);
+                  }}
+                  placeholder="კოდი"
+                  className="w-full bg-transparent px-4 py-5 text-3xl font-black text-center outline-none placeholder-white/20 tracking-[12px]"
+                  autoFocus autoComplete="one-time-code"
+                />
               </div>
 
               {error && <p className="text-red-400 text-xs text-center mb-3">{error}</p>}
 
-              <button onClick={verifyOtp} disabled={loading || otp.join("").length < 6}
+              <button onClick={verifyOtp} disabled={loading || otp.replace(/\s/g,"").length < 6}
                 className="w-full rounded-2xl py-4 font-bold text-sm transition active:scale-95 disabled:opacity-40"
                 style={{ background: "linear-gradient(135deg, #7C3AED, #ec4899)", boxShadow: "0 4px 24px rgba(124,58,237,0.35)" }}>
                 {loading ? "..." : (ka ? "შესვლა" : "Verify & Sign In")}
