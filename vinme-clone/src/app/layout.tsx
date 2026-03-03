@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Noto_Sans_Georgian } from "next/font/google";
+import { UserProvider } from "@/lib/userContext";
 
 const notoGeo = Noto_Sans_Georgian({
   subsets: ["georgian"],
@@ -20,8 +21,6 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  // ✅ Makes keyboard resize the viewport on Android Chrome
-  // so 100dvh always = visible area above keyboard
   interactiveWidget: "resizes-content",
 };
 
@@ -29,7 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ka" className={notoGeo.variable}>
       <body className="min-h-screen bg-black text-white antialiased">
-        {children}
+        <UserProvider>{children}</UserProvider>
       </body>
     </html>
   );
