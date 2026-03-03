@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getLang } from "@/lib/i18n";
 
-export default function BottomNav() {
+export default function BottomNav({ chatBadge }: { chatBadge?: number } = {}) {
   const pathname = usePathname() || "";
   
   // ✅ Hide nav on chat thread pages (like WhatsApp - full screen chat)
@@ -92,7 +92,7 @@ export default function BottomNav() {
     {
       href: "/chat",
       label: ka ? "ჩათი" : "Chat",
-      badge: unreadPeople,
+      badge: chatBadge !== undefined ? chatBadge : unreadPeople,
       icon: (active: boolean) => (
         // speech bubble icon — Tinder-like
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
