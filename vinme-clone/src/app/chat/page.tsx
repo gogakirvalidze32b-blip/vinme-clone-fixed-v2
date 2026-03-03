@@ -59,6 +59,7 @@ export default function ChatPage() {
     if (loadingRef.current) return;
     loadingRef.current = true;
 
+    // ✅ Batch 1: fetch matches first (need IDs for next queries)
     const { data: rows } = await supabase
       .from("matches").select("*")
       .or(`user_a.eq.${uid},user_b.eq.${uid}`)
@@ -69,20 +70,21 @@ export default function ChatPage() {
     const otherIds = rows.map((r: any) => r.user_a === uid ? r.user_b : r.user_a);
     if (!otherIds.length) { setMatches([]); setLoading(false); loadingRef.current = false; return; }
 
-    const { data: profiles } = await supabase
-      .from("profiles").select("user_id,nickname,first_name,photo1_url,last_seen").in("user_id", otherIds);
-
-    const profileMap = new Map<string, Profile>();
-    (profiles ?? []).forEach((p: any) => profileMap.set(p.user_id, p));
-
     const matchIds = rows.map((r: any) => r.id);
 
-    // ✅ Single query — fetch everything, compute unread in JS
-    const { data: allMsgs } = await supabase
-      .from("messages")
-      .select("id,match_id,content,created_at,type,sender_anon,read_at")
-      .in("match_id", matchIds)
-      .order("created_at", { ascending: false });
+    // ✅ Batch 2: profiles + messages in parallel
+    const [profilesRes, msgsRes] = await Promise.all([
+      supabase.from("profiles").select("user_id,nickname,first_name,photo1_url,last_seen").in("user_id", otherIds),
+      supabase.from("messages")
+        .select("id,match_id,content,created_at,type,sender_anon,read_at")
+        .in("match_id", matchIds)
+        .order("created_at", { ascending: false }),
+    ]);
+
+    const profileMap = new Map<string, Profile>();
+    (profilesRes.data ?? []).forEach((p: any) => profileMap.set(p.user_id, p));
+
+    const allMsgs = msgsRes.data;
 
     // Build maps in one pass
     const lastMsgMap = new Map<string, any>();
