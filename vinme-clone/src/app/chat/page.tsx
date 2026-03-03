@@ -132,12 +132,8 @@ export default function ChatPage() {
       const uid = sess.session?.user?.id;
       if (!uid) { router.replace("/login"); return; }
       setMyId(uid);
-
-      // ✅ fetch matches + anon_id in parallel
-      const [meRes] = await Promise.all([
-        supabase.from("profiles").select("anon_id").eq("user_id", uid).maybeSingle(),
-      ]);
-      const anonId = meRes.data?.anon_id ?? null;
+      const { data: me } = await supabase.from("profiles").select("anon_id").eq("user_id", uid).maybeSingle();
+      const anonId = me?.anon_id ?? null;
       setMyAnonId(anonId);
       await loadMatches(uid, anonId);
     })();
