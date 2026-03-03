@@ -143,18 +143,34 @@ export default function ChatPage() {
     })();
   }, [router]);
 
-  // ✅ realtime — unread badge updates instantly
+  // ✅ realtime — smart state update, NO full reload on every message
   useEffect(() => {
-    if (!myId) return;
+    if (!myId || !myAnonId) return;
     const ch = supabase.channel(`chat-list-${Date.now()}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => {
-        if (myId && myAnonId) loadMatches(myId, myAnonId);
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
+        const msg = payload.new as any;
+        setMatches(prev => prev.map(m => {
+          if (String(m.id) !== String(msg.match_id)) return m;
+          const isUnread = msg.sender_anon !== myAnonId;
+          return {
+            ...m,
+            _hasMessages: true,
+            last_message: msg.type === "voice" ? "🎤 Voice" : msg.type === "image" ? "📷 Photo" : msg.content,
+            last_message_time: msg.created_at,
+            last_sender_anon: msg.sender_anon,
+            _unreadCount: isUnread ? m._unreadCount + 1 : m._unreadCount,
+          };
+        }));
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, () => {
-        if (myId && myAnonId) loadMatches(myId, myAnonId);
-      })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "matches" }, () => {
-        if (myId && myAnonId) loadMatches(myId, myAnonId);
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, (payload) => {
+        const msg = payload.new as any;
+        // read_at update — recalculate unread for that match
+        if (msg.read_at) {
+          setMatches(prev => prev.map(m => {
+            if (String(m.id) !== String(msg.match_id)) return m;
+            return { ...m, _unreadCount: Math.max(0, m._unreadCount - 1) };
+          }));
+        }
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
