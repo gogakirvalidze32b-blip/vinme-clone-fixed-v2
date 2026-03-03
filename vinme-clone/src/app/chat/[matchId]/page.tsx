@@ -1,8 +1,5 @@
 "use client";
 
-let _cachedAnonId: string | null = null;
-let _cachedUid: string | null = null;
-
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -151,15 +148,11 @@ export default function ChatThreadPage() {
       setMyUserId(user.id);
 
       const [meRes, matchRes] = await Promise.all([
-        (_cachedAnonId && _cachedUid === user.id)
-          ? Promise.resolve({ data: { anon_id: _cachedAnonId } })
-          : supabase.from("profiles").select("anon_id").eq("user_id", user.id).maybeSingle(),
+        supabase.from("profiles").select("anon_id").eq("user_id", user.id).maybeSingle(),
         supabase.from("matches").select("user_a,user_b").eq("id", matchId).maybeSingle(),
       ]);
 
       const anonId = meRes.data?.anon_id ?? null;
-      _cachedAnonId = anonId;
-      _cachedUid = user.id;
       setMyAnonId(anonId);
 
       const matchRow = matchRes.data;
@@ -170,13 +163,13 @@ export default function ChatThreadPage() {
       const [profileRes, msgsRes] = await Promise.all([
         supabase.from("profiles").select("user_id,nickname,first_name,photo1_url,last_seen").eq("user_id", otherId).maybeSingle(),
         supabase.from("messages").select("*").eq("match_id", matchId).order("created_at", { ascending: true }),
+        markRead(anonId, user.id),
+        supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("user_id", user.id),
       ]);
 
       setOtherProfile(profileRes.data ?? null);
       setMsgs(msgsRes.data ?? []);
       setIsLoaded(true);
-      await markRead(anonId, user.id);
-      await supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("user_id", user.id);
     })();
   }, [matchId, router, markRead]);
 

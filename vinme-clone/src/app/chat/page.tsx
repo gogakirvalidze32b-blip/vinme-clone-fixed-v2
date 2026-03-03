@@ -1,9 +1,5 @@
 "use client";
 
-// Module-level cache shared with AppShell
-let _cachedAnonId: string | null = null;
-let _cachedUid: string | null = null;
-
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -63,6 +59,7 @@ export default function ChatPage() {
     if (loadingRef.current) return;
     loadingRef.current = true;
 
+    // ✅ Batch 1: fetch matches first (need IDs for next queries)
     const { data: rows } = await supabase
       .from("matches").select("*")
       .or(`user_a.eq.${uid},user_b.eq.${uid}`)
@@ -73,11 +70,31 @@ export default function ChatPage() {
     const otherIds = rows.map((r: any) => r.user_a === uid ? r.user_b : r.user_a);
     if (!otherIds.length) { setMatches([]); setLoading(false); loadingRef.current = false; return; }
 
-    const { data: profiles } = await supabase
-      .from("profiles").select("user_id,nickname,first_name,photo1_url,last_seen").in("user_id", otherIds);
+    const matchIds = rows.map((r: any) => r.id);
+
+    // ✅ Batch 2: profiles + messages in parallel
+    const [profilesRes, msgsRes] = await Promise.all([
+      supabase.from("profiles").select("user_id,nickname,first_name,photo1_url,last_seen").in("user_id", otherIds),
+      supabase.from("messages")
+        .select("id,match_id,content,created_at,type,sender_anon,read_at")
+        .in("match_id", matchIds)
+        .order("created_at", { ascending: false }),
+    ]);
 
     const profileMap = new Map<string, Profile>();
-    (profiles ?? []).forEach((p: any) => profileMap.set(p.user_id, p));
+    (profilesRes.data ?? []).forEach((p: any) => profileMap.set(p.user_id, p));
+
+    const allMsgs = msgsRes.data;
+
+    // Build maps in one pass
+    const lastMsgMap = new Map<string, any>();
+    const unreadMap = new Map<string, number>();
+    for (const msg of (allMsgs ?? [])) {
+      if (!lastMsgMap.has(msg.match_id)) lastMsgMap.set(msg.match_id, msg);
+      if (anonId && !msg.read_at && msg.sender_anon !== anonId) {
+        unreadMap.set(msg.match_id, (unreadMap.get(msg.match_id) ?? 0) + 1);
+      }
+    }
 
     const result: Match[] = [];
 
@@ -86,19 +103,8 @@ export default function ChatPage() {
       const profile = profileMap.get(otherId);
       if (!profile) continue;
 
-      // last message
-      const { data: lastMsg } = await supabase
-        .from("messages").select("content,created_at,type,sender_anon")
-        .eq("match_id", row.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
-
-      // ✅ unread = messages FROM other person, not read
-      let unreadCount = 0;
-      if (anonId) {
-        const { count } = await supabase
-          .from("messages").select("id", { count: "exact", head: true })
-          .eq("match_id", row.id).neq("sender_anon", anonId).is("read_at", null);
-        unreadCount = count ?? 0;
-      }
+      const lastMsg = lastMsgMap.get(row.id);
+      const unreadCount = unreadMap.get(row.id) ?? 0;
 
       result.push({
         ...row,
@@ -126,30 +132,45 @@ export default function ChatPage() {
       const uid = sess.session?.user?.id;
       if (!uid) { router.replace("/login"); return; }
       setMyId(uid);
-      let anonId = _cachedAnonId;
-      if (!anonId || _cachedUid !== uid) {
-        const { data: me } = await supabase.from("profiles").select("anon_id").eq("user_id", uid).maybeSingle();
-        anonId = me?.anon_id ?? null;
-        _cachedAnonId = anonId;
-        _cachedUid = uid;
-      }
+
+      // ✅ fetch matches + anon_id in parallel
+      const [meRes] = await Promise.all([
+        supabase.from("profiles").select("anon_id").eq("user_id", uid).maybeSingle(),
+      ]);
+      const anonId = meRes.data?.anon_id ?? null;
       setMyAnonId(anonId);
       await loadMatches(uid, anonId);
     })();
   }, [router]);
 
-  // ✅ realtime — unread badge updates instantly
+  // ✅ realtime — smart state update, NO full reload on every message
   useEffect(() => {
-    if (!myId) return;
+    if (!myId || !myAnonId) return;
     const ch = supabase.channel(`chat-list-${Date.now()}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => {
-        if (myId && myAnonId) loadMatches(myId, myAnonId);
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
+        const msg = payload.new as any;
+        setMatches(prev => prev.map(m => {
+          if (String(m.id) !== String(msg.match_id)) return m;
+          const isUnread = msg.sender_anon !== myAnonId;
+          return {
+            ...m,
+            _hasMessages: true,
+            last_message: msg.type === "voice" ? "🎤 Voice" : msg.type === "image" ? "📷 Photo" : msg.content,
+            last_message_time: msg.created_at,
+            last_sender_anon: msg.sender_anon,
+            _unreadCount: isUnread ? m._unreadCount + 1 : m._unreadCount,
+          };
+        }));
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, () => {
-        if (myId && myAnonId) loadMatches(myId, myAnonId);
-      })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "matches" }, () => {
-        if (myId && myAnonId) loadMatches(myId, myAnonId);
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, (payload) => {
+        const msg = payload.new as any;
+        // read_at update — recalculate unread for that match
+        if (msg.read_at) {
+          setMatches(prev => prev.map(m => {
+            if (String(m.id) !== String(msg.match_id)) return m;
+            return { ...m, _unreadCount: Math.max(0, m._unreadCount - 1) };
+          }));
+        }
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
