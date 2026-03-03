@@ -75,6 +75,31 @@ export default function ChatPage() {
     const profileMap = new Map<string, Profile>();
     (profiles ?? []).forEach((p: any) => profileMap.set(p.user_id, p));
 
+    const matchIds = rows.map((r: any) => r.id);
+
+    // Batch fetch last messages + unread counts in 2 queries instead of 2*N
+    const [allMsgsRes, unreadRes] = await Promise.all([
+      supabase.from("messages")
+        .select("id,match_id,content,created_at,type,sender_anon")
+        .in("match_id", matchIds)
+        .order("created_at", { ascending: false }),
+      anonId ? supabase.from("messages")
+        .select("id,match_id")
+        .in("match_id", matchIds)
+        .neq("sender_anon", anonId)
+        .is("read_at", null) : Promise.resolve({ data: [] }),
+    ]);
+
+    // Build maps
+    const lastMsgMap = new Map<string, any>();
+    for (const msg of (allMsgsRes.data ?? [])) {
+      if (!lastMsgMap.has(msg.match_id)) lastMsgMap.set(msg.match_id, msg);
+    }
+    const unreadMap = new Map<string, number>();
+    for (const msg of ((unreadRes as any).data ?? [])) {
+      unreadMap.set(msg.match_id, (unreadMap.get(msg.match_id) ?? 0) + 1);
+    }
+
     const result: Match[] = [];
 
     for (const row of rows) {
@@ -82,19 +107,8 @@ export default function ChatPage() {
       const profile = profileMap.get(otherId);
       if (!profile) continue;
 
-      // last message
-      const { data: lastMsg } = await supabase
-        .from("messages").select("content,created_at,type,sender_anon")
-        .eq("match_id", row.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
-
-      // ✅ unread = messages FROM other person, not read
-      let unreadCount = 0;
-      if (anonId) {
-        const { count } = await supabase
-          .from("messages").select("id", { count: "exact", head: true })
-          .eq("match_id", row.id).neq("sender_anon", anonId).is("read_at", null);
-        unreadCount = count ?? 0;
-      }
+      const lastMsg = lastMsgMap.get(row.id);
+      const unreadCount = unreadMap.get(row.id) ?? 0;
 
       result.push({
         ...row,

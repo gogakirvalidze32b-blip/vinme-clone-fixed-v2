@@ -13,7 +13,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ka = lang !== "en";
- 
+
   useEffect(() => {
     setLang(getLang());
     const h = () => setLang(getLang());
@@ -171,8 +171,7 @@ export default function LoginPage() {
           {/* ── OTP VIEW ── */}
           {view === "otp" && (
             <>
-              <button onClick={() => { setView("email"); setOtp(""); setError(null);
-}}
+              <button onClick={() => { setView("email"); setOtp(["","","","","",""]); setError(null); }}
                 className="flex items-center gap-2 text-white/40 hover:text-white mb-10 transition text-sm">
                 ← {ka ? "უკან" : "Back"}
               </button>
