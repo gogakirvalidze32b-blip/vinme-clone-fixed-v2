@@ -77,27 +77,21 @@ export default function ChatPage() {
 
     const matchIds = rows.map((r: any) => r.id);
 
-    // Batch fetch last messages + unread counts in 2 queries instead of 2*N
-    const [allMsgsRes, unreadRes] = await Promise.all([
-      supabase.from("messages")
-        .select("id,match_id,content,created_at,type,sender_anon")
-        .in("match_id", matchIds)
-        .order("created_at", { ascending: false }),
-      anonId ? supabase.from("messages")
-        .select("id,match_id")
-        .in("match_id", matchIds)
-        .neq("sender_anon", anonId)
-        .is("read_at", null) : Promise.resolve({ data: [] }),
-    ]);
+    // ✅ Single query — fetch everything, compute unread in JS
+    const { data: allMsgs } = await supabase
+      .from("messages")
+      .select("id,match_id,content,created_at,type,sender_anon,read_at")
+      .in("match_id", matchIds)
+      .order("created_at", { ascending: false });
 
-    // Build maps
+    // Build maps in one pass
     const lastMsgMap = new Map<string, any>();
-    for (const msg of (allMsgsRes.data ?? [])) {
-      if (!lastMsgMap.has(msg.match_id)) lastMsgMap.set(msg.match_id, msg);
-    }
     const unreadMap = new Map<string, number>();
-    for (const msg of ((unreadRes as any).data ?? [])) {
-      unreadMap.set(msg.match_id, (unreadMap.get(msg.match_id) ?? 0) + 1);
+    for (const msg of (allMsgs ?? [])) {
+      if (!lastMsgMap.has(msg.match_id)) lastMsgMap.set(msg.match_id, msg);
+      if (anonId && !msg.read_at && msg.sender_anon !== anonId) {
+        unreadMap.set(msg.match_id, (unreadMap.get(msg.match_id) ?? 0) + 1);
+      }
     }
 
     const result: Match[] = [];
