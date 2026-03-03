@@ -24,6 +24,9 @@ export default function BottomNav({ chatBadge }: { chatBadge?: number } = {}) {
   }, []);
 
   useEffect(() => {
+    // If chatBadge is provided by AppShell - skip all queries, AppShell handles it
+    if (chatBadge !== undefined) return;
+
     let alive = true;
 
     async function refresh() {
@@ -35,20 +38,13 @@ export default function BottomNav({ chatBadge }: { chatBadge?: number } = {}) {
       const anonId = myProfile?.anon_id ?? null;
       if (!anonId) return;
 
-      const { data: matchRows } = await supabase
-        .from("matches").select("id").or(`user_a.eq.${uid},user_b.eq.${uid}`);
-      if (!matchRows?.length) { if (alive) setUnreadPeople(0); return; }
+      // Single batch query instead of N+1 loop
+      const { data: unreadMsgs } = await supabase
+        .from("messages").select("match_id")
+        .is("read_at", null).neq("sender_anon", anonId).limit(1000);
 
-      // ✅ count how many matches have at least 1 unread message
-      let count = 0;
-      for (const row of matchRows) {
-        const { count: c } = await supabase
-          .from("messages").select("id", { count: "exact", head: true })
-          .eq("match_id", row.id).neq("sender_anon", anonId).is("read_at", null);
-        if ((c ?? 0) > 0) count++;
-      }
-
-      if (alive) setUnreadPeople(count);
+      const uniq = new Set((unreadMsgs ?? []).map((r: any) => r.match_id));
+      if (alive) setUnreadPeople(uniq.size);
     }
 
     refresh();
@@ -59,7 +55,7 @@ export default function BottomNav({ chatBadge }: { chatBadge?: number } = {}) {
       .subscribe();
 
     return () => { alive = false; supabase.removeChannel(ch); };
-  }, [pathname2]);
+  }, [pathname2, chatBadge]);
 
   const hide =
     pathname === "/" || pathname.startsWith("/login") || pathname.startsWith("/auth") ||

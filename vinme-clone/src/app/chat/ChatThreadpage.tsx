@@ -68,35 +68,55 @@ export default function ChatThreadPage() {
 
         const uid = user.id;
 
-        // ✅ Batch 1: fetch my anon_id + match row in parallel
-        const [meRes, mRes] = await Promise.all([
-          supabase.from("profiles").select("anon_id").eq("user_id", uid).maybeSingle(),
-          supabase.from("matches").select("user_a, user_b").eq("id", matchId).maybeSingle(),
-        ]);
+        const { data: me, error: meErr } = await supabase
+          .from("profiles")
+          .select("anon_id")
+          .eq("user_id", uid)
+          .maybeSingle();
 
-        if (meRes.error) throw meRes.error;
-        if (mRes.error) throw mRes.error;
-        if (!mRes.data) throw new Error("Match not found");
+        if (meErr) throw meErr;
 
-        const anon = meRes.data?.anon_id ?? null;
-        const otherId = mRes.data.user_a === uid ? mRes.data.user_b : mRes.data.user_a;
-
+        const anon = me?.anon_id ?? null;
         if (!alive) return;
         setMyAnonId(anon);
 
-        // ✅ Batch 2: fetch profile + messages + mark read all in parallel
-        const [profileRes, messagesRes] = await Promise.all([
-          supabase.from("profiles").select("nickname, photo1_url").eq("user_id", otherId).maybeSingle(),
-          supabase.from("messages")
-            .select("id, match_id, sender_anon, content, created_at, read_at")
-            .eq("match_id", matchId)
-            .order("created_at", { ascending: true }),
-          anon ? markThreadRead(matchId, anon) : Promise.resolve(),
-        ]);
+        const { data: mRow, error: mErr } = await supabase
+          .from("matches")
+          .select("user_a, user_b")
+          .eq("id", matchId)
+          .maybeSingle();
+
+        if (mErr) throw mErr;
+        if (!mRow) throw new Error("Match not found");
+
+        const otherId = mRow.user_a === uid ? mRow.user_b : mRow.user_a;
+
+        const { data: profile, error: pErr } = await supabase
+          .from("profiles")
+          .select("nickname, photo1_url")
+          .eq("user_id", otherId)
+          .maybeSingle();
+
+        if (pErr) throw pErr;
 
         if (!alive) return;
-        setOtherProfile(profileRes.data ?? null);
-        setMsgs((messagesRes.data as MsgRow[]) ?? []);
+        setOtherProfile(profile ?? null);
+
+        const { data: messages, error: msgErr } = await supabase
+          .from("messages")
+          .select("id, match_id, sender_anon, content, created_at, read_at")
+          .eq("match_id", matchId)
+          .order("created_at", { ascending: true });
+
+        if (msgErr) throw msgErr;
+
+        if (!alive) return;
+        setMsgs((messages as MsgRow[]) ?? []);
+
+        // ✅ open thread => mark read (badge should disappear)
+        if (anon) {
+          await markThreadRead(matchId, anon);
+        }
       } catch (e: any) {
         console.error("CHAT LOAD ERROR:", e);
         if (alive) setErr(e?.message ?? "Load failed");
