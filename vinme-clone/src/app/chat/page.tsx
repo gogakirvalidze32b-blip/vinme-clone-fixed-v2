@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { photoSrc } from "@/lib/photos";
 import { getLang } from "@/lib/i18n";
-import BottomNav from "@/components/BottomNav";
 
 type Profile = { user_id: string; nickname: string | null; first_name: string | null; photo1_url: string | null; last_seen?: string | null; };
 
@@ -203,7 +202,6 @@ export default function ChatPage() {
           </div>
         </div>)}
       </div>
-      <BottomNav />
     </main>
   );
 
@@ -317,7 +315,6 @@ export default function ChatPage() {
           </div>
         )}
       </div>
-      <BottomNav />
     </main>
   );
 }
