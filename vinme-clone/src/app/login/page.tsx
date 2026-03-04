@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import LangMenu from "@/components/LangMenu";
 import { getLang, type Lang } from "@/lib/i18n";
 
+
 export default function LoginPage() {
   const [lang, setLang] = useState<Lang>("ka");
   const [view, setView] = useState<"main" | "email" | "otp">("main");
@@ -18,7 +19,6 @@ export default function LoginPage() {
     setLang(getLang());
     const h = () => setLang(getLang());
     window.addEventListener("app:lang", h);
-    // Session check removed - user must always authenticate via OTP/Google
     return () => window.removeEventListener("app:lang", h);
   }, []);
 
@@ -36,13 +36,13 @@ export default function LoginPage() {
       email: email.trim(),
       options: { shouldCreateUser: true }
     });
-    if (e) { 
+    if (e) {
       if (e.message.includes("rate limit") || e.message.includes("too many")) {
         setError(ka ? "ძალიან ბევრი მცდელობა, სცადე 1 საათში" : "Too many attempts, try again in 1 hour");
       } else {
         setError(e.message);
       }
-      setLoading(false); return; 
+      setLoading(false); return;
     }
     setView("otp");
     setLoading(false);
@@ -63,7 +63,6 @@ export default function LoginPage() {
     <div className="relative min-h-[100dvh] w-full overflow-hidden text-white" style={{
       background: "linear-gradient(135deg, #0f0f1a 0%, #1a0a2e 40%, #0d1117 100%)"
     }}>
-      {/* Animated blobs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute w-96 h-96 rounded-full opacity-20 blur-3xl animate-pulse"
           style={{ background: "radial-gradient(circle, #7C3AED, transparent)", top: "-10%", left: "-10%" }} />
@@ -80,7 +79,6 @@ export default function LoginPage() {
       <div className="flex min-h-[100dvh] items-center justify-center px-4">
         <div className="w-full max-w-[380px]">
 
-          {/* ── MAIN VIEW ── */}
           {view === "main" && (
             <>
               <div className="flex flex-col items-center mb-12">
@@ -89,9 +87,7 @@ export default function LoginPage() {
                   {ka ? "შეხვდი ახალ ადამიანებს — მარტივად." : "Meet new people — easily."}
                 </p>
               </div>
-
               <div className="flex flex-col gap-3">
-                {/* Google */}
                 <button onClick={signInGoogle}
                   className="w-full flex items-center justify-center gap-3 rounded-2xl py-4 font-semibold text-sm bg-white text-black transition active:scale-95 shadow-lg">
                   <svg width="20" height="20" viewBox="0 0 24 24">
@@ -102,14 +98,11 @@ export default function LoginPage() {
                   </svg>
                   {ka ? "Google-ით შესვლა" : "Continue with Google"}
                 </button>
-
                 <div className="flex items-center gap-3">
                   <div className="flex-1 h-px bg-white/10" />
                   <span className="text-white/25 text-xs">{ka ? "ან" : "or"}</span>
                   <div className="flex-1 h-px bg-white/10" />
                 </div>
-
-                {/* Email OTP */}
                 <button onClick={() => setView("email")}
                   className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 font-semibold text-sm transition active:scale-95 ring-1 ring-white/15"
                   style={{ background: "rgba(255,255,255,0.06)" }}>
@@ -120,21 +113,18 @@ export default function LoginPage() {
                   {ka ? "მეილით შესვლა" : "Continue with Email"}
                 </button>
               </div>
-
               <p className="mt-8 text-center text-[11px] text-white/20">
                 {ka ? "შესვლით ეთანხმები წესებს და კონფიდენციალურობას." : "By continuing you agree to our Terms & Privacy Policy."}
               </p>
             </>
           )}
 
-          {/* ── EMAIL VIEW ── */}
           {view === "email" && (
             <>
               <button onClick={() => { setView("main"); setError(null); }}
                 className="flex items-center gap-2 text-white/40 hover:text-white mb-10 transition text-sm">
                 ← {ka ? "უკან" : "Back"}
               </button>
-
               <div className="mb-8">
                 <h1 className="text-2xl font-black mb-2">
                   {ka ? "შეიყვანე მეილი 📧" : "Enter your email 📧"}
@@ -143,7 +133,6 @@ export default function LoginPage() {
                   {ka ? "გამოგიგზავნით 6-ნიშნა კოდს" : "We'll send you a 6-digit code"}
                 </p>
               </div>
-
               <div className="flex flex-col gap-3">
                 <div className="rounded-2xl ring-1 ring-white/10 focus-within:ring-[#7C3AED] transition overflow-hidden"
                   style={{ background: "rgba(255,255,255,0.06)" }}>
@@ -156,9 +145,7 @@ export default function LoginPage() {
                     autoComplete="email" autoFocus
                   />
                 </div>
-
                 {error && <p className="text-red-400 text-xs px-1">{error}</p>}
-
                 <button onClick={sendOtp} disabled={loading}
                   className="w-full rounded-2xl py-4 font-bold text-sm transition active:scale-95 disabled:opacity-50"
                   style={{ background: "linear-gradient(135deg, #7C3AED, #ec4899)", boxShadow: "0 4px 24px rgba(124,58,237,0.35)" }}>
@@ -168,14 +155,13 @@ export default function LoginPage() {
             </>
           )}
 
-          {/* ── OTP VIEW ── */}
           {view === "otp" && (
             <>
-              <button onClick={() => { setView("email"); setOtp(["","","","","",""]); setError(null); }}
+              {/* ✅ გასწორებული: setOtp("") და არა setOtp([...]) */}
+              <button onClick={() => { setView("email"); setOtp(""); setError(null); }}
                 className="flex items-center gap-2 text-white/40 hover:text-white mb-10 transition text-sm">
                 ← {ka ? "უკან" : "Back"}
               </button>
-
               <div className="mb-8">
                 <h1 className="text-2xl font-black mb-2">
                   {ka ? "კოდი გამოგიგზავნეთ ✉️" : "Check your email ✉️"}
@@ -184,33 +170,28 @@ export default function LoginPage() {
                   {ka ? `კოდი გაგზავნილია ${email}-ზე` : `Code sent to ${email}`}
                 </p>
               </div>
-
-              {/* Single OTP input - supports paste */}
               <div className="rounded-2xl ring-1 ring-white/10 focus-within:ring-[#7C3AED] transition overflow-hidden mb-4"
                 style={{ background: "rgba(255,255,255,0.06)" }}>
                 <input
                   type="text" inputMode="numeric"
                   value={otp}
                   onChange={e => {
-                    const val = e.target.value.replace(/[^0-9]/g, "").slice(0, 8);
+                    const val = e.target.value.replace(/[^0-9]/g, "").slice(0, 6);
                     setOtp(val);
                     setError(null);
-                    if (val.length >= 6) setTimeout(() => verifyOtp(), 100);
+                    if (val.length === 6) setTimeout(() => verifyOtp(), 100);
                   }}
                   placeholder="კოდი"
                   className="w-full bg-transparent px-4 py-5 text-3xl font-black text-center outline-none placeholder-white/20 tracking-[12px]"
                   autoFocus autoComplete="one-time-code"
                 />
               </div>
-
               {error && <p className="text-red-400 text-xs text-center mb-3">{error}</p>}
-
               <button onClick={verifyOtp} disabled={loading || otp.replace(/\s/g,"").length < 6}
                 className="w-full rounded-2xl py-4 font-bold text-sm transition active:scale-95 disabled:opacity-40"
                 style={{ background: "linear-gradient(135deg, #7C3AED, #ec4899)", boxShadow: "0 4px 24px rgba(124,58,237,0.35)" }}>
                 {loading ? "..." : (ka ? "შესვლა" : "Verify & Sign In")}
               </button>
-
               <button onClick={sendOtp} disabled={loading}
                 className="w-full mt-3 text-center text-sm text-white/30 hover:text-white/60 transition">
                 {ka ? "კოდი არ მოვიდა? თავიდან გაგზავნა" : "Didn't receive? Resend"}
