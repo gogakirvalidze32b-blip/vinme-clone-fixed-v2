@@ -50,7 +50,7 @@ export default function LoginPage() {
 
   async function verifyOtp() {
     const code = otp.replace(/\s/g, "").trim();
-    if (code.length < 6) { setError(ka ? "შეიყვანე კოდი" : "Enter the code"); return; }
+    if (code.length < 8) { setError(ka ? "შეიყვანე კოდი" : "Enter the code"); return; }
     setLoading(true); setError(null);
     const { error: e } = await supabase.auth.verifyOtp({
       email: email.trim(), token: code, type: "email"
@@ -130,7 +130,7 @@ export default function LoginPage() {
                   {ka ? "შეიყვანე მეილი 📧" : "Enter your email 📧"}
                 </h1>
                 <p className="text-white/40 text-sm">
-                  {ka ? "გამოგიგზავნით 6-ნიშნა კოდს" : "We'll send you a 6-digit code"}
+                  {ka ? "გამოგიგზავნით 8-ნიშნა კოდს" : "We'll send you an 8-digit code"}
                 </p>
               </div>
               <div className="flex flex-col gap-3">
@@ -157,7 +157,6 @@ export default function LoginPage() {
 
           {view === "otp" && (
             <>
-              {/* ✅ გასწორებული: setOtp("") და არა setOtp([...]) */}
               <button onClick={() => { setView("email"); setOtp(""); setError(null); }}
                 className="flex items-center gap-2 text-white/40 hover:text-white mb-10 transition text-sm">
                 ← {ka ? "უკან" : "Back"}
@@ -176,10 +175,10 @@ export default function LoginPage() {
                   type="text" inputMode="numeric"
                   value={otp}
                   onChange={e => {
-                    const val = e.target.value.replace(/[^0-9]/g, "").slice(0, 6);
+                    const val = e.target.value.replace(/[^0-9]/g, "").slice(0, 8);
                     setOtp(val);
                     setError(null);
-                    if (val.length === 6) setTimeout(() => verifyOtp(), 100);
+                    if (val.length === 8) setTimeout(() => verifyOtp(), 100);
                   }}
                   placeholder="კოდი"
                   className="w-full bg-transparent px-4 py-5 text-3xl font-black text-center outline-none placeholder-white/20 tracking-[12px]"
@@ -187,7 +186,7 @@ export default function LoginPage() {
                 />
               </div>
               {error && <p className="text-red-400 text-xs text-center mb-3">{error}</p>}
-              <button onClick={verifyOtp} disabled={loading || otp.replace(/\s/g,"").length < 6}
+              <button onClick={verifyOtp} disabled={loading || otp.replace(/\s/g,"").length < 8}
                 className="w-full rounded-2xl py-4 font-bold text-sm transition active:scale-95 disabled:opacity-40"
                 style={{ background: "linear-gradient(135deg, #7C3AED, #ec4899)", boxShadow: "0 4px 24px rgba(124,58,237,0.35)" }}>
                 {loading ? "..." : (ka ? "შესვლა" : "Verify & Sign In")}
