@@ -1,7 +1,6 @@
-import type { Metadata, Viewport } from "next";
-import "./globals.css";
 import { Noto_Sans_Georgian } from "next/font/google";
-import { UserProvider } from "@/lib/userContext";
+import "./globals.css";
+import { Providers } from "@/components/Providers";
 
 const notoGeo = Noto_Sans_Georgian({
   subsets: ["georgian"],
@@ -9,26 +8,16 @@ const notoGeo = Noto_Sans_Georgian({
   variable: "--font-brand",
 });
 
-export const metadata: Metadata = {
+export const metadata = {
   title: "Shekhvdi",
   description: "Dating app",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent" },
-};
-
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-  viewportFit: "cover",
-  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ka" className={notoGeo.variable}>
       <body className="min-h-screen bg-black text-white antialiased">
-        <UserProvider>{children}</UserProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

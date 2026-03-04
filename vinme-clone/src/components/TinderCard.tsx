@@ -255,14 +255,13 @@ export default function TinderCard({
   );
 }
 
-// ---- helpers ----
 function ActionBtn({ size, color, onClick, disabled, children, style }: {
   size: "sm" | "lg"; color: string; onClick?: () => void;
   disabled?: boolean; children: React.ReactNode; style?: React.CSSProperties;
 }) {
   const dim = size === "lg" ? "w-16 h-16" : "w-12 h-12";
   return (
-    <button type="button" onClick={onClick} disabled={disabled} style={style}
+    <button type="button" onClick={onClick} disabled={disabled}
       className={`${dim} rounded-full bg-zinc-950 border-2 flex items-center justify-center shadow-lg disabled:opacity-40 active:scale-90 transition`}
       style={{ ...style, borderColor: color, color }}>
       {children}

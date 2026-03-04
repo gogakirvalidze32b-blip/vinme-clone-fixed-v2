@@ -1,0 +1,43 @@
+
+> vinme-clone@0.1.0 build
+> next build
+
+npm :  GÜá Warning: Next.js inferred your workspace root, but it may 
+not be correct.
+At line:1 char:1
++ npm run build 2>&1 | Out-String | Set-Content build-log.txt
++ ~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ( GÜá Warning: N...not b 
+   e correct.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+ We detected multiple lockfiles and selected the directory of C:\User
+s\User\vinme-clone-fixed-v2\package-lock.json as the root directory.
+ To silence this warning, set `outputFileTracingRoot` in your Next.js
+ config, or consider removing one of the lockfiles if it's not needed
+.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-j
+s/output#caveats for more information.
+ Detected additional lockfiles: 
+   * C:\Users\User\vinme-clone-fixed-v2\vinme-clone\package-lock.json
+
+   Gû¦ Next.js 15.5.9
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ G£ô Compiled successfully in 2.9s
+   Skipping validation of types
+   Skipping linting
+   Collecting page data ...
+   Generating static pages (0/19) ...
+Error occurred prerendering page "/_not-found". Read more: https://ne
+xtjs.org/docs/messages/prerender-error
+[Error: Element type is invalid: expected a string (for built-in comp
+onents) or a class/function (for composite components) but got: undef
+ined.] {
+  digest: '912477975'
+}
+Export encountered an error on /_not-found/page: /_not-found, exiting
+ the build.
+ G¿» Next.js build worker exited with code: 1 and signal: null
+
