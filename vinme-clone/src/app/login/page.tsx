@@ -182,7 +182,7 @@ export default function LoginPage() {
                     setError(null);
 useEffect(() => {
   if (otp.replace(/\s/g,"").length === 8) verifyOtp();
-}, [otp]);                  }}
+}, [otp]);          }}
                   placeholder="კოდი"
                   className="w-full bg-transparent px-4 py-5 text-3xl font-black text-center outline-none placeholder-white/20 tracking-[12px]"
                   autoFocus autoComplete="one-time-code"
