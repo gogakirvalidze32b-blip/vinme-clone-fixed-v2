@@ -58,17 +58,26 @@ export default function SettingsPage() {
   const [ageMax, setAgeMax] = useState(45);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [pauseSaving, setPauseSaving] = useState(false);
+  const [scheduledDeletion, setScheduledDeletion] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const { data } = await supabase.from("profiles")
-        .select("max_distance_km,min_age,max_age").eq("user_id", user.id).maybeSingle();
+        .select("max_distance_km,min_age,max_age,is_paused").eq("user_id", user.id).maybeSingle();
       if (!data) return;
       if (data.max_distance_km) setDistanceKm(data.max_distance_km);
       if (data.min_age) setAgeMin(data.min_age);
       if (data.max_age) setAgeMax(data.max_age);
+      setIsPaused(data.is_paused ?? false);
+
+      // check scheduled deletion
+      const { data: del } = await supabase.from("scheduled_deletions")
+        .select("scheduled_for").eq("user_id", user.id).maybeSingle();
+      if (del) setScheduledDeletion(del.scheduled_for);
     })();
   }, []);
 
@@ -78,27 +87,56 @@ export default function SettingsPage() {
     setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2000);
   }
 
+  async function handlePauseToggle(val: boolean) {
+    setPauseSaving(true);
+    await saveProfilePatch({ is_paused: val });
+    setIsPaused(val);
+    setPauseSaving(false);
+  }
+
   async function handleLogout() {
     await supabase.auth.signOut();
     router.replace("/login");
   }
 
+  async function handleCancelDeletion() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from("scheduled_deletions").delete().eq("user_id", user.id);
+    // restore profile
+    await supabase.from("profiles").update({ deleted_at: null }).eq("user_id", user.id);
+    setScheduledDeletion(null);
+  }
+
   async function handleDelete() {
-    const ok = confirm(ka ? "ანგარიში წაიშლება. დარწმუნებული ხარ?" : "Delete your account? This cannot be undone.");
+    const ok = confirm(
+      ka
+        ? "პროფილი დაიბლოკება და 30 დღეში სამუდამოდ წაიშლება. გააგრძელებ?"
+        : "Your profile will be deactivated and permanently deleted in 30 days. Continue?"
+    );
     if (!ok) return;
-    let error = null;
-    try {
-      const res = await supabase.rpc("delete_my_account");
-      error = res.error;
-    } catch {};
-    if (error) {
-      // fallback: just sign out
-      await supabase.auth.signOut();
-    } else {
-      await supabase.auth.signOut();
-    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const scheduledFor = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    // mark profile as deleted_at
+    await supabase.from("profiles").update({ deleted_at: new Date().toISOString(), is_paused: true }).eq("user_id", user.id);
+
+    // schedule deletion
+    await supabase.from("scheduled_deletions").upsert({
+      user_id: user.id,
+      scheduled_for: scheduledFor,
+    }, { onConflict: "user_id" });
+
+    await supabase.auth.signOut();
     router.replace("/login");
   }
+
+  const deletionDate = scheduledDeletion
+    ? new Date(scheduledDeletion).toLocaleDateString(ka ? "ka-GE" : "en-US", { day: "numeric", month: "long", year: "numeric" })
+    : null;
 
   return (
     <div className="min-h-[100dvh] bg-zinc-950 text-white flex justify-center">
@@ -113,6 +151,24 @@ export default function SettingsPage() {
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 pt-3" style={{ paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))" }}>
+
+          {/* SCHEDULED DELETION BANNER */}
+          {scheduledDeletion && (
+            <div className="mt-2 rounded-2xl bg-red-500/15 ring-1 ring-red-500/30 p-4 flex items-center justify-between gap-3">
+              <div>
+                <div className="font-bold text-red-400 text-sm">
+                  {L("პროფილი იშლება", "Account scheduled for deletion")}
+                </div>
+                <div className="text-xs text-white/50 mt-0.5">
+                  {L(`წაიშლება: ${deletionDate}`, `Deletes on: ${deletionDate}`)}
+                </div>
+              </div>
+              <button onClick={handleCancelDeletion}
+                className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-black shrink-0">
+                {L("გაუქმება", "Cancel")}
+              </button>
+            </div>
+          )}
 
           {/* PREMIUM */}
           <div className="rounded-2xl bg-gradient-to-r from-pink-500/20 to-orange-400/20 ring-1 ring-pink-500/30 p-4 flex items-center justify-between mt-2">
@@ -129,6 +185,25 @@ export default function SettingsPage() {
             <Row label={L("ტელეფონის ნომერი", "Phone Number")} sub={L("დამატება / შეცვლა", "Add / Change")} />
             <Row label={L("ელ.ფოსტა", "Email")} sub={L("დამატება / შეცვლა", "Add / Change")} />
             <Row label={L("პროფილის რედაქტირება", "Edit Profile")} onClick={() => router.push("/profile/edit")} />
+          </Card>
+
+          {/* PAUSE */}
+          <SectionLabel>{L("პროფილის სტატუსი", "Profile Status")}</SectionLabel>
+          <Card>
+            <div className="px-4 py-3 flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium">{L("პროფილის პაუზა", "Pause Profile")}</div>
+                <div className="text-xs text-white/40 mt-0.5">
+                  {isPaused
+                    ? L("პროფილი დამალულია — ჩართე რო ისევ გამოჩნდე", "Profile hidden — enable to reappear")
+                    : L("გამორთვით დაიმალები ყველასგან", "Turn off to hide from everyone")}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {pauseSaving && <span className="text-xs text-white/30">...</span>}
+                <Toggle checked={isPaused} onChange={handlePauseToggle} />
+              </div>
+            </div>
           </Card>
 
           {/* DISCOVERY */}
@@ -228,10 +303,12 @@ export default function SettingsPage() {
           </div>
 
           {/* DELETE */}
-          <button type="button" onClick={handleDelete}
-            className="w-full rounded-2xl ring-1 ring-red-500/30 py-4 font-semibold text-red-400 hover:bg-red-500/10 active:scale-[0.99] transition mb-4">
-            {L("ანგარიშის წაშლა", "Delete Account")}
-          </button>
+          {!scheduledDeletion && (
+            <button type="button" onClick={handleDelete}
+              className="w-full rounded-2xl ring-1 ring-red-500/30 py-4 font-semibold text-red-400 hover:bg-red-500/10 active:scale-[0.99] transition mb-4">
+              {L("ანგარიშის წაშლა", "Delete Account")}
+            </button>
+          )}
         </div>
 
         <BottomNav />
