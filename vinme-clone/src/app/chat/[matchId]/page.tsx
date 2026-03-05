@@ -413,8 +413,10 @@ export default function ChatThreadPage() {
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "message_reactions" }, (payload) => {
         const r = payload.old as Reaction;
-        setReactions(prev => prev.filter(x => x.id !== r.id));
-      })
+setReactions(prev => prev.filter(x => 
+  x.id !== r.id && 
+  !(x.message_id === r.message_id && x.sender_anon === r.sender_anon)
+));      })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [matchId, markRead]);
