@@ -46,6 +46,66 @@ function Ticks({ sent, read, mine }: { sent: boolean; read: boolean; mine: boole
   );
 }
 
+// ===== UNMATCH FEEDBACK MODAL =====
+function UnmatchModal({ onClose, onConfirm, ka }: {
+  onClose: () => void; onConfirm: (reason: string) => void; ka: boolean;
+}) {
+  const [selected, setSelected] = useState<string | null>(null);
+
+  const reasons = ka ? [
+    "არ ვართ თავსებადი",
+    "შეურაცხმყოფელი ქცევა",
+    "სპამი ან ყალბი პროფილი",
+    "უბრალოდ მიმოწერა დამთავრდა",
+    "სხვა მიზეზი",
+  ] : [
+    "Not compatible",
+    "Offensive behavior",
+    "Spam or fake profile",
+    "Conversation ended naturally",
+    "Other reason",
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div className="relative w-full max-w-lg bg-zinc-900 rounded-t-3xl overflow-hidden"
+        onClick={e => e.stopPropagation()}>
+        <div className="px-5 pt-5 pb-2">
+          <h2 className="text-lg font-extrabold text-white">
+            {ka ? "რატო ხდება Unmatch?" : "Why are you unmatching?"}
+          </h2>
+          <p className="text-sm text-white/40 mt-1">
+            {ka ? "მიზეზი სავალდებულოა" : "A reason is required"}
+          </p>
+        </div>
+        <div className="px-4 py-3 flex flex-col gap-2">
+          {reasons.map((r) => (
+            <button key={r} onClick={() => setSelected(r)}
+              className={`w-full text-left px-4 py-3.5 rounded-2xl text-sm font-medium transition border ${
+                selected === r
+                  ? "bg-red-500/20 border-red-500/60 text-white"
+                  : "bg-white/5 border-white/8 text-white/70 hover:bg-white/10"
+              }`}>
+              {r}
+            </button>
+          ))}
+        </div>
+        <div className="px-4 pb-8 pt-2 flex gap-3">
+          <button onClick={onClose}
+            className="flex-1 rounded-2xl bg-white/8 py-3.5 text-sm font-semibold text-white/70">
+            {ka ? "გაუქმება" : "Cancel"}
+          </button>
+          <button onClick={() => selected && onConfirm(selected)} disabled={!selected}
+            className="flex-1 rounded-2xl bg-red-500 py-3.5 text-sm font-bold text-white disabled:opacity-40 transition">
+            {ka ? "Unmatch" : "Unmatch"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ===== 3-DOT MENU =====
 function ChatMenu({ onClose, onViewProfile, onUnmatch, onBlock, lang }: {
   onClose: () => void; onViewProfile: () => void; onUnmatch: () => void; onBlock: () => void; lang: string;
@@ -93,26 +153,19 @@ export default function ChatThreadPage() {
   const [otherProfile, setOtherProfile] = useState<any>(null);
   const [otherUserId, setOtherUserId] = useState<string|null>(null);
   const [sending, setSending] = useState(false);
-  const sendingRef = useRef(false);
-  const [uploadingImg, setUploadingImg] = useState(false);
-  const [imagePreview, setImagePreview] = useState<{file: File, url: string} | null>(null);
-  const imgInputRef = useRef<HTMLInputElement>(null);
   const [showEmoji, setShowEmoji] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
-  const [vpHeight, setVpHeight] = useState<number>(0);
+  const [showUnmatchModal, setShowUnmatchModal] = useState(false);
 
-  // long press delete
   const [selectedMsgId, setSelectedMsgId] = useState<string|null>(null);
   const longPressTimer = useRef<NodeJS.Timeout|null>(null);
 
-  // pull to refresh
   const [pullY, setPullY] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const pullStartY = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // recording
   const [recording, setRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob|null>(null);
   const [recordTime, setRecordTime] = useState(0);
@@ -163,13 +216,13 @@ export default function ChatThreadPage() {
       const [profileRes, msgsRes] = await Promise.all([
         supabase.from("profiles").select("user_id,nickname,first_name,photo1_url,last_seen").eq("user_id", otherId).maybeSingle(),
         supabase.from("messages").select("*").eq("match_id", matchId).order("created_at", { ascending: true }),
-        markRead(anonId, user.id),
-        supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("user_id", user.id),
       ]);
 
       setOtherProfile(profileRes.data ?? null);
       setMsgs(msgsRes.data ?? []);
       setIsLoaded(true);
+      await markRead(anonId, user.id);
+      await supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("user_id", user.id);
     })();
   }, [matchId, router, markRead]);
 
@@ -195,23 +248,6 @@ export default function ChatThreadPage() {
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs.length]);
 
-  // ✅ Track visual viewport height for keyboard-aware layout
-  useEffect(() => {
-    // Only apply on mobile (keyboard-aware layout)
-    if (window.innerWidth > 768) return;
-    const vv = window.visualViewport;
-    if (!vv) { setVpHeight(window.innerHeight); return; }
-    const handler = () => {
-      const h = Math.round(vv.height);
-      setVpHeight(h);
-    };
-    handler();
-    vv.addEventListener("resize", handler);
-    vv.addEventListener("scroll", handler);
-    return () => { vv.removeEventListener("resize", handler); vv.removeEventListener("scroll", handler); };
-  }, []);
-
-  // pull-to-refresh handlers
   function onTouchStart(e: React.TouchEvent) { pullStartY.current = e.touches[0].clientY; }
   function onTouchMove(e: React.TouchEvent) {
     const el = scrollRef.current;
@@ -228,7 +264,6 @@ export default function ChatThreadPage() {
     } else { setPullY(0); }
   }
 
-  // long press handlers
   function onMsgPointerDown(msgId: string) {
     longPressTimer.current = setTimeout(() => setSelectedMsgId(msgId), 500);
   }
@@ -240,25 +275,9 @@ export default function ChatThreadPage() {
     setSelectedMsgId(null);
   }
 
-  async function uploadImage(file: File) {
-    if (!matchId || !myUserId || !file) return;
-    setUploadingImg(true);
-    try {
-      const ext = file.type.split("/")[1] || "jpg";
-      const path = `${myUserId}/chat-${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from("photos").upload(path, file, { upsert: true, contentType: file.type });
-      if (upErr) throw upErr;
-      const { data: urlData } = supabase.storage.from("photos").getPublicUrl(path);
-      const imgUrl = urlData.publicUrl;
-      await supabase.from("messages").insert({ match_id: matchId, sender_anon: myAnonId, content: imgUrl, type: "image" });
-    } catch (e) { console.error(e); }
-    setUploadingImg(false);
-  }
-
   async function send() {
     const t2 = text.trim();
-    if (!t2 || !myAnonId || sending || sendingRef.current) return;
-    sendingRef.current = true;
+    if (!t2 || !myAnonId || sending) return;
     setSending(true); setText("");
     const tempId = `temp-${Date.now()}`;
     setMsgs(prev => [...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: t2, created_at: new Date().toISOString(), read_at: null, type: "text" }]);
@@ -297,10 +316,8 @@ export default function ChatThreadPage() {
     if (!audioBlob || !myAnonId || uploadingVoice) return;
     setUploadingVoice(true);
     const fileName = `voice-${Date.now()}.webm`;
-    // ✅ upload to public bucket path
-    const { data: uploadData, error } = await supabase.storage.from("voices").upload(fileName, audioBlob, { contentType: "audio/webm", upsert: true });
+    const { error } = await supabase.storage.from("voices").upload(fileName, audioBlob, { contentType: "audio/webm", upsert: true });
     if (error) { console.error("Voice upload error:", error); setUploadingVoice(false); return; }
-    // ✅ get public URL correctly
     const { data: urlData } = supabase.storage.from("voices").getPublicUrl(fileName);
     const publicUrl = urlData.publicUrl;
     const tempId = `tempv-${Date.now()}`;
@@ -311,11 +328,26 @@ export default function ChatThreadPage() {
     setAudioBlob(null); setUploadingVoice(false);
   }
 
-  async function handleUnmatch() {
-    if (!confirm(ka ? "Unmatch-ი გჭირდება?" : "Unmatch this person?")) return;
+  async function handleUnmatchConfirm(reason: string) {
+    setShowUnmatchModal(false);
+    // feedback შენახვა
+    await supabase.from("unmatch_feedback").insert({
+      from_user_id: myUserId,
+      to_user_id: otherUserId,
+      match_id: matchId,
+      reason,
+    });
+    // notification მეორე მომხმარებელს
+    await supabase.from("notifications").insert({
+      user_id: otherUserId,
+      type: "unmatch",
+      message: ka ? `ვიღაცამ Unmatch გაგიკეთა` : `Someone unmatched you`,
+    }).then(() => {}); // ignore error თუ table არ არსებობს
+    // match წაშლა
     await supabase.from("matches").delete().eq("id", matchId);
     router.replace("/chat");
   }
+
   async function handleBlock() {
     if (!confirm(ka ? "დაბლოკვა და შეტყობინება?" : "Block and report?")) return;
     await supabase.from("matches").delete().eq("id", matchId);
@@ -326,8 +358,8 @@ export default function ChatThreadPage() {
   const otherName = otherProfile?.nickname ?? otherProfile?.first_name ?? "...";
 
   if (!isLoaded) return (
-    <div className="flex justify-center bg-[#111]" style={{ height: "100dvh", overflow: "hidden" }}>
-      <div className="w-full max-w-lg flex flex-col bg-[#111]" style={{ height: "100%"  }}>
+    <div className="flex justify-center bg-[#111]" style={{ height: "100dvh" }}>
+      <div className="w-full max-w-lg flex flex-col bg-[#111]" style={{ height: "100dvh" }}>
         <div className="flex items-center gap-3 px-4 py-3 bg-zinc-950 border-b border-white/8 shrink-0">
           <div className="w-9 h-9 rounded-full bg-white/10 animate-pulse" />
           <div className="flex items-center gap-3 flex-1">
@@ -348,17 +380,15 @@ export default function ChatThreadPage() {
   );
 
   return (
-    <div className="flex justify-center bg-[#111]" style={{ height: vpHeight > 0 ? `${vpHeight}px` : "100dvh" }}>
+    <div className="flex justify-center bg-[#111]" style={{ height: "100dvh" }}>
       <div className="w-full max-w-lg flex flex-col bg-[#111] text-white"
-        style={{ height: vpHeight > 0 ? `${vpHeight}px` : "100dvh" }}
+        style={{ height: "100dvh" }}
         onClick={() => { showEmoji && setShowEmoji(false); selectedMsgId && setSelectedMsgId(null); }}>
 
         {/* HEADER */}
         <div className="flex items-center gap-3 px-4 py-3 bg-zinc-950 border-b border-white/8 shrink-0">
           <button onClick={() => router.push("/chat")}
             className="rounded-full bg-white/8 w-9 h-9 flex items-center justify-center text-white shrink-0 hover:bg-white/12 transition">←</button>
-          
-          {/* ✅ avatar + name clickable → profile */}
           <div className="flex items-center gap-3 flex-1 cursor-pointer"
             onClick={() => otherUserId && router.push(`/profile/${otherUserId}`)}>
             <div className="relative shrink-0">
@@ -371,8 +401,6 @@ export default function ChatThreadPage() {
               <div className={`text-[11px] ${isOnline ? "text-green-400" : "text-white/40"}`}>{statusText}</div>
             </div>
           </div>
-
-          {/* 3-dot menu */}
           <button onClick={(e) => { e.stopPropagation(); setShowMenu(true); }}
             className="w-9 h-9 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/8 transition shrink-0 text-lg font-bold tracking-widest">
             ···
@@ -383,8 +411,6 @@ export default function ChatThreadPage() {
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3"
           style={{ transform: `translateY(${pullY}px)`, transition: pullY === 0 ? "transform 0.2s" : "none" }}
           onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-          
-          {/* pull indicator */}
           {(pullY > 10 || refreshing) && (
             <div className="flex justify-center mb-2 -mt-8">
               <span className={`text-white/40 text-xs ${refreshing ? "animate-spin" : ""}`}>
@@ -392,7 +418,6 @@ export default function ChatThreadPage() {
               </span>
             </div>
           )}
-
           <div className="space-y-0.5">
             {msgs.map((m, i) => {
               const mine = m.sender_anon === myAnonId;
@@ -400,14 +425,11 @@ export default function ChatThreadPage() {
               const isRead = !!m.read_at;
               const prevSame = i > 0 && msgs[i-1].sender_anon === m.sender_anon;
               const isSelected = selectedMsgId === m.id;
-
               return (
                 <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"} ${prevSame ? "mt-0.5" : "mt-3"} relative`}
                   onPointerDown={() => onMsgPointerDown(m.id)} onPointerUp={onMsgPointerUp} onPointerLeave={onMsgPointerUp}
                   onContextMenu={e => e.preventDefault()}
                   style={{ WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none" }}>
-                  
-                  {/* delete popup on long press */}
                   {isSelected && mine && (
                     <div className="absolute bottom-full right-0 mb-1 z-30 bg-zinc-800 rounded-xl shadow-xl ring-1 ring-white/10 overflow-hidden">
                       <button onClick={() => deleteMessage(m.id)}
@@ -416,7 +438,6 @@ export default function ChatThreadPage() {
                       </button>
                     </div>
                   )}
-
                   {m.type === "voice" ? (
                     <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl max-w-[270px]
                       ${mine ? "bg-[#7C3AED] rounded-tr-sm" : "bg-zinc-800 rounded-tl-sm"}
@@ -429,29 +450,14 @@ export default function ChatThreadPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className={`text-sm leading-relaxed max-w-[78%] select-none overflow-hidden
-                      ${m.type === "image" ? "rounded-2xl" : "px-3.5 py-2.5 break-words"}
+                    <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words max-w-[78%] select-none
                       ${mine ? "bg-[#7C3AED] rounded-2xl rounded-tr-sm" : "bg-zinc-800 rounded-2xl rounded-tl-sm"}
                       ${isTemp ? "opacity-60" : ""} ${isSelected ? "ring-2 ring-red-400 opacity-80" : ""}`}>
-                      {m.type === "image" ? (
-                        <div>
-                          <img src={m.content} className="max-w-full max-h-[280px] object-cover block" alt=""
-                            onClick={() => window.open(m.content, "_blank")}
-                            onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
-                          <div className="px-2 py-1 flex justify-end items-center gap-1">
-                            <span className={`text-[10px] ${mine ? "text-purple-200/50" : "text-white/25"}`}>{fmtTime(m.created_at)}</span>
-                            <Ticks sent={!isTemp} read={isRead} mine={mine} />
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <span>{m.content}</span>
-                          <span className="inline-flex items-center gap-0.5 ml-2">
-                            <span className={`text-[10px] ${mine ? "text-purple-200/50" : "text-white/25"}`}>{fmtTime(m.created_at)}</span>
-                            <Ticks sent={!isTemp} read={isRead} mine={mine} />
-                          </span>
-                        </>
-                      )}
+                      <span>{m.content}</span>
+                      <span className="inline-flex items-center gap-0.5 ml-2">
+                        <span className={`text-[10px] ${mine ? "text-purple-200/50" : "text-white/25"}`}>{fmtTime(m.created_at)}</span>
+                        <Ticks sent={!isTemp} read={isRead} mine={mine} />
+                      </span>
                     </div>
                   )}
                 </div>
@@ -461,36 +467,13 @@ export default function ChatThreadPage() {
           </div>
         </div>
 
-        {/* IMAGE PREVIEW MODAL */}
-        {imagePreview && (
-          <div className="fixed inset-0 z-50 bg-black">
-            {/* Full screen photo */}
-            <img src={imagePreview.url} className="absolute inset-0 w-full h-full object-contain" alt="" />
-            {/* X button top-left */}
-            <button onClick={() => setImagePreview(null)}
-              className="absolute top-4 left-4 w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white text-lg z-10"
-              style={{ marginTop: "env(safe-area-inset-top, 0px)" }}>
-              ✕
-            </button>
-            {/* Send button bottom-right like image 2 */}
-            <button
-              onClick={async () => { const f = imagePreview.file; setImagePreview(null); await uploadImage(f); }}
-              disabled={uploadingImg}
-              className="absolute bottom-8 right-6 w-14 h-14 rounded-full bg-[#7C3AED] flex items-center justify-center shadow-2xl z-10 disabled:opacity-50">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
-            </button>
-          </div>
-        )}
-
-        {/* INPUT - fixed to bottom on mobile, flex on desktop */}
-        <div className="shrink-0 bg-zinc-950 border-t border-white/8 px-3 pt-2"
-          style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 8px)" }}
+        {/* INPUT */}
+        <div className="shrink-0 bg-zinc-950 border-t border-white/8 px-3 pt-2 pb-3"
+          style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 0px)" }}
           onClick={e => e.stopPropagation()}>
-          
           {showEmoji && (
             <div className="mb-2"><EmojiPicker onEmojiClick={e => setText(p => p + e.emoji)} width="100%" height={280} theme={"dark" as any} /></div>
           )}
-
           {recording && (
             <div className="flex items-center gap-2 mb-2 px-3 py-2.5 rounded-2xl bg-red-500/10 border border-red-500/20">
               <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse shrink-0" />
@@ -506,7 +489,6 @@ export default function ChatThreadPage() {
               </button>
             </div>
           )}
-
           {!recording && audioBlob && (
             <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-2xl bg-[#7C3AED]/15 border border-[#7C3AED]/25">
               <span className="text-[#A78BFA] font-semibold text-xs shrink-0">🎤 {ka ? "ხმა მზადაა" : "Voice ready"}</span>
@@ -518,25 +500,8 @@ export default function ChatThreadPage() {
               <button onClick={() => setAudioBlob(null)} className="text-white/30 hover:text-white shrink-0">✕</button>
             </div>
           )}
-
           {!recording && (
             <div className="flex items-center gap-2">
-              {/* Hidden image input */}
-              <input ref={imgInputRef} type="file" accept="image/*" className="hidden"
-                onChange={e => { 
-                  const f = e.target.files?.[0]; 
-                  if (f) setImagePreview({ file: f, url: URL.createObjectURL(f) }); 
-                  e.target.value=""; 
-                }} />
-              
-              <button onClick={e => { e.stopPropagation(); imgInputRef.current?.click(); }}
-                className="shrink-0 w-9 h-9 flex items-center justify-center text-white/35 hover:text-white/60 transition"
-                disabled={uploadingImg}>
-                {uploadingImg
-                  ? <span className="text-xs">⏳</span>
-                  : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
-                }
-              </button>
               <button onClick={e => { e.stopPropagation(); setShowEmoji(!showEmoji); }}
                 className="shrink-0 w-9 h-9 flex items-center justify-center text-xl text-white/35 hover:text-white/60 transition">😊</button>
               <div className="flex-1 flex items-center bg-zinc-800 rounded-full px-4 py-2.5 gap-2 min-w-0">
@@ -565,16 +530,24 @@ export default function ChatThreadPage() {
             </div>
           )}
         </div>
-
       </div>
 
-      {/* 3-DOT MENU MODAL */}
+      {/* 3-DOT MENU */}
       {showMenu && (
         <ChatMenu lang={lang}
           onClose={() => setShowMenu(false)}
           onViewProfile={() => { setShowMenu(false); otherUserId && router.push(`/profile/${otherUserId}`); }}
-          onUnmatch={() => { setShowMenu(false); handleUnmatch(); }}
+          onUnmatch={() => { setShowMenu(false); setShowUnmatchModal(true); }}
           onBlock={() => { setShowMenu(false); handleBlock(); }}
+        />
+      )}
+
+      {/* UNMATCH FEEDBACK MODAL */}
+      {showUnmatchModal && (
+        <UnmatchModal
+          ka={ka}
+          onClose={() => setShowUnmatchModal(false)}
+          onConfirm={handleUnmatchConfirm}
         />
       )}
 
