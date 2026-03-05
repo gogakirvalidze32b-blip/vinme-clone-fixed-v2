@@ -11,6 +11,7 @@ const notoGeo = Noto_Sans_Georgian({
 export const metadata = {
   title: "Shekhvdi",
   description: "Dating app",
+  icons: { icon: "/logo1.webp" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
