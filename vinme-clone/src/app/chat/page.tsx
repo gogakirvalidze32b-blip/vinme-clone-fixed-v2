@@ -96,9 +96,9 @@ export default function ChatPage() {
     const unreadMap = new Map<string, number>();
     for (const msg of (allMsgs ?? [])) {
       if (!lastMsgMap.has(msg.match_id)) lastMsgMap.set(msg.match_id, msg);
-      if (anonId && !msg.read_at && msg.sender_anon !== anonId) {
-        unreadMap.set(msg.match_id, (unreadMap.get(msg.match_id) ?? 0) + 1);
-      }
+     if (anonId && !msg.read_at && msg.sender_anon !== anonId) {
+  unreadMap.set(msg.match_id, (unreadMap.get(msg.match_id) ?? 0) + 1);
+}
     }
 
     const result: Match[] = [];
@@ -183,7 +183,9 @@ export default function ChatPage() {
       return new Date(b.last_message_time).getTime() - new Date(a.last_message_time).getTime();
     });
 
-const totalUnread = matches.filter(m => m._unreadCount > 0 && m.last_sender_anon !== myAnonId).length;
+const totalUnread = matches.filter(m => 
+  m._unreadCount > 0 && m.last_sender_anon !== myAnonId
+).length;
 
   if (loading) return (
     <main className="min-h-[100dvh] bg-black text-white pb-28">
