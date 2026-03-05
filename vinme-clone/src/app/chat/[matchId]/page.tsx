@@ -691,8 +691,8 @@ setReactions(prev => prev.filter(x =>
 
                 return (
                   <div key={m.id} className={`flex flex-col w-full ${mine?"items-end":"items-start"} ${prevSame?"mt-0.5":"mt-3"}`}>
-                    <div className="relative w-full flex group"
-                      style={{ justifyContent: mine ? "flex-end" : "flex-start" }}
+                  <div className="relative flex w-full px-2"
+  style={{ justifyContent: mine ? "flex-end" : "flex-start" }}
                       onMouseEnter={() => setHoveredMsgId(m.id)}
                       onMouseLeave={() => setHoveredMsgId(null)}
                       onPointerDown={() => onMsgPointerDown(m.id, mine)}
@@ -762,9 +762,9 @@ setReactions(prev => prev.filter(x =>
                             )}
                           </div>
                         ) : (
-                          <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words max-w-[78%] select-none
-                            ${mine?"bg-[#7C3AED] rounded-2xl rounded-tr-sm":"bg-zinc-800 rounded-2xl rounded-tl-sm"}
-                            ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400 opacity-80":""}`}>
+                          <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words select-none
+  ${mine?"bg-[#7C3AED] rounded-2xl rounded-tr-sm ml-16":"bg-zinc-800 rounded-2xl rounded-tl-sm mr-16"}
+  ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400 opacity-80":""}`}>
                             <span>{m.content}</span>
                             <span className="inline-flex items-center gap-0.5 ml-2">
                               <span className={`text-[10px] ${mine?"text-purple-200/50":"text-white/25"}`}>{fmtTime(m.created_at)}</span>
