@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { photoSrc } from "@/lib/photos";
 import { getLang } from "@/lib/i18n";
 import { useUser } from "@/lib/userContext";
+import BottomNav from "@/components/BottomNav";
 
 type Profile = { user_id: string; nickname: string | null; first_name: string | null; photo1_url: string | null; last_seen?: string | null; };
 
@@ -52,7 +53,6 @@ export default function ChatPage() {
   const [selectedMatchId, setSelectedMatchId] = useState<string|null>(null);
   const longPressRef = useRef<NodeJS.Timeout|null>(null);
 
-  // ✅ ctxAnonId მზად რომ გახდეს — flag ავწიოთ
   useEffect(() => {
     if (ctxAnonId !== null && !ctxReady) setCtxReady(true);
   }, [ctxAnonId]);
@@ -131,7 +131,6 @@ export default function ChatPage() {
     loadingRef.current = false;
   }
 
-  // ✅ ctxReady-ზე ველოდებით — მაშინ ვიწყებთ
   useEffect(() => {
     if (!ctxReady) return;
     (async () => {
@@ -167,7 +166,7 @@ export default function ChatPage() {
         if (msg.read_at) {
           setMatches(prev => prev.map(m => {
             if (String(m.id) !== String(msg.match_id)) return m;
-            return { ...m, _unreadCount: Math.max(0, m._unreadCount - 1) };
+            return { ...m, _unreadCount: 0 };
           }));
         }
       })
@@ -206,6 +205,7 @@ export default function ChatPage() {
           </div>
         </div>)}
       </div>
+      <BottomNav />
     </main>
   );
 
@@ -315,6 +315,7 @@ export default function ChatPage() {
           </div>
         )}
       </div>
+      <BottomNav />
     </main>
   );
 }

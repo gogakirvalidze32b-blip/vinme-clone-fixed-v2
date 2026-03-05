@@ -8,10 +8,9 @@ import { getLang } from "@/lib/i18n";
 
 export default function BottomNav({ chatBadge }: { chatBadge?: number } = {}) {
   const pathname = usePathname() || "";
-  
-  // ✅ Hide nav on chat thread pages (like WhatsApp - full screen chat)
+
   if (pathname.match(/^\/chat\/.+/)) return null;
-  // ✅ unread = number of PEOPLE (matches) with unread messages
+
   const [unreadPeople, setUnreadPeople] = useState(0);
   const [lang, setLang] = useState<"ka"|"en">("ka");
   const pathname2 = usePathname();
@@ -24,7 +23,6 @@ export default function BottomNav({ chatBadge }: { chatBadge?: number } = {}) {
   }, []);
 
   useEffect(() => {
-    // If chatBadge is provided by AppShell - skip all queries, AppShell handles it
     if (chatBadge !== undefined) return;
 
     let alive = true;
@@ -38,7 +36,6 @@ export default function BottomNav({ chatBadge }: { chatBadge?: number } = {}) {
       const anonId = myProfile?.anon_id ?? null;
       if (!anonId) return;
 
-      // Single batch query instead of N+1 loop
       const { data: unreadMsgs } = await supabase
         .from("messages").select("match_id")
         .is("read_at", null).neq("sender_anon", anonId).limit(1000);
@@ -90,7 +87,6 @@ export default function BottomNav({ chatBadge }: { chatBadge?: number } = {}) {
       label: ka ? "ჩათი" : "Chat",
       badge: chatBadge !== undefined ? chatBadge : unreadPeople,
       icon: (active: boolean) => (
-        // speech bubble icon — Tinder-like
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
           stroke={active ? "white" : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
