@@ -415,22 +415,28 @@ export default function ChatThreadPage() {
         const updated = payload.new as MsgRow;
         setMsgs(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m));
       })
-     .on("postgres_changes", { 
-  event: "*",  // INSERT, UPDATE, DELETE ყველა
+ .on("postgres_changes", { 
+  event: "*",
   schema: "public", 
   table: "message_reactions"
-  // filter არ ვწერთ — message_id-ით შემდეგ ვფილტრავთ
 }, (payload) => {
+  console.log("🔥 REACTION EVENT:", payload);
   if (payload.eventType === "INSERT") {
     const r = payload.new as Reaction;
-    // მხოლოდ ამ chat-ის მესიჯების reactions
-    setMsgs(prev => {
-      const msgIds = prev.map(m => m.id);
-      if (!msgIds.includes(r.message_id)) return prev;
-      setReactions(p => p.some(x => x.id === r.id) ? p : [...p, r]);
-      return prev;
-    });
+    setReactions(prev => prev.some(x => x.id === r.id) ? prev : [...prev, r]);
   }
+  if (payload.eventType === "DELETE") {
+    const r = payload.old as Reaction;
+    setReactions(prev => prev.filter(x => 
+      x.id !== r.id && 
+      !(x.message_id === r.message_id && x.sender_anon === r.sender_anon)
+    ));
+  }
+  if (payload.eventType === "UPDATE") {
+    const r = payload.new as Reaction;
+    setReactions(prev => prev.map(x => x.id === r.id ? r : x));
+  }
+  
   if (payload.eventType === "DELETE") {
     const r = payload.old as Reaction;
     setReactions(prev => prev.filter(x => 
@@ -512,6 +518,8 @@ setReactions(prev => prev.filter(x =>
     } else { setPullY(0); }
   }
 
+  
+
   async function deleteMessage(msgId: string) {
     await supabase.from("messages").delete().eq("id", msgId);
     setMsgs(prev => prev.filter(m => m.id !== msgId));
@@ -534,8 +542,12 @@ setReactions(prev => prev.filter(x =>
       await supabase.from("matches").update({ has_unread: true }).eq("id", matchId);
     } catch (e) { console.error(e); }
     setUploadingImg(false);
+
+    
   }
 
+
+  
   async function send() {
     const t2 = text.trim();
     if (!t2 || !myAnonId || sending) return;
