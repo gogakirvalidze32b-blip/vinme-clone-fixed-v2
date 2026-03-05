@@ -18,6 +18,8 @@
 
     "@supabase/supabase-js": "^2.89.0",
 
+    "critters": "^0.0.25",
+
     "emoji-picker-react": "^4.18.0",
 
     "next": "^15.4.5",
