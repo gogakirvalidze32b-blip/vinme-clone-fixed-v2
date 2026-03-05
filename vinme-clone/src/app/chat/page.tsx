@@ -41,8 +41,8 @@ export default function ChatPage() {
   const ka = lang !== "en";
   const L = (k: string, e: string) => ka ? k : e;
 
-  // ✅ anonId userContext-იდან — 0 extra query
   const { anonId: ctxAnonId } = useUser();
+  const [ctxReady, setCtxReady] = useState(false);
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,6 +51,11 @@ export default function ChatPage() {
   const loadingRef = useRef(false);
   const [selectedMatchId, setSelectedMatchId] = useState<string|null>(null);
   const longPressRef = useRef<NodeJS.Timeout|null>(null);
+
+  // ✅ ctxAnonId მზად რომ გახდეს — flag ავწიოთ
+  useEffect(() => {
+    if (ctxAnonId !== null && !ctxReady) setCtxReady(true);
+  }, [ctxAnonId]);
 
   async function deleteMatch(matchId: string) {
     await supabase.from("matches").delete().eq("id", matchId);
@@ -126,9 +131,9 @@ export default function ChatPage() {
     loadingRef.current = false;
   }
 
-  // ✅ ctxAnonId მზად რომ იყოს — მაშინ loadMatches გავუშვათ
+  // ✅ ctxReady-ზე ველოდებით — მაშინ ვიწყებთ
   useEffect(() => {
-    if (ctxAnonId === null) return; // ველოდებით userContext-ს
+    if (!ctxReady) return;
     (async () => {
       const { data: sess } = await supabase.auth.getSession();
       const uid = sess.session?.user?.id;
@@ -137,7 +142,7 @@ export default function ChatPage() {
       setMyAnonId(ctxAnonId);
       await loadMatches(uid, ctxAnonId);
     })();
-  }, [router, ctxAnonId]);
+  }, [ctxReady]);
 
   useEffect(() => {
     if (!myId || !myAnonId) return;
