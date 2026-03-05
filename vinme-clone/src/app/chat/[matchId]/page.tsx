@@ -876,7 +876,7 @@ setReactions(prev => prev.filter(x =>
                     onFocus={() => { setFocused(true); setShowEmoji(false); }}
                     onBlur={() => { setTimeout(() => { if (!text.trim()) setFocused(false); }, 150); }}
                     autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
-onKeyDown={e => { if (e.key==="Enter" && !e.shiftKey && !sending) { e.preventDefault(); send(); } }}                    className="flex-1 bg-transparent outline-none text-white text-sm placeholder-white/40 min-w-0"
+onKeyDown={e => { if (e.key==="Enter" && !e.shiftKey && !sending) { e.preventDefault(); send(); } }}
                     placeholder={ka?"მესიჯი...":"Message..."} />
                 </div>
 
