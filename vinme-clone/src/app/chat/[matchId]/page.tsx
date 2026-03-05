@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { photoSrc } from "@/lib/photos";
-import EmojiPicker from "emoji-picker-react";
 import { SafeImg } from "@/components/SafeImg";
 import { getLang } from "@/lib/i18n";
 import { useUser } from "@/lib/userContext";
@@ -12,6 +11,7 @@ import { useUser } from "@/lib/userContext";
 type MsgRow = {
   id: string; match_id: number; sender_anon: string;
   content: string; created_at: string; read_at: string | null;
+  delivered_at?: string | null;
   type?: "text" | "voice" | "image";
   reply_to_id?: string | null;
   reply_preview?: string | null;
@@ -34,14 +34,23 @@ function formatLastSeen(lastSeen: string|null, ka: boolean): string {
   return ka ? `${days} დღის წინ` : `${days}d ago`;
 }
 
-function Ticks({ sent, read, mine }: { sent: boolean; read: boolean; mine: boolean }) {
-  if (!mine || !sent) return null;
-  if (read) return (
+// ===== TICKS: single=sent, double grey=delivered, double blue=read =====
+function Ticks({ isTemp, delivered, read, mine }: { isTemp: boolean; delivered: boolean; read: boolean; mine: boolean }) {
+  if (!mine) return null;
+  if (isTemp) return (
+    <span className="inline-flex items-center ml-1 shrink-0">
+      <svg width="11" height="10" viewBox="0 0 14 12" fill="none">
+        <path d="M1 6l4 4 8-8" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    </span>
+  );
+  const color = read ? "#60A5FA" : "rgba(255,255,255,0.45)";
+  if (delivered || read) return (
     <span className="inline-flex items-center ml-1 shrink-0">
       <svg width="16" height="11" viewBox="0 0 20 13" fill="none">
-        <path d="M1 6l4 4 7-8" stroke="#60A5FA" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M7 10l7-8" stroke="#60A5FA" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M11 10l7-8" stroke="#60A5FA" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M1 6l4 4 7-8" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M7 10l7-8" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M11 10l7-8" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     </span>
   );
@@ -54,20 +63,21 @@ function Ticks({ sent, read, mine }: { sent: boolean; read: boolean; mine: boole
   );
 }
 
-// ===== REACTION BUBBLE =====
-function ReactionBar({ msgId, myAnonId, reactions, onReact, onClose }: {
+// ===== REACTION BAR (long press popup) =====
+function ReactionBar({ msgId, myAnonId, reactions, onReact, onClose, mine }: {
   msgId: string; myAnonId: string; reactions: Reaction[];
-  onReact: (msgId: string, emoji: string) => void; onClose: () => void;
+  onReact: (msgId: string, emoji: string) => void; onClose: () => void; mine: boolean;
 }) {
   const emojis = ["❤️", "😂", "😮", "😢", "😡", "👍"];
   return (
-    <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 bg-zinc-800 rounded-full px-3 py-2 shadow-2xl ring-1 ring-white/10"
+    <div
+      className={`absolute bottom-full mb-2 z-50 flex items-center gap-1 bg-zinc-800 rounded-full px-3 py-2 shadow-2xl ring-1 ring-white/10 ${mine ? "right-0" : "left-0"}`}
       onClick={e => e.stopPropagation()}>
       {emojis.map(e => {
-        const myReaction = reactions.find(r => r.message_id === msgId && r.sender_anon === myAnonId && r.emoji === e);
+        const active = reactions.some(r => r.message_id === msgId && r.sender_anon === myAnonId && r.emoji === e);
         return (
           <button key={e} onClick={() => { onReact(msgId, e); onClose(); }}
-            className={`text-2xl transition active:scale-75 hover:scale-125 ${myReaction ? "opacity-100 scale-110" : "opacity-80"}`}
+            className={`text-2xl transition active:scale-75 hover:scale-125 ${active ? "scale-110" : "opacity-80"}`}
             style={{ lineHeight: 1 }}>
             {e}
           </button>
@@ -77,9 +87,9 @@ function ReactionBar({ msgId, myAnonId, reactions, onReact, onClose }: {
   );
 }
 
-// ===== REACTIONS DISPLAY =====
-function ReactionsDisplay({ msgId, reactions, myAnonId, onReact }: {
-  msgId: string; reactions: Reaction[]; myAnonId: string;
+// ===== REACTIONS DISPLAY (below message) =====
+function ReactionsDisplay({ msgId, reactions, myAnonId, mine, onReact }: {
+  msgId: string; reactions: Reaction[]; myAnonId: string; mine: boolean;
   onReact: (msgId: string, emoji: string) => void;
 }) {
   const msgReactions = reactions.filter(r => r.message_id === msgId);
@@ -87,7 +97,7 @@ function ReactionsDisplay({ msgId, reactions, myAnonId, onReact }: {
   const grouped: Record<string, number> = {};
   msgReactions.forEach(r => { grouped[r.emoji] = (grouped[r.emoji] ?? 0) + 1; });
   return (
-    <div className="flex gap-1 flex-wrap mt-0.5">
+    <div className={`flex gap-1 flex-wrap mt-1 ${mine ? "justify-end" : "justify-start"}`}>
       {Object.entries(grouped).map(([emoji, count]) => {
         const isMine = msgReactions.some(r => r.emoji === emoji && r.sender_anon === myAnonId);
         return (
@@ -95,7 +105,7 @@ function ReactionsDisplay({ msgId, reactions, myAnonId, onReact }: {
             className={`flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs transition active:scale-90 ${
               isMine ? "bg-[#7C3AED]/40 ring-1 ring-[#7C3AED]" : "bg-zinc-700/80 ring-1 ring-white/10"
             }`}>
-            <span>{emoji}</span>
+            <span style={{ fontSize: 14 }}>{emoji}</span>
             {count > 1 && <span className="text-white/70 font-medium">{count}</span>}
           </button>
         );
@@ -111,10 +121,7 @@ function UnmatchModal({ onClose, onConfirm, ka }: {
   const reasons = ka ? [
     "არ ვართ თავსებადი", "შეურაცხმყოფელი ქცევა", "სპამი ან ყალბი პროფილი",
     "უბრალოდ მიმოწერა დამთავრდა", "სხვა მიზეზი",
-  ] : [
-    "Not compatible", "Offensive behavior", "Spam or fake profile",
-    "Conversation ended naturally", "Other reason",
-  ];
+  ] : ["Not compatible","Offensive behavior","Spam or fake profile","Conversation ended naturally","Other reason"];
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
@@ -124,21 +131,15 @@ function UnmatchModal({ onClose, onConfirm, ka }: {
           <p className="text-sm text-white/40 mt-1">{ka ? "მიზეზი სავალდებულოა" : "A reason is required"}</p>
         </div>
         <div className="px-4 py-3 flex flex-col gap-2">
-          {reasons.map((r) => (
+          {reasons.map(r => (
             <button key={r} onClick={() => setSelected(r)}
-              className={`w-full text-left px-4 py-3.5 rounded-2xl text-sm font-medium transition border ${
-                selected === r ? "bg-red-500/20 border-red-500/60 text-white" : "bg-white/5 border-white/8 text-white/70 hover:bg-white/10"
-              }`}>{r}</button>
+              className={`w-full text-left px-4 py-3.5 rounded-2xl text-sm font-medium transition border ${selected===r?"bg-red-500/20 border-red-500/60 text-white":"bg-white/5 border-white/8 text-white/70 hover:bg-white/10"}`}>{r}</button>
           ))}
         </div>
         <div className="px-4 pb-8 pt-2 flex gap-3">
-          <button onClick={onClose} className="flex-1 rounded-2xl bg-white/8 py-3.5 text-sm font-semibold text-white/70">
-            {ka ? "გაუქმება" : "Cancel"}
-          </button>
+          <button onClick={onClose} className="flex-1 rounded-2xl bg-white/8 py-3.5 text-sm font-semibold text-white/70">{ka?"გაუქმება":"Cancel"}</button>
           <button onClick={() => selected && onConfirm(selected)} disabled={!selected}
-            className="flex-1 rounded-2xl bg-red-500 py-3.5 text-sm font-bold text-white disabled:opacity-40 transition">
-            Unmatch
-          </button>
+            className="flex-1 rounded-2xl bg-red-500 py-3.5 text-sm font-bold text-white disabled:opacity-40 transition">Unmatch</button>
         </div>
       </div>
     </div>
@@ -157,12 +158,12 @@ function ChatMenu({ onClose, onViewProfile, onUnmatch, onBlock, lang }: {
           <button onClick={onClose} className="text-white/40 hover:text-white text-2xl leading-none">✕</button>
         </div>
         {[
-          { label: ka ? "პროფილის ნახვა" : "View profile", icon: "👤", onClick: onViewProfile },
-          { label: ka ? "Unmatch & დაბლოკვა" : "Unmatch & Block", icon: "🚫", red: false, onClick: onUnmatch },
-          { label: ka ? "დაბლოკვა და შეტყობინება" : "Block and report", icon: "⛔", red: true, onClick: onBlock },
-        ].map((item, i) => (
+          { label: ka?"პროფილის ნახვა":"View profile", icon:"👤", red:false, onClick:onViewProfile },
+          { label: ka?"Unmatch & დაბლოკვა":"Unmatch & Block", icon:"🚫", red:false, onClick:onUnmatch },
+          { label: ka?"დაბლოკვა და შეტყობინება":"Block and report", icon:"⛔", red:true, onClick:onBlock },
+        ].map((item,i) => (
           <button key={i} onClick={item.onClick}
-            className={`w-full flex items-center justify-between px-5 py-4 border-t border-white/8 hover:bg-white/5 transition ${item.red ? "text-red-400" : "text-white"}`}>
+            className={`w-full flex items-center justify-between px-5 py-4 border-t border-white/8 hover:bg-white/5 transition ${item.red?"text-red-400":"text-white"}`}>
             <div className="flex items-center gap-3">
               <span className="text-xl">{item.icon}</span>
               <span className="font-medium text-sm">{item.label}</span>
@@ -185,7 +186,7 @@ function AttachSheet({ onClose, onGallery, onCamera, lang }: {
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div className="relative w-full max-w-lg bg-zinc-900 rounded-t-3xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center px-5 pt-5 pb-3 border-b border-white/8">
-          <h3 className="text-white font-bold">{ka ? "დამატება" : "Attach"}</h3>
+          <h3 className="text-white font-bold">{ka?"დამატება":"Attach"}</h3>
           <button onClick={onClose} className="text-white/40 text-2xl">✕</button>
         </div>
         <div className="grid grid-cols-2 gap-3 p-4">
@@ -195,7 +196,7 @@ function AttachSheet({ onClose, onGallery, onCamera, lang }: {
               <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
               <circle cx="12" cy="13" r="4"/>
             </svg>
-            <span className="text-white/80 text-sm font-medium">{ka ? "კამერა" : "Camera"}</span>
+            <span className="text-white/80 text-sm font-medium">{ka?"კამერა":"Camera"}</span>
           </button>
           <button onClick={() => { onGallery(); onClose(); }}
             className="flex flex-col items-center gap-3 py-6 rounded-2xl bg-white/5 hover:bg-white/10 transition active:scale-95">
@@ -204,10 +205,59 @@ function AttachSheet({ onClose, onGallery, onCamera, lang }: {
               <circle cx="8.5" cy="8.5" r="1.5"/>
               <path d="m21 15-5-5L5 21"/>
             </svg>
-            <span className="text-white/80 text-sm font-medium">{ka ? "გალერეა" : "Gallery"}</span>
+            <span className="text-white/80 text-sm font-medium">{ka?"გალერეა":"Gallery"}</span>
           </button>
         </div>
         <div className="h-6" />
+      </div>
+    </div>
+  );
+}
+
+// ===== INLINE EMOJI PICKER (no library, fast) =====
+const EMOJI_ROWS = [
+  ["😀","😃","😄","😁","😆","😅","🤣","😂","🙂","😊","😇","🥰","😍","🤩","😘","😗"],
+  ["😙","😚","😋","😛","😜","🤪","😝","🤑","🤗","🤭","🤫","🤔","🤐","🤨","😐","😑"],
+  ["😶","😏","😒","🙄","😬","🤥","😌","😔","😪","🤤","😴","😷","🤒","🤕","🤢","🤧"],
+  ["🥵","🥶","🥴","😵","🤯","🤠","🥳","😎","🤓","🧐","😕","😟","🙁","☹️","😮","😯"],
+  ["😲","😳","🥺","😦","😧","😨","😰","😥","😢","😭","😱","😖","😣","😞","😓","😩"],
+  ["😫","🥱","😤","😡","😠","🤬","😈","👿","💀","☠️","💩","🤡","👹","👺","👻","👽"],
+  ["❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎","💔","❣️","💕","💞","💓","💗","💖"],
+  ["💘","💝","💟","☮️","✝️","☪️","🕉","✡️","🔯","🕎","☯️","☦️","🛐","⛎","♈","♉"],
+  ["👍","👎","👌","🤌","🤏","✌️","🤞","🤟","🤘","🤙","👈","👉","👆","🖕","👇","☝️"],
+  ["👋","🤚","🖐","✋","🖖","👏","🙌","🤲","🤝","🙏","✍️","💅","🤳","💪","🦾","🦿"],
+  ["🎉","🎊","🎈","🎁","🎀","🎗","🎟","🎫","🏆","🥇","🥈","🥉","⚽","🏀","🏈","⚾"],
+  ["🔥","💥","✨","⭐","🌟","💫","⚡","☄️","🌈","☀️","🌤","⛅","🌥","☁️","🌦","🌧"],
+  ["😻","😺","😸","😹","😼","😽","🙀","😿","😾","🐶","🐱","🐭","🐹","🐰","🦊","🐻"],
+];
+
+function QuickEmojiPicker({ onPick, onClose }: { onPick: (e: string) => void; onClose: () => void }) {
+  const [search, setSearch] = useState("");
+  const allEmojis = EMOJI_ROWS.flat();
+  const filtered = search ? allEmojis.filter(e => e.includes(search)) : null;
+  const rows = filtered ? [filtered] : EMOJI_ROWS;
+
+  return (
+    <div className="bg-zinc-900 border-t border-white/8 rounded-t-2xl" onClick={e => e.stopPropagation()}>
+      {/* search */}
+      <div className="px-3 pt-3 pb-2">
+        <input value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="🔍 Search..."
+          className="w-full bg-zinc-800 rounded-full px-4 py-2 text-sm text-white placeholder-white/30 outline-none" />
+      </div>
+      {/* grid */}
+      <div className="overflow-y-auto px-2 pb-3" style={{ maxHeight: 240 }}>
+        {rows.map((row, ri) => (
+          <div key={ri} className="flex flex-wrap">
+            {row.map((e, ei) => (
+              <button key={ei} onClick={() => onPick(e)}
+                className="w-10 h-10 flex items-center justify-center text-2xl hover:bg-white/10 rounded-xl transition active:scale-90"
+                style={{ lineHeight: 1 }}>
+                {e}
+              </button>
+            ))}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -235,19 +285,16 @@ export default function ChatThreadPage() {
   const [showUnmatchModal, setShowUnmatchModal] = useState(false);
   const [showAttachSheet, setShowAttachSheet] = useState(false);
 
-  // long press → reaction bar or delete
   const [reactionMsgId, setReactionMsgId] = useState<string|null>(null);
   const [selectedMsgId, setSelectedMsgId] = useState<string|null>(null);
   const longPressTimer = useRef<NodeJS.Timeout|null>(null);
   const longPressFired = useRef(false);
 
-  // reply
   const [replyTo, setReplyTo] = useState<MsgRow|null>(null);
+  const [hoveredMsgId, setHoveredMsgId] = useState<string|null>(null);
 
-  // swipe
   const swipeStartX = useRef<number>(0);
   const swipeStartY = useRef<number>(0);
-  const swipeMsgId = useRef<string|null>(null);
   const [swipeOffsets, setSwipeOffsets] = useState<Record<string, number>>({});
 
   const [focused, setFocused] = useState(false);
@@ -292,8 +339,6 @@ export default function ChatThreadPage() {
     return Date.now() - new Date(otherProfile.last_seen).getTime() < 3*60*1000;
   }, [otherProfile]);
 
-  const statusText = formatLastSeen(otherProfile?.last_seen ?? null, ka);
-
   const markRead = useCallback(async (anonId: string|null, uid: string|null) => {
     if (!anonId || !uid) return;
     await supabase.from("messages").update({ read_at: new Date().toISOString() })
@@ -302,6 +347,14 @@ export default function ChatThreadPage() {
     setMsgs(prev => prev.map(m =>
       m.sender_anon !== anonId && !m.read_at ? { ...m, read_at: new Date().toISOString() } : m
     ));
+  }, [matchId]);
+
+  // mark delivered when other user is on page
+  const markDelivered = useCallback(async (anonId: string|null) => {
+    if (!anonId) return;
+    await supabase.from("messages")
+      .update({ delivered_at: new Date().toISOString() })
+      .eq("match_id", matchId).neq("sender_anon", anonId).is("delivered_at", null);
   }, [matchId]);
 
   useEffect(() => {
@@ -320,21 +373,23 @@ export default function ChatThreadPage() {
       if (!matchRow) return;
       const otherId = matchRow.user_a === user.id ? matchRow.user_b : matchRow.user_a;
       setOtherUserId(otherId);
-      const [profileRes, msgsRes, reactionsRes] = await Promise.all([
+      const [profileRes, msgsRes] = await Promise.all([
         supabase.from("profiles").select("user_id,nickname,first_name,photo1_url,last_seen").eq("user_id", otherId).maybeSingle(),
         supabase.from("messages").select("*").eq("match_id", matchId).order("created_at", { ascending: true }),
-        supabase.from("message_reactions").select("*").in("message_id",
-          (await supabase.from("messages").select("id").eq("match_id", matchId)).data?.map((m: any) => m.id) ?? []
-        ),
       ]);
+      const msgIds = (msgsRes.data ?? []).map((m: any) => m.id);
+      const reactionsRes = msgIds.length
+        ? await supabase.from("message_reactions").select("*").in("message_id", msgIds)
+        : { data: [] };
       setOtherProfile(profileRes.data ?? null);
       setMsgs(msgsRes.data ?? []);
       setReactions(reactionsRes.data ?? []);
       setIsLoaded(true);
       await markRead(anonId, user.id);
+      await markDelivered(anonId);
       await supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("user_id", user.id);
     })();
-  }, [matchId, router, markRead]);
+  }, [matchId, router, markRead, markDelivered]);
 
   useEffect(() => {
     if (!matchId) return;
@@ -350,7 +405,7 @@ export default function ChatThreadPage() {
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages", filter: `match_id=eq.${matchId}` }, (payload) => {
         const updated = payload.new as MsgRow;
-        setMsgs(prev => prev.map(m => m.id === updated.id ? { ...m, read_at: updated.read_at } : m));
+        setMsgs(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m));
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "message_reactions" }, (payload) => {
         const r = payload.new as Reaction;
@@ -366,17 +421,14 @@ export default function ChatThreadPage() {
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs.length]);
 
-  // ===== REACTION HANDLER =====
   async function handleReact(msgId: string, emoji: string) {
     if (!myAnonId) return;
     const existing = reactions.find(r => r.message_id === msgId && r.sender_anon === myAnonId);
     if (existing) {
       if (existing.emoji === emoji) {
-        // toggle off
         setReactions(prev => prev.filter(r => r.id !== existing.id));
         await supabase.from("message_reactions").delete().eq("id", existing.id);
       } else {
-        // change emoji
         setReactions(prev => prev.map(r => r.id === existing.id ? { ...r, emoji } : r));
         await supabase.from("message_reactions").update({ emoji }).eq("id", existing.id);
       }
@@ -388,41 +440,30 @@ export default function ChatThreadPage() {
     }
   }
 
-  // ===== LONG PRESS =====
   function onMsgPointerDown(msgId: string, mine: boolean) {
     longPressFired.current = false;
     longPressTimer.current = setTimeout(() => {
       longPressFired.current = true;
-      if (mine) setSelectedMsgId(msgId);
-      else setReactionMsgId(msgId);
-      // show reactions for own messages too
       setReactionMsgId(msgId);
+      if (mine) setSelectedMsgId(msgId);
     }, 500);
   }
   function onMsgPointerUp() { if (longPressTimer.current) clearTimeout(longPressTimer.current); }
 
-  // ===== SWIPE TO REPLY =====
   function onMsgTouchStart(e: React.TouchEvent, msgId: string) {
     swipeStartX.current = e.touches[0].clientX;
     swipeStartY.current = e.touches[0].clientY;
-    swipeMsgId.current = msgId;
   }
   function onMsgTouchMove(e: React.TouchEvent, msgId: string) {
     const dx = e.touches[0].clientX - swipeStartX.current;
     const dy = Math.abs(e.touches[0].clientY - swipeStartY.current);
-    if (dy > 20) return; // vertical scroll — ignore
-    if (dx > 0 && dx < 80) {
-      setSwipeOffsets(prev => ({ ...prev, [msgId]: dx }));
-    }
+    if (dy > 20) return;
+    if (dx > 0 && dx < 80) setSwipeOffsets(prev => ({ ...prev, [msgId]: dx }));
   }
   function onMsgTouchEnd(e: React.TouchEvent, msg: MsgRow) {
     const dx = swipeOffsets[msg.id] ?? 0;
-    if (dx > 50) {
-      setReplyTo(msg);
-      inputRef.current?.focus();
-    }
+    if (dx > 50) { setReplyTo(msg); inputRef.current?.focus(); }
     setSwipeOffsets(prev => ({ ...prev, [msg.id]: 0 }));
-    swipeMsgId.current = null;
   }
 
   function onTouchStart(e: React.TouchEvent) { pullStartY.current = e.touches[0].clientY; }
@@ -444,7 +485,7 @@ export default function ChatThreadPage() {
   async function deleteMessage(msgId: string) {
     await supabase.from("messages").delete().eq("id", msgId);
     setMsgs(prev => prev.filter(m => m.id !== msgId));
-    setSelectedMsgId(null);
+    setSelectedMsgId(null); setReactionMsgId(null);
   }
 
   async function uploadImage(file: File) {
@@ -470,10 +511,10 @@ export default function ChatThreadPage() {
     if (!t2 || !myAnonId || sending) return;
     setSending(true); setText("");
     const tempId = `temp-${Date.now()}`;
-    const replyPreview = replyTo ? (replyTo.type === "voice" ? "🎤 Voice" : replyTo.type === "image" ? "📷 Photo" : replyTo.content.slice(0, 60)) : null;
+    const replyPreview = replyTo ? (replyTo.type==="voice"?"🎤 Voice":replyTo.type==="image"?"📷 Photo":replyTo.content.slice(0,60)) : null;
     const replyId = replyTo?.id ?? null;
     setReplyTo(null);
-    setMsgs(prev => [...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: t2, created_at: new Date().toISOString(), read_at: null, type: "text", reply_to_id: replyId, reply_preview: replyPreview }]);
+    setMsgs(prev => [...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: t2, created_at: new Date().toISOString(), read_at: null, delivered_at: null, type: "text", reply_to_id: replyId, reply_preview: replyPreview }]);
     const { data } = await supabase.from("messages").insert({ match_id: matchId, sender_anon: myAnonId, content: t2, type: "text", reply_to_id: replyId, reply_preview: replyPreview }).select().single();
     if (data) setMsgs(prev => prev.map(m => m.id === tempId ? (data as MsgRow) : m));
     await supabase.from("matches").update({ has_unread: true }).eq("id", matchId);
@@ -498,16 +539,8 @@ export default function ChatThreadPage() {
       timerRef.current = setInterval(() => setRecordTime(p => p + 1), 1000);
     } catch { alert(ka ? "მიკროფონი მიუწვდომელია" : "Microphone unavailable"); }
   }
-
-  function stopRecording() {
-    mediaRecorderRef.current?.stop(); setRecording(false);
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-  }
-  function cancelRecording() {
-    stopRecording(); setAudioBlob(null);
-    if (audioPreviewUrl) { URL.revokeObjectURL(audioPreviewUrl); setAudioPreviewUrl(null); }
-    setRecordTime(0); chunksRef.current = [];
-  }
+  function stopRecording() { mediaRecorderRef.current?.stop(); setRecording(false); if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } }
+  function cancelRecording() { stopRecording(); setAudioBlob(null); if (audioPreviewUrl) { URL.revokeObjectURL(audioPreviewUrl); setAudioPreviewUrl(null); } setRecordTime(0); chunksRef.current = []; }
 
   async function sendVoice() {
     if (!audioBlob || !myAnonId || uploadingVoice) return;
@@ -528,13 +561,12 @@ export default function ChatThreadPage() {
   async function handleUnmatchConfirm(reason: string) {
     setShowUnmatchModal(false);
     await supabase.from("unmatch_feedback").insert({ from_user_id: myUserId, to_user_id: otherUserId, match_id: matchId, reason });
-    await supabase.from("notifications").insert({ user_id: otherUserId, type: "unmatch", message: ka ? "ვიღაცამ Unmatch გაგიკეთა" : "Someone unmatched you" }).then(() => {});
+    await supabase.from("notifications").insert({ user_id: otherUserId, type: "unmatch", message: ka?"ვიღაცამ Unmatch გაგიკეთა":"Someone unmatched you" }).then(()=>{});
     await supabase.from("matches").delete().eq("id", matchId);
     router.replace("/chat");
   }
-
   async function handleBlock() {
-    if (!confirm(ka ? "დაბლოკვა და შეტყობინება?" : "Block and report?")) return;
+    if (!confirm(ka?"დაბლოკვა და შეტყობინება?":"Block and report?")) return;
     await supabase.from("matches").delete().eq("id", matchId);
     router.replace("/chat");
   }
@@ -569,7 +601,7 @@ export default function ChatThreadPage() {
     <>
       <div id="chat-root" className="fixed inset-0 bg-[#111] flex justify-center"
         style={{ bottom: 0, transition: "bottom 0.12s ease-out" }}
-        onClick={() => { showEmoji && setShowEmoji(false); reactionMsgId && setReactionMsgId(null); selectedMsgId && setSelectedMsgId(null); }}>
+        onClick={() => { setShowEmoji(false); setReactionMsgId(null); setSelectedMsgId(null); }}>
         <div className="w-full max-w-lg flex flex-col bg-[#111] text-white h-full">
 
           {/* HEADER */}
@@ -585,23 +617,21 @@ export default function ChatThreadPage() {
               </div>
               <div className="min-w-0">
                 <div className="font-semibold text-sm truncate">{otherName}</div>
-                <div className={`text-[11px] ${isOnline ? "text-green-400" : "text-white/40"}`}>{statusText}</div>
+                <div className={`text-[11px] ${isOnline?"text-green-400":"text-white/40"}`}>{formatLastSeen(otherProfile?.last_seen ?? null, ka)}</div>
               </div>
             </div>
-            <button onClick={(e) => { e.stopPropagation(); setShowMenu(true); }}
-              className="w-9 h-9 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/8 transition shrink-0 text-lg font-bold tracking-widest">
-              ···
-            </button>
+            <button onClick={e => { e.stopPropagation(); setShowMenu(true); }}
+              className="w-9 h-9 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/8 transition shrink-0 text-lg font-bold tracking-widest">···</button>
           </div>
 
           {/* MESSAGES */}
           <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3"
-            style={{ transform: `translateY(${pullY}px)`, transition: pullY === 0 ? "transform 0.2s" : "none" }}
+            style={{ transform: `translateY(${pullY}px)`, transition: pullY===0?"transform 0.2s":"none" }}
             onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
             {(pullY > 10 || refreshing) && (
               <div className="flex justify-center mb-2 -mt-8">
-                <span className={`text-white/40 text-xs ${refreshing ? "animate-spin" : ""}`}>
-                  {refreshing ? "↻" : "↓ " + (ka ? "განახლება" : "Pull to refresh")}
+                <span className={`text-white/40 text-xs ${refreshing?"animate-spin":""}`}>
+                  {refreshing ? "↻" : "↓ "+(ka?"განახლება":"Pull to refresh")}
                 </span>
               </div>
             )}
@@ -610,85 +640,101 @@ export default function ChatThreadPage() {
                 const mine = m.sender_anon === myAnonId;
                 const isTemp = m.id.startsWith("temp");
                 const isRead = !!m.read_at;
+                const isDelivered = !!m.delivered_at;
                 const prevSame = i > 0 && msgs[i-1].sender_anon === m.sender_anon;
                 const isSelected = selectedMsgId === m.id;
                 const showReactionBar = reactionMsgId === m.id;
                 const swipeOffset = swipeOffsets[m.id] ?? 0;
+                const isHovered = hoveredMsgId === m.id;
 
                 return (
-                  <div key={m.id} className={`flex flex-col ${mine ? "items-end" : "items-start"} ${prevSame ? "mt-0.5" : "mt-3"}`}>
-                    <div className="relative w-full flex"
+                  <div key={m.id} className={`flex flex-col ${mine?"items-end":"items-start"} ${prevSame?"mt-0.5":"mt-3"}`}>
+                    <div className="relative w-full flex group"
                       style={{ justifyContent: mine ? "flex-end" : "flex-start" }}
+                      onMouseEnter={() => setHoveredMsgId(m.id)}
+                      onMouseLeave={() => setHoveredMsgId(null)}
                       onPointerDown={() => onMsgPointerDown(m.id, mine)}
                       onPointerUp={onMsgPointerUp}
                       onPointerLeave={onMsgPointerUp}
                       onContextMenu={e => e.preventDefault()}
                       onTouchStart={e => onMsgTouchStart(e, m.id)}
                       onTouchMove={e => onMsgTouchMove(e, m.id)}
-                      onTouchEnd={e => onMsgTouchEnd(e, m)}
->
-                      {/* swipe reply indicator */}
+                      onTouchEnd={e => onMsgTouchEnd(e, m)}>
+
+                      {/* swipe indicator */}
                       {swipeOffset > 10 && (
                         <div className="absolute left-0 top-1/2 -translate-y-1/2 text-white/50 text-lg pl-1"
-                          style={{ opacity: Math.min(swipeOffset / 50, 1) }}>↩</div>
+                          style={{ opacity: Math.min(swipeOffset/50, 1) }}>↩</div>
                       )}
 
-                      {/* reaction bar */}
-                      {showReactionBar && (
-                        <ReactionBar msgId={m.id} myAnonId={myAnonId} reactions={reactions}
-                          onReact={handleReact} onClose={() => setReactionMsgId(null)} />
-                      )}
-
-                      {/* delete popup */}
-                      {isSelected && mine && (
-                        <div className="absolute bottom-full right-0 mb-1 z-30 bg-zinc-800 rounded-xl shadow-xl ring-1 ring-white/10 overflow-hidden">
-                          <button onClick={() => deleteMessage(m.id)}
-                            className="flex items-center gap-2 px-4 py-3 text-red-400 text-sm font-medium hover:bg-red-500/10 transition w-full">
-                            🗑 {ka ? "წაშლა" : "Delete"}
-                          </button>
+                      {/* DESKTOP hover actions — left of other's message, right of mine */}
+                      {isHovered && !showReactionBar && (
+                        <div className={`absolute top-1/2 -translate-y-1/2 flex items-center gap-1 z-20 ${mine ? "right-full pr-2" : "left-full pl-2"}`}>
+                          {/* reply */}
+                          <button onClick={e => { e.stopPropagation(); setReplyTo(m); inputRef.current?.focus(); }}
+                            className="w-7 h-7 rounded-full bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center text-white/70 hover:text-white transition text-sm">↩</button>
+                          {/* react */}
+                          <button onClick={e => { e.stopPropagation(); setReactionMsgId(m.id); }}
+                            className="w-7 h-7 rounded-full bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center transition text-sm">😊</button>
+                          {/* delete (mine only) */}
+                          {mine && (
+                            <button onClick={e => { e.stopPropagation(); deleteMessage(m.id); }}
+                              className="w-7 h-7 rounded-full bg-zinc-700 hover:bg-red-500/80 flex items-center justify-center text-white/50 hover:text-white transition text-xs">🗑</button>
+                          )}
                         </div>
                       )}
 
-                      <div style={{ transform: `translateX(${swipeOffset}px)`, transition: swipeOffset === 0 ? "transform 0.2s" : "none" }}>
-                        {/* reply preview inside bubble */}
+                      {/* reaction bar popup */}
+                      {showReactionBar && (
+                        <ReactionBar msgId={m.id} myAnonId={myAnonId} reactions={reactions} mine={mine}
+                          onReact={handleReact} onClose={() => setReactionMsgId(null)} />
+                      )}
+
+                      <div style={{ transform: `translateX(${swipeOffset}px)`, transition: swipeOffset===0?"transform 0.2s":"none" }}>
+                        {/* reply preview */}
                         {m.reply_preview && (
-                          <div className={`mb-1 px-3 py-1.5 rounded-xl text-xs border-l-2 border-[#7C3AED] bg-white/8 max-w-[240px] truncate text-white/60 ${mine ? "ml-auto" : ""}`}>
+                          <div className={`mb-1 px-3 py-1.5 rounded-xl text-xs border-l-2 border-[#7C3AED] bg-white/8 max-w-[240px] truncate text-white/60 ${mine?"ml-auto":""}`}>
                             ↩ {m.reply_preview}
                           </div>
                         )}
 
                         {m.type === "voice" ? (
                           <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl max-w-[270px]
-                            ${mine ? "bg-[#7C3AED] rounded-tr-sm" : "bg-zinc-800 rounded-tl-sm"}
-                            ${isTemp ? "opacity-60" : ""} ${isSelected ? "ring-2 ring-red-400" : ""}`}>
+                            ${mine?"bg-[#7C3AED] rounded-tr-sm":"bg-zinc-800 rounded-tl-sm"}
+                            ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
                             <span className="text-lg shrink-0">🎤</span>
                             <audio controls src={m.content} className="h-8 max-w-[160px]" preload="metadata" />
                             <div className="flex items-center gap-0.5 shrink-0">
                               <span className="text-[10px] text-white/40">{fmtTime(m.created_at)}</span>
-                              <Ticks sent={!isTemp} read={isRead} mine={mine} />
+                              <Ticks isTemp={isTemp} delivered={isDelivered} read={isRead} mine={mine} />
                             </div>
                           </div>
                         ) : m.type === "image" ? (
-                          <div className={`rounded-2xl overflow-hidden max-w-[260px] ${mine ? "rounded-tr-sm" : "rounded-tl-sm"} ${isTemp ? "opacity-60" : ""}`}>
+                          <div className={`rounded-2xl overflow-hidden max-w-[260px] ${mine?"rounded-tr-sm":"rounded-tl-sm"} ${isTemp?"opacity-60":""}`}>
                             <img src={m.content} className="max-w-full max-h-[280px] object-cover block" alt=""
                               onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
+                            {mine && (
+                              <div className="flex justify-end px-2 py-1 bg-black/20">
+                                <Ticks isTemp={isTemp} delivered={isDelivered} read={isRead} mine={mine} />
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words max-w-[78%] select-none
-                            ${mine ? "bg-[#7C3AED] rounded-2xl rounded-tr-sm" : "bg-zinc-800 rounded-2xl rounded-tl-sm"}
-                            ${isTemp ? "opacity-60" : ""} ${isSelected ? "ring-2 ring-red-400 opacity-80" : ""}`}>
+                            ${mine?"bg-[#7C3AED] rounded-2xl rounded-tr-sm":"bg-zinc-800 rounded-2xl rounded-tl-sm"}
+                            ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400 opacity-80":""}`}>
                             <span>{m.content}</span>
                             <span className="inline-flex items-center gap-0.5 ml-2">
-                              <span className={`text-[10px] ${mine ? "text-purple-200/50" : "text-white/25"}`}>{fmtTime(m.created_at)}</span>
-                              <Ticks sent={!isTemp} read={isRead} mine={mine} />
+                              <span className={`text-[10px] ${mine?"text-purple-200/50":"text-white/25"}`}>{fmtTime(m.created_at)}</span>
+                              <Ticks isTemp={isTemp} delivered={isDelivered} read={isRead} mine={mine} />
                             </span>
                           </div>
                         )}
                       </div>
                     </div>
 
-                    {/* reactions display */}
-                    <ReactionsDisplay msgId={m.id} reactions={reactions} myAnonId={myAnonId} onReact={handleReact} />
+                    {/* reactions below */}
+                    <ReactionsDisplay msgId={m.id} reactions={reactions} myAnonId={myAnonId} mine={mine} onReact={handleReact} />
                   </div>
                 );
               })}
@@ -697,28 +743,21 @@ export default function ChatThreadPage() {
           </div>
 
           {/* INPUT BAR */}
-          <div className="shrink-0 bg-zinc-950 border-t border-white/8 px-3 pt-2"
-            style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 8px)" }}
+          <div className="shrink-0 bg-zinc-950 border-t border-white/8"
             onClick={e => e.stopPropagation()}>
 
+            {/* EMOJI PICKER */}
             {showEmoji && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowEmoji(false)} />
-                <div className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl overflow-hidden shadow-2xl">
-                  <EmojiPicker onEmojiClick={e => { setText(p => p + e.emoji); }}
-                    width="100%" height={380} theme={"dark" as any}
-                    searchDisabled={false} skinTonesDisabled previewConfig={{ showPreview: false }} />
-                </div>
-              </>
+              <QuickEmojiPicker onPick={e => setText(p => p + e)} onClose={() => setShowEmoji(false)} />
             )}
 
             {/* reply bar */}
             {replyTo && (
-              <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-2xl bg-zinc-800 border-l-2 border-[#7C3AED]">
+              <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2 rounded-2xl bg-zinc-800 border-l-2 border-[#7C3AED]">
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs text-[#A78BFA] font-semibold mb-0.5">↩ {ka ? "პასუხი" : "Reply"}</div>
+                  <div className="text-xs text-[#A78BFA] font-semibold mb-0.5">↩ {ka?"პასუხი":"Reply"}</div>
                   <div className="text-xs text-white/60 truncate">
-                    {replyTo.type === "voice" ? "🎤 Voice" : replyTo.type === "image" ? "📷 Photo" : replyTo.content.slice(0, 60)}
+                    {replyTo.type==="voice"?"🎤 Voice":replyTo.type==="image"?"📷 Photo":replyTo.content.slice(0,60)}
                   </div>
                 </div>
                 <button onClick={() => setReplyTo(null)} className="text-white/40 hover:text-white text-lg shrink-0">✕</button>
@@ -726,7 +765,7 @@ export default function ChatThreadPage() {
             )}
 
             {recording && (
-              <div className="flex items-center gap-2 mb-2 px-3 py-2.5 rounded-2xl bg-red-500/10 border border-red-500/20">
+              <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2.5 rounded-2xl bg-red-500/10 border border-red-500/20">
                 <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse shrink-0" />
                 <span className="text-red-400 font-bold text-sm tabular-nums shrink-0">{fmtTimer(recordTime)}</span>
                 <div className="flex-1 flex items-end gap-[2px] h-6 overflow-hidden">
@@ -735,14 +774,12 @@ export default function ChatThreadPage() {
                   ))}
                 </div>
                 <button onClick={cancelRecording} className="text-white/40 hover:text-red-400 shrink-0 px-1">🗑</button>
-                <button onClick={stopRecording} className="rounded-full bg-red-500 px-3 py-1.5 text-xs font-bold text-white shrink-0">
-                  {ka ? "გაჩერება" : "Stop"}
-                </button>
+                <button onClick={stopRecording} className="rounded-full bg-red-500 px-3 py-1.5 text-xs font-bold text-white shrink-0">{ka?"გაჩერება":"Stop"}</button>
               </div>
             )}
 
             {!recording && audioBlob && audioPreviewUrl && (
-              <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-2xl bg-zinc-800 border border-white/10">
+              <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2 rounded-2xl bg-zinc-800 border border-white/10">
                 <span className="text-white/70 text-xs shrink-0">🎤</span>
                 <audio controls src={audioPreviewUrl} className="flex-1 h-8" preload="auto" />
                 <button onClick={cancelRecording} className="text-white/40 hover:text-white shrink-0 text-lg leading-none">✕</button>
@@ -755,14 +792,13 @@ export default function ChatThreadPage() {
               onChange={e => { const f = e.target.files?.[0]; if (f) setImagePreview({ file: f, url: URL.createObjectURL(f) }); e.target.value=""; }} />
 
             {!recording && (
-              <div className="flex items-center gap-1.5 pb-1">
+              <div className="flex items-center gap-1.5 px-3 py-2"
+                style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 8px)" }}>
                 {!hasFocusOrText ? (
                   <>
                     <button onClick={() => setShowAttachSheet(true)}
                       className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90">
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                        <path d="M12 5v14M5 12h14"/>
-                      </svg>
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
                     </button>
                     <button onClick={() => cameraInputRef.current?.click()}
                       className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90">
@@ -771,12 +807,10 @@ export default function ChatThreadPage() {
                         <circle cx="12" cy="13" r="4"/>
                       </svg>
                     </button>
-                    <button onClick={() => galleryInputRef.current?.click()}
-                      className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90" disabled={uploadingImg}>
+                    <button onClick={() => galleryInputRef.current?.click()} disabled={uploadingImg}
+                      className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90">
                       <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="3" width="18" height="18" rx="2"/>
-                        <circle cx="8.5" cy="8.5" r="1.5"/>
-                        <path d="m21 15-5-5L5 21"/>
+                        <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>
                       </svg>
                     </button>
                     <button onPointerDown={e => { e.preventDefault(); startRecording(); }}
@@ -784,28 +818,25 @@ export default function ChatThreadPage() {
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
                         <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                        <line x1="12" y1="19" x2="12" y2="23"/>
-                        <line x1="8" y1="23" x2="16" y2="23"/>
+                        <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
                       </svg>
                     </button>
                   </>
                 ) : (
                   <button onMouseDown={e => e.preventDefault()} onTouchStart={e => e.preventDefault()}
-                    onClick={() => setFocused(false)}
-                    className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition text-2xl font-bold">
-                    ›
-                  </button>
+                    onClick={() => { setFocused(false); setShowEmoji(false); }}
+                    className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition text-2xl font-bold">›</button>
                 )}
 
                 <div className="flex-1 flex items-center bg-zinc-800 rounded-full px-4 py-2.5 gap-2 min-w-0">
                   <input ref={inputRef} value={text}
                     onChange={e => setText(e.target.value)}
-                    onFocus={() => setFocused(true)}
+                    onFocus={() => { setFocused(true); setShowEmoji(false); }}
                     onBlur={() => { setTimeout(() => { if (!text.trim()) setFocused(false); }, 150); }}
                     autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
-                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+                    onKeyDown={e => { if (e.key==="Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
                     className="flex-1 bg-transparent outline-none text-white text-sm placeholder-white/40 min-w-0"
-                    placeholder={hasFocusOrText ? (ka ? "მესიჯი..." : "Message...") : (ka ? "მესიჯი" : "Message")} />
+                    placeholder={ka?"მესიჯი...":"Message..."} />
                 </div>
 
                 {text.trim() ? (
@@ -820,7 +851,7 @@ export default function ChatThreadPage() {
                       : <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>}
                   </button>
                 ) : (
-                  <button onClick={e => { e.stopPropagation(); setShowEmoji(!showEmoji); }}
+                  <button onClick={e => { e.stopPropagation(); setShowEmoji(p => !p); inputRef.current?.blur(); }}
                     className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition text-xl">
                     🙂
                   </button>
@@ -835,8 +866,7 @@ export default function ChatThreadPage() {
         <div className="fixed inset-0 z-50 bg-black flex flex-col">
           <div className="flex items-center justify-between px-4 py-3" style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 12px)" }}>
             <button onClick={() => setImagePreview(null)} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white text-lg">✕</button>
-            <button onClick={async () => { const f = imagePreview.file; setImagePreview(null); await uploadImage(f); }}
-              disabled={uploadingImg}
+            <button onClick={async () => { const f = imagePreview.file; setImagePreview(null); await uploadImage(f); }} disabled={uploadingImg}
               className="w-12 h-12 rounded-full bg-[#7C3AED] flex items-center justify-center shadow-xl disabled:opacity-50 active:scale-90 transition">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
             </button>
@@ -847,26 +877,15 @@ export default function ChatThreadPage() {
         </div>
       )}
 
-      {showMenu && (
-        <ChatMenu lang={lang}
-          onClose={() => setShowMenu(false)}
-          onViewProfile={() => { setShowMenu(false); otherUserId && router.push(`/profile/${otherUserId}`); }}
-          onUnmatch={() => { setShowMenu(false); setShowUnmatchModal(true); }}
-          onBlock={() => { setShowMenu(false); handleBlock(); }}
-        />
-      )}
+      {showMenu && <ChatMenu lang={lang} onClose={() => setShowMenu(false)}
+        onViewProfile={() => { setShowMenu(false); otherUserId && router.push(`/profile/${otherUserId}`); }}
+        onUnmatch={() => { setShowMenu(false); setShowUnmatchModal(true); }}
+        onBlock={() => { setShowMenu(false); handleBlock(); }} />}
 
-      {showUnmatchModal && (
-        <UnmatchModal ka={ka} onClose={() => setShowUnmatchModal(false)} onConfirm={handleUnmatchConfirm} />
-      )}
+      {showUnmatchModal && <UnmatchModal ka={ka} onClose={() => setShowUnmatchModal(false)} onConfirm={handleUnmatchConfirm} />}
 
-      {showAttachSheet && (
-        <AttachSheet lang={lang}
-          onClose={() => setShowAttachSheet(false)}
-          onGallery={() => galleryInputRef.current?.click()}
-          onCamera={() => cameraInputRef.current?.click()}
-        />
-      )}
+      {showAttachSheet && <AttachSheet lang={lang} onClose={() => setShowAttachSheet(false)}
+        onGallery={() => galleryInputRef.current?.click()} onCamera={() => cameraInputRef.current?.click()} />}
 
       {(reactionMsgId || selectedMsgId) && (
         <div className="fixed inset-0 z-30" onClick={() => { setReactionMsgId(null); setSelectedMsgId(null); }} />
