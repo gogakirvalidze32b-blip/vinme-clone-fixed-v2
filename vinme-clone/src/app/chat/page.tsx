@@ -96,17 +96,10 @@ export default function ChatPage() {
     const unreadMap = new Map<string, number>();
     for (const msg of (allMsgs ?? [])) {
       if (!lastMsgMap.has(msg.match_id)) lastMsgMap.set(msg.match_id, msg);
-  if (anonId && msg.sender_anon !== anonId) {
-  if (!unreadMap.has(msg.match_id)) {
-    // მხოლოდ ბოლო მესიჯი ითვლება (array sorted desc, so first = latest)
-    if (!msg.read_at) {
-      unreadMap.set(msg.match_id, 1);
-    } else {
-      unreadMap.set(msg.match_id, 0); // read, don't count
+      if (anonId && !msg.read_at && msg.sender_anon !== anonId) {
+        unreadMap.set(msg.match_id, (unreadMap.get(msg.match_id) ?? 0) + 1);
+      }
     }
-  }
-}
-
 
     const result: Match[] = [];
 
@@ -190,9 +183,7 @@ export default function ChatPage() {
       return new Date(b.last_message_time).getTime() - new Date(a.last_message_time).getTime();
     });
 
-const totalUnread = conversations.filter(m => 
-  m.last_sender_anon !== null && m.last_sender_anon !== myAnonId && m._unreadCount > 0
-).length + newMatches.length;
+const totalUnread = matches.filter(m => m._unreadCount > 0 && m.last_sender_anon !== myAnonId).length;
 
   if (loading) return (
     <main className="min-h-[100dvh] bg-black text-white pb-28">
@@ -327,5 +318,4 @@ const totalUnread = conversations.filter(m =>
       <BottomNav />
     </main>
   );
-}
 }
