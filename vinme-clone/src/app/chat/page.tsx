@@ -96,9 +96,15 @@ export default function ChatPage() {
     const unreadMap = new Map<string, number>();
     for (const msg of (allMsgs ?? [])) {
       if (!lastMsgMap.has(msg.match_id)) lastMsgMap.set(msg.match_id, msg);
-     if (anonId && !msg.read_at && msg.sender_anon !== anonId) {
-  unreadMap.set(msg.match_id, (unreadMap.get(msg.match_id) ?? 0) + 1);
+  
+
+if (anonId && msg.sender_anon !== anonId) {
+  if (!unreadMap.has(msg.match_id)) {
+    // მხოლოდ ბოლო მესიჯი ამოწმებს (desc order-ით პირველი = ბოლო)
+    unreadMap.set(msg.match_id, !msg.read_at ? 1 : 0);
+  }
 }
+
     }
 
     const result: Match[] = [];
