@@ -214,10 +214,9 @@ export default function ChatThreadPage() {
   async function send() {
     const t = text.trim();
     if (!t || !myAnonId || !matchId || Number.isNaN(matchId)) return;
-
-    setSending(true);
-    setText("");
-    setErr(null);
+     setSending(true);
+  setText("");
+  await new Promise(r => setTimeout(r, 50)); 
 
     const optimisticId = `tmp-${Date.now()}`;
     const now = new Date().toISOString();

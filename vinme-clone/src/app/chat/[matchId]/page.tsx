@@ -243,7 +243,7 @@ function QuickEmojiPicker({ onPick, onClose }: { onPick: (e: string) => void; on
       <div className="px-3 pt-3 pb-2">
         <input value={search} onChange={e => setSearch(e.target.value)}
           placeholder="🔍 Search..."
-          className="w-full bg-zinc-800 rounded-full px-4 py-2 text-sm text-white placeholder-white/30 outline-none" />
+          className="w-full bg-zinc-800 rounded-full px-4 py-2 text-sm text-white placeholder-white/30 outline-none ring-0 focus:ring-0 focus:outline-none"  />
       </div>
       {/* grid */}
       <div className="overflow-y-auto px-2 pb-3" style={{ maxHeight: 240 }}>
@@ -459,6 +459,7 @@ setReactions(prev => prev.filter(x =>
 
   async function handleReact(msgId: string, emoji: string) {
     if (!myAnonId) return;
+      setReactionMsgId(null); // დამატე ეს აქ რომ რექშენის ბარი დაიხუროს რეაქციის შემდეგ, თორემ იშვიათად რჩება ღია და არ იკავებს ადგილს
     const existing = reactions.find(r => r.message_id === msgId && r.sender_anon === myAnonId);
     if (existing) {
       if (existing.emoji === emoji) {
@@ -762,7 +763,7 @@ setReactions(prev => prev.filter(x =>
                             )}
                           </div>
                         ) : (
-                          <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words select-none
+                       <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words select-none
   ${mine?"bg-[#7C3AED] rounded-2xl rounded-tr-sm ml-16":"bg-zinc-800 rounded-2xl rounded-tl-sm mr-16"}
   ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400 opacity-80":""}`}>
                             <span>{m.content}</span>
@@ -870,8 +871,8 @@ setReactions(prev => prev.filter(x =>
                     className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition text-2xl font-bold">›</button>
                 )}
 
-                <div className="flex-1 flex items-center bg-zinc-800 rounded-full px-4 py-2.5 gap-2 min-w-0">
-                  <input ref={inputRef} value={text}
+                <div className="flex-1 flex items-center bg-zinc-800 rounded-full px-4 py-2.5 gap-2 min-w-0 border-0 outline-none ring-0">
+                    <input ref={inputRef} value={text}
                     onChange={e => setText(e.target.value)}
                     onFocus={() => { setFocused(true); setShowEmoji(false); }}
                     onBlur={() => { setTimeout(() => { if (!text.trim()) setFocused(false); }, 150); }}

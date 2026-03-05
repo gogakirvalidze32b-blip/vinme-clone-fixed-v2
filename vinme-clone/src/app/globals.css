@@ -90,3 +90,9 @@ img {
 .bottom-nav-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+
+input:focus {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
