@@ -5,7 +5,6 @@ import { supabase } from "@/lib/supabase";
 import LangMenu from "@/components/LangMenu";
 import { getLang, type Lang } from "@/lib/i18n";
 
-
 export default function LoginPage() {
   const [lang, setLang] = useState<Lang>("ka");
   const [view, setView] = useState<"main" | "email" | "otp">("main");
@@ -21,6 +20,18 @@ export default function LoginPage() {
     window.addEventListener("app:lang", h);
     return () => window.removeEventListener("app:lang", h);
   }, []);
+
+  useEffect(() => {
+    const code = otp.replace(/\s/g, "");
+    if (code.length !== 8) return;
+    setLoading(true);
+    setError(null);
+    supabase.auth.verifyOtp({ email: email.trim(), token: code, type: "email" })
+      .then(({ error: e }) => {
+        if (e) { setError(ka ? "არასწორი კოდი, სცადე თავიდან" : "Wrong code, try again"); setLoading(false); return; }
+        window.location.href = "/";
+      });
+  }, [otp]);
 
   async function signInGoogle() {
     await supabase.auth.signInWithOAuth({
@@ -48,15 +59,13 @@ export default function LoginPage() {
     setLoading(false);
   }
 
- async function verifyOtp() {
+  async function verifyOtp() {
     const code = otp.replace(/\s/g, "").trim();
-    console.log("code length:", code.length, "code:", code);
     if (code.length < 8) { setError(ka ? "შეიყვანე კოდი" : "Enter the code"); return; }
     setLoading(true); setError(null);
-    const { data, error: e } = await supabase.auth.verifyOtp({
+    const { error: e } = await supabase.auth.verifyOtp({
       email: email.trim(), token: code, type: "email"
     });
-    console.log("data:", data, "error:", e);
     if (e) { setError(ka ? "არასწორი კოდი, სცადე თავიდან" : "Wrong code, try again"); setLoading(false); return; }
     window.location.href = "/";
   }
@@ -180,20 +189,7 @@ export default function LoginPage() {
                     const val = e.target.value.replace(/[^0-9]/g, "").slice(0, 8);
                     setOtp(val);
                     setError(null);
-useEffect(() => {
-  const code = otp.replace(/\s/g,"");
-  if (code.length === 8) {
-    const run = async () => {
-      setLoading(true); setError(null);
-      const { error: e } = await supabase.auth.verifyOtp({
-        email: email.trim(), token: code, type: "email"
-      });
-      if (e) { setError(ka ? "არასწორი კოდი, სცადე თავიდან" : "Wrong code, try again"); setLoading(false); return; }
-      window.location.href = "/";
-    };
-    run();
-  }
-}, [otp]);         }}
+                  }}
                   placeholder="კოდი"
                   className="w-full bg-transparent px-4 py-5 text-3xl font-black text-center outline-none placeholder-white/20 tracking-[12px]"
                   autoFocus autoComplete="one-time-code"
