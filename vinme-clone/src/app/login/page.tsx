@@ -180,8 +180,9 @@ export default function LoginPage() {
                     const val = e.target.value.replace(/[^0-9]/g, "").slice(0, 8);
                     setOtp(val);
                     setError(null);
-                    if (val.length === 8) setTimeout(() => verifyOtp(), 100);
-                  }}
+useEffect(() => {
+  if (otp.replace(/\s/g,"").length === 8) verifyOtp();
+}, [otp]);                  }}
                   placeholder="კოდი"
                   className="w-full bg-transparent px-4 py-5 text-3xl font-black text-center outline-none placeholder-white/20 tracking-[12px]"
                   autoFocus autoComplete="one-time-code"
