@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { photoSrc } from "@/lib/photos";
 import { getLang } from "@/lib/i18n";
+import { useUser } from "@/lib/userContext";
 
 type Profile = { user_id: string; nickname: string | null; first_name: string | null; photo1_url: string | null; last_seen?: string | null; };
 
@@ -40,6 +41,9 @@ export default function ChatPage() {
   const ka = lang !== "en";
   const L = (k: string, e: string) => ka ? k : e;
 
+  // ✅ anonId userContext-იდან — 0 extra query
+  const { anonId: ctxAnonId } = useUser();
+
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [myId, setMyId] = useState<string | null>(null);
@@ -58,7 +62,6 @@ export default function ChatPage() {
     if (loadingRef.current) return;
     loadingRef.current = true;
 
-    // ✅ Batch 1: fetch matches first (need IDs for next queries)
     const { data: rows } = await supabase
       .from("matches").select("*")
       .or(`user_a.eq.${uid},user_b.eq.${uid}`)
@@ -71,7 +74,6 @@ export default function ChatPage() {
 
     const matchIds = rows.map((r: any) => r.id);
 
-    // ✅ Batch 2: profiles + messages in parallel
     const [profilesRes, msgsRes] = await Promise.all([
       supabase.from("profiles").select("user_id,nickname,first_name,photo1_url,last_seen").in("user_id", otherIds),
       supabase.from("messages")
@@ -85,7 +87,6 @@ export default function ChatPage() {
 
     const allMsgs = msgsRes.data;
 
-    // Build maps in one pass
     const lastMsgMap = new Map<string, any>();
     const unreadMap = new Map<string, number>();
     for (const msg of (allMsgs ?? [])) {
@@ -109,8 +110,8 @@ export default function ChatPage() {
         ...row,
         _unreadCount: unreadCount,
         _hasMessages: !!lastMsg,
-        last_message: lastMsg?.type === "voice" 
-          ? (ka ? "🎤 ხმოვანი" : "🎤 Voice") 
+        last_message: lastMsg?.type === "voice"
+          ? (ka ? "🎤 ხმოვანი" : "🎤 Voice")
           : lastMsg?.type === "image"
           ? (ka ? "📷 ფოტო" : "📷 Photo")
           : (lastMsg?.content ?? null),
@@ -125,20 +126,19 @@ export default function ChatPage() {
     loadingRef.current = false;
   }
 
+  // ✅ ctxAnonId მზად რომ იყოს — მაშინ loadMatches გავუშვათ
   useEffect(() => {
+    if (ctxAnonId === null) return; // ველოდებით userContext-ს
     (async () => {
       const { data: sess } = await supabase.auth.getSession();
       const uid = sess.session?.user?.id;
       if (!uid) { router.replace("/login"); return; }
       setMyId(uid);
-      const { data: me } = await supabase.from("profiles").select("anon_id").eq("user_id", uid).maybeSingle();
-      const anonId = me?.anon_id ?? null;
-      setMyAnonId(anonId);
-      await loadMatches(uid, anonId);
+      setMyAnonId(ctxAnonId);
+      await loadMatches(uid, ctxAnonId);
     })();
-  }, [router]);
+  }, [router, ctxAnonId]);
 
-  // ✅ realtime — smart state update, NO full reload on every message
   useEffect(() => {
     if (!myId || !myAnonId) return;
     const ch = supabase.channel(`chat-list-${Date.now()}`)
@@ -159,7 +159,6 @@ export default function ChatPage() {
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, (payload) => {
         const msg = payload.new as any;
-        // read_at update — recalculate unread for that match
         if (msg.read_at) {
           setMatches(prev => prev.map(m => {
             if (String(m.id) !== String(msg.match_id)) return m;
@@ -218,7 +217,6 @@ export default function ChatPage() {
           )}
         </div>
 
-        {/* NEW MATCHES STRIP */}
         {newMatches.length > 0 && (
           <div className="mb-6">
             <h2 className="text-xs text-white/40 uppercase tracking-wider mb-3">{L("ახალი შეხვედრები", "New Matches")}</h2>
@@ -244,7 +242,6 @@ export default function ChatPage() {
           </div>
         )}
 
-        {/* CONVERSATIONS */}
         {conversations.length > 0 && (
           <div>
             <h2 className="text-xs text-white/40 uppercase tracking-wider mb-3">{L("მიმოწერა", "Messages")}</h2>
@@ -297,12 +294,10 @@ export default function ChatPage() {
           </div>
         )}
 
-        {/* DISMISS OVERLAY */}
         {selectedMatchId && (
           <div className="fixed inset-0 z-30" onClick={() => setSelectedMatchId(null)} />
         )}
 
-        {/* EMPTY */}
         {matches.length === 0 && (
           <div className="text-center text-white/40 mt-24">
             <div className="text-5xl mb-4">💬</div>
