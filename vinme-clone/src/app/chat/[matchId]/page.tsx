@@ -319,6 +319,14 @@ export default function ChatThreadPage() {
 
   useEffect(() => { if (ctxAnonId && !myAnonId) setMyAnonId(ctxAnonId); }, [ctxAnonId]);
 
+
+  useEffect(() => {
+  return () => {
+    setReactionMsgId(null);
+    setSelectedMsgId(null);
+  };
+}, []);
+
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
@@ -407,10 +415,30 @@ export default function ChatThreadPage() {
         const updated = payload.new as MsgRow;
         setMsgs(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m));
       })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "message_reactions" }, (payload) => {
-        const r = payload.new as Reaction;
-        setReactions(prev => prev.some(x => x.id === r.id) ? prev : [...prev, r]);
-      })
+     .on("postgres_changes", { 
+  event: "*",  // INSERT, UPDATE, DELETE ყველა
+  schema: "public", 
+  table: "message_reactions"
+  // filter არ ვწერთ — message_id-ით შემდეგ ვფილტრავთ
+}, (payload) => {
+  if (payload.eventType === "INSERT") {
+    const r = payload.new as Reaction;
+    // მხოლოდ ამ chat-ის მესიჯების reactions
+    setMsgs(prev => {
+      const msgIds = prev.map(m => m.id);
+      if (!msgIds.includes(r.message_id)) return prev;
+      setReactions(p => p.some(x => x.id === r.id) ? p : [...p, r]);
+      return prev;
+    });
+  }
+  if (payload.eventType === "DELETE") {
+    const r = payload.old as Reaction;
+    setReactions(prev => prev.filter(x => 
+      x.id !== r.id && 
+      !(x.message_id === r.message_id && x.sender_anon === r.sender_anon)
+    ));
+  }
+})
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "message_reactions" }, (payload) => {
         const r = payload.old as Reaction;
 setReactions(prev => prev.filter(x => 
@@ -608,7 +636,7 @@ setReactions(prev => prev.filter(x =>
 
           {/* HEADER */}
           <div className="flex items-center gap-3 px-4 py-3 bg-zinc-950 border-b border-white/8 shrink-0">
-            <button onClick={() => router.push("/chat")}
+<button onClick={() => { setReactionMsgId(null); setSelectedMsgId(null); router.push("/chat"); }}
               className="rounded-full bg-white/8 w-9 h-9 flex items-center justify-center text-white shrink-0 hover:bg-white/12 transition">←</button>
             <div className="flex items-center gap-3 flex-1 cursor-pointer"
               onClick={() => otherUserId && router.push(`/profile/${otherUserId}`)}>
