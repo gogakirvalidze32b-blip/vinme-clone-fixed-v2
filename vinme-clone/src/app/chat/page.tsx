@@ -183,7 +183,7 @@ export default function ChatPage() {
       return new Date(b.last_message_time).getTime() - new Date(a.last_message_time).getTime();
     });
 
-  const totalUnread = matches.reduce((s, m) => s + m._unreadCount, 0);
+const totalUnread = matches.filter(m => m._unreadCount > 0 && m.last_sender_anon !== myAnonId).length;
 
   if (loading) return (
     <main className="min-h-[100dvh] bg-black text-white pb-28">
