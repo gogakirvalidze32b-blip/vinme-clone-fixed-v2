@@ -29,8 +29,7 @@ export default function LoginPage() {
     supabase.auth.verifyOtp({ email: email.trim(), token: code, type: "email" })
       .then(({ error: e }) => {
         if (e) { setError(ka ? "არასწორი კოდი, სცადე თავიდან" : "Wrong code, try again"); setLoading(false); return; }
-        window.location.href = "/";
-      });
+window.location.href = "/auth/redirect";      });
   }, [otp]);
 
   async function signInGoogle() {
@@ -59,16 +58,16 @@ export default function LoginPage() {
     setLoading(false);
   }
 
-  async function verifyOtp() {
-    const code = otp.replace(/\s/g, "").trim();
-    if (code.length < 8) { setError(ka ? "შეიყვანე კოდი" : "Enter the code"); return; }
-    setLoading(true); setError(null);
-    const { error: e } = await supabase.auth.verifyOtp({
-      email: email.trim(), token: code, type: "email"
-    });
-    if (e) { setError(ka ? "არასწორი კოდი, სცადე თავიდან" : "Wrong code, try again"); setLoading(false); return; }
-    window.location.href = "/";
-  }
+async function verifyOtp() {
+  const code = otp.replace(/\s/g, "").trim();
+  if (code.length < 8) { setError(ka ? "შეიყვანე კოდი" : "Enter the code"); return; }
+  setLoading(true); setError(null);
+  const { error: e } = await supabase.auth.verifyOtp({
+    email: email.trim(), token: code, type: "email"
+  });
+  if (e) { setError(ka ? "არასწორი კოდი, სცადე თავიდან" : "Wrong code, try again"); setLoading(false); return; }
+window.location.href = "/auth/redirect";
+}
 
   return (
     <div className="relative min-h-[100dvh] w-full overflow-hidden text-white" style={{
