@@ -420,7 +420,7 @@ export default function ChatThreadPage() {
   schema: "public", 
   table: "message_reactions"
 }, (payload) => {
-  console.log("🔥 REACTION EVENT:", payload);
+  // console.log("🔥 REACTION EVENT:", payload);
   if (payload.eventType === "INSERT") {
     const r = payload.new as Reaction;
     setReactions(prev => prev.some(x => x.id === r.id) ? prev : [...prev, r]);
@@ -436,7 +436,7 @@ export default function ChatThreadPage() {
     const r = payload.new as Reaction;
     setReactions(prev => prev.map(x => x.id === r.id ? r : x));
   }
-  
+
   if (payload.eventType === "DELETE") {
     const r = payload.old as Reaction;
     setReactions(prev => prev.filter(x => 
