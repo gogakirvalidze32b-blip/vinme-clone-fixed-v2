@@ -48,13 +48,15 @@ export default function LoginPage() {
     setLoading(false);
   }
 
-  async function verifyOtp() {
+ async function verifyOtp() {
     const code = otp.replace(/\s/g, "").trim();
+    console.log("code length:", code.length, "code:", code);
     if (code.length < 8) { setError(ka ? "შეიყვანე კოდი" : "Enter the code"); return; }
     setLoading(true); setError(null);
-    const { error: e } = await supabase.auth.verifyOtp({
+    const { data, error: e } = await supabase.auth.verifyOtp({
       email: email.trim(), token: code, type: "email"
     });
+    console.log("data:", data, "error:", e);
     if (e) { setError(ka ? "არასწორი კოდი, სცადე თავიდან" : "Wrong code, try again"); setLoading(false); return; }
     window.location.href = "/";
   }
