@@ -7,10 +7,12 @@ import { photoSrc } from "@/lib/photos";
 import EmojiPicker from "emoji-picker-react";
 import { SafeImg } from "@/components/SafeImg";
 import { getLang } from "@/lib/i18n";
+import { useUser } from "@/lib/userContext";
 
 type MsgRow = {
   id: string; match_id: number; sender_anon: string;
-  content: string; created_at: string; read_at: string | null; type?: "text" | "voice";
+  content: string; created_at: string; read_at: string | null;
+  type?: "text" | "voice" | "image";
 };
 
 function fmtTimer(sec: number) { const m = Math.floor(sec/60), s = sec%60; return `${m}:${s<10?"0":""}${s}`; }
@@ -46,59 +48,40 @@ function Ticks({ sent, read, mine }: { sent: boolean; read: boolean; mine: boole
   );
 }
 
-// ===== UNMATCH FEEDBACK MODAL =====
 function UnmatchModal({ onClose, onConfirm, ka }: {
   onClose: () => void; onConfirm: (reason: string) => void; ka: boolean;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
-
   const reasons = ka ? [
-    "არ ვართ თავსებადი",
-    "შეურაცხმყოფელი ქცევა",
-    "სპამი ან ყალბი პროფილი",
-    "უბრალოდ მიმოწერა დამთავრდა",
-    "სხვა მიზეზი",
+    "არ ვართ თავსებადი", "შეურაცხმყოფელი ქცევა", "სპამი ან ყალბი პროფილი",
+    "უბრალოდ მიმოწერა დამთავრდა", "სხვა მიზეზი",
   ] : [
-    "Not compatible",
-    "Offensive behavior",
-    "Spam or fake profile",
-    "Conversation ended naturally",
-    "Other reason",
+    "Not compatible", "Offensive behavior", "Spam or fake profile",
+    "Conversation ended naturally", "Other reason",
   ];
-
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-      <div className="relative w-full max-w-lg bg-zinc-900 rounded-t-3xl overflow-hidden"
-        onClick={e => e.stopPropagation()}>
+      <div className="relative w-full max-w-lg bg-zinc-900 rounded-t-3xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="px-5 pt-5 pb-2">
-          <h2 className="text-lg font-extrabold text-white">
-            {ka ? "რატო ხდება Unmatch?" : "Why are you unmatching?"}
-          </h2>
-          <p className="text-sm text-white/40 mt-1">
-            {ka ? "მიზეზი სავალდებულოა" : "A reason is required"}
-          </p>
+          <h2 className="text-lg font-extrabold text-white">{ka ? "რატო ხდება Unmatch?" : "Why are you unmatching?"}</h2>
+          <p className="text-sm text-white/40 mt-1">{ka ? "მიზეზი სავალდებულოა" : "A reason is required"}</p>
         </div>
         <div className="px-4 py-3 flex flex-col gap-2">
           {reasons.map((r) => (
             <button key={r} onClick={() => setSelected(r)}
               className={`w-full text-left px-4 py-3.5 rounded-2xl text-sm font-medium transition border ${
-                selected === r
-                  ? "bg-red-500/20 border-red-500/60 text-white"
-                  : "bg-white/5 border-white/8 text-white/70 hover:bg-white/10"
-              }`}>
-              {r}
-            </button>
+                selected === r ? "bg-red-500/20 border-red-500/60 text-white" : "bg-white/5 border-white/8 text-white/70 hover:bg-white/10"
+              }`}>{r}</button>
           ))}
         </div>
         <div className="px-4 pb-8 pt-2 flex gap-3">
-          <button onClick={onClose}
-            className="flex-1 rounded-2xl bg-white/8 py-3.5 text-sm font-semibold text-white/70">
+          <button onClick={onClose} className="flex-1 rounded-2xl bg-white/8 py-3.5 text-sm font-semibold text-white/70">
             {ka ? "გაუქმება" : "Cancel"}
           </button>
           <button onClick={() => selected && onConfirm(selected)} disabled={!selected}
             className="flex-1 rounded-2xl bg-red-500 py-3.5 text-sm font-bold text-white disabled:opacity-40 transition">
-            {ka ? "Unmatch" : "Unmatch"}
+            Unmatch
           </button>
         </div>
       </div>
@@ -106,7 +89,6 @@ function UnmatchModal({ onClose, onConfirm, ka }: {
   );
 }
 
-// ===== 3-DOT MENU =====
 function ChatMenu({ onClose, onViewProfile, onUnmatch, onBlock, lang }: {
   onClose: () => void; onViewProfile: () => void; onUnmatch: () => void; onBlock: () => void; lang: string;
 }) {
@@ -114,8 +96,7 @@ function ChatMenu({ onClose, onViewProfile, onUnmatch, onBlock, lang }: {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className="relative w-full max-w-lg bg-zinc-900 rounded-t-3xl overflow-hidden pb-safe"
-        onClick={e => e.stopPropagation()}>
+      <div className="relative w-full max-w-lg bg-zinc-900 rounded-t-3xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex justify-end px-4 pt-4 pb-2">
           <button onClick={onClose} className="text-white/40 hover:text-white text-2xl leading-none">✕</button>
         </div>
@@ -139,12 +120,52 @@ function ChatMenu({ onClose, onViewProfile, onUnmatch, onBlock, lang }: {
   );
 }
 
+function AttachSheet({ onClose, onGallery, onCamera, lang }: {
+  onClose: () => void; onGallery: () => void; onCamera: () => void; lang: string;
+}) {
+  const ka = lang !== "en";
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="relative w-full max-w-lg bg-zinc-900 rounded-t-3xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex justify-between items-center px-5 pt-5 pb-3 border-b border-white/8">
+          <h3 className="text-white font-bold">{ka ? "დამატება" : "Attach"}</h3>
+          <button onClick={onClose} className="text-white/40 text-2xl">✕</button>
+        </div>
+        <div className="grid grid-cols-2 gap-3 p-4">
+          <button onClick={() => { onCamera(); onClose(); }}
+            className="flex flex-col items-center gap-3 py-6 rounded-2xl bg-white/5 hover:bg-white/10 transition active:scale-95">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+            <span className="text-white/80 text-sm font-medium">{ka ? "კამერა" : "Camera"}</span>
+          </button>
+          <button onClick={() => { onGallery(); onClose(); }}
+            className="flex flex-col items-center gap-3 py-6 rounded-2xl bg-white/5 hover:bg-white/10 transition active:scale-95">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <path d="m21 15-5-5L5 21"/>
+            </svg>
+            <span className="text-white/80 text-sm font-medium">{ka ? "გალერეა" : "Gallery"}</span>
+          </button>
+        </div>
+        <div className="h-6" />
+      </div>
+    </div>
+  );
+}
+
 export default function ChatThreadPage() {
   const router = useRouter();
   const params = useParams();
   const matchId = Number(params?.matchId);
   const lang = getLang();
   const ka = lang !== "en";
+
+  // ✅ context-იდან anonId — სწრაფი, არ ელოდება DB-ს
+  const { anonId: ctxAnonId } = useUser();
 
   const [msgs, setMsgs] = useState<MsgRow[]>([]);
   const [text, setText] = useState("");
@@ -157,17 +178,17 @@ export default function ChatThreadPage() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showUnmatchModal, setShowUnmatchModal] = useState(false);
-
+  const [showAttachSheet, setShowAttachSheet] = useState(false);
   const [selectedMsgId, setSelectedMsgId] = useState<string|null>(null);
+  const [focused, setFocused] = useState(false);
   const longPressTimer = useRef<NodeJS.Timeout|null>(null);
-
   const [pullY, setPullY] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const pullStartY = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
-
   const [recording, setRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob|null>(null);
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string|null>(null);
   const [recordTime, setRecordTime] = useState(0);
   const [uploadingVoice, setUploadingVoice] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder|null>(null);
@@ -175,6 +196,31 @@ export default function ChatThreadPage() {
   const timerRef = useRef<NodeJS.Timeout|null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingImg, setUploadingImg] = useState(false);
+  const [imagePreview, setImagePreview] = useState<{file: File, url: string} | null>(null);
+
+  // ✅ ctxAnonId მზად რომ გახდეს — myAnonId დაყენება
+  useEffect(() => {
+    if (ctxAnonId && !myAnonId) setMyAnonId(ctxAnonId);
+  }, [ctxAnonId]);
+
+  // ✅ keyboard fix — DOM პირდაპირ, React state-ის გარეშე
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const el = document.getElementById("chat-root");
+    const handler = () => {
+      const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      if (el) el.style.bottom = `${kb}px`;
+      if (kb > 0) bottomRef.current?.scrollIntoView({ behavior: "instant" as ScrollBehavior });
+    };
+    handler();
+    vv.addEventListener("resize", handler);
+    vv.addEventListener("scroll", handler);
+    return () => { vv.removeEventListener("resize", handler); vv.removeEventListener("scroll", handler); };
+  }, []);
 
   const isOnline = useMemo(() => {
     if (!otherProfile?.last_seen) return false;
@@ -199,25 +245,21 @@ export default function ChatThreadPage() {
       const user = session?.session?.user;
       if (!user) { router.replace("/login"); return; }
       setMyUserId(user.id);
-
       const [meRes, matchRes] = await Promise.all([
         supabase.from("profiles").select("anon_id").eq("user_id", user.id).maybeSingle(),
         supabase.from("matches").select("user_a,user_b").eq("id", matchId).maybeSingle(),
       ]);
-
-      const anonId = meRes.data?.anon_id ?? null;
+      // ✅ DB-დან ან context-იდან — რომელიც პირველი მოვა
+      const anonId = meRes.data?.anon_id ?? ctxAnonId ?? null;
       setMyAnonId(anonId);
-
       const matchRow = matchRes.data;
       if (!matchRow) return;
       const otherId = matchRow.user_a === user.id ? matchRow.user_b : matchRow.user_a;
       setOtherUserId(otherId);
-
       const [profileRes, msgsRes] = await Promise.all([
         supabase.from("profiles").select("user_id,nickname,first_name,photo1_url,last_seen").eq("user_id", otherId).maybeSingle(),
         supabase.from("messages").select("*").eq("match_id", matchId).order("created_at", { ascending: true }),
       ]);
-
       setOtherProfile(profileRes.data ?? null);
       setMsgs(msgsRes.data ?? []);
       setIsLoaded(true);
@@ -264,15 +306,31 @@ export default function ChatThreadPage() {
     } else { setPullY(0); }
   }
 
-  function onMsgPointerDown(msgId: string) {
-    longPressTimer.current = setTimeout(() => setSelectedMsgId(msgId), 500);
-  }
+  function onMsgPointerDown(msgId: string) { longPressTimer.current = setTimeout(() => setSelectedMsgId(msgId), 500); }
   function onMsgPointerUp() { if (longPressTimer.current) clearTimeout(longPressTimer.current); }
 
   async function deleteMessage(msgId: string) {
     await supabase.from("messages").delete().eq("id", msgId);
     setMsgs(prev => prev.filter(m => m.id !== msgId));
     setSelectedMsgId(null);
+  }
+
+  async function uploadImage(file: File) {
+    if (!matchId || !myUserId || !myAnonId) return;
+    setUploadingImg(true);
+    try {
+      const ext = file.type.split("/")[1] || "jpg";
+      const path = `${myUserId}/chat-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("photos").upload(path, file, { upsert: true, contentType: file.type });
+      if (upErr) throw upErr;
+      const { data: urlData } = supabase.storage.from("photos").getPublicUrl(path);
+      const tempId = `tempi-${Date.now()}`;
+      setMsgs(prev => [...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: urlData.publicUrl, created_at: new Date().toISOString(), read_at: null, type: "image" }]);
+      const { data } = await supabase.from("messages").insert({ match_id: matchId, sender_anon: myAnonId, content: urlData.publicUrl, type: "image" }).select().single();
+      if (data) setMsgs(prev => prev.map(m => m.id === tempId ? (data as MsgRow) : m));
+      await supabase.from("matches").update({ has_unread: true }).eq("id", matchId);
+    } catch (e) { console.error(e); }
+    setUploadingImg(false);
   }
 
   async function send() {
@@ -297,7 +355,7 @@ export default function ChatThreadPage() {
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       recorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-        if (blob.size > 0) setAudioBlob(blob);
+        if (blob.size > 0) { setAudioBlob(blob); setAudioPreviewUrl(URL.createObjectURL(blob)); }
         stream.getTracks().forEach(tr => tr.stop());
       };
       recorder.start(); setRecording(true); setRecordTime(0);
@@ -310,40 +368,32 @@ export default function ChatThreadPage() {
     mediaRecorderRef.current?.stop(); setRecording(false);
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
   }
-  function cancelRecording() { stopRecording(); setAudioBlob(null); setRecordTime(0); chunksRef.current = []; }
+  function cancelRecording() {
+    stopRecording(); setAudioBlob(null);
+    if (audioPreviewUrl) { URL.revokeObjectURL(audioPreviewUrl); setAudioPreviewUrl(null); }
+    setRecordTime(0); chunksRef.current = [];
+  }
 
   async function sendVoice() {
     if (!audioBlob || !myAnonId || uploadingVoice) return;
     setUploadingVoice(true);
     const fileName = `voice-${Date.now()}.webm`;
     const { error } = await supabase.storage.from("voices").upload(fileName, audioBlob, { contentType: "audio/webm", upsert: true });
-    if (error) { console.error("Voice upload error:", error); setUploadingVoice(false); return; }
+    if (error) { console.error(error); setUploadingVoice(false); return; }
     const { data: urlData } = supabase.storage.from("voices").getPublicUrl(fileName);
-    const publicUrl = urlData.publicUrl;
     const tempId = `tempv-${Date.now()}`;
-    setMsgs(prev => [...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: publicUrl, created_at: new Date().toISOString(), read_at: null, type: "voice" }]);
-    const { data } = await supabase.from("messages").insert({ match_id: matchId, sender_anon: myAnonId, content: publicUrl, type: "voice" }).select().single();
+    setMsgs(prev => [...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: urlData.publicUrl, created_at: new Date().toISOString(), read_at: null, type: "voice" }]);
+    const { data } = await supabase.from("messages").insert({ match_id: matchId, sender_anon: myAnonId, content: urlData.publicUrl, type: "voice" }).select().single();
     if (data) setMsgs(prev => prev.map(m => m.id === tempId ? (data as MsgRow) : m));
     await supabase.from("matches").update({ has_unread: true }).eq("id", matchId);
+    if (audioPreviewUrl) { URL.revokeObjectURL(audioPreviewUrl); setAudioPreviewUrl(null); }
     setAudioBlob(null); setUploadingVoice(false);
   }
 
   async function handleUnmatchConfirm(reason: string) {
     setShowUnmatchModal(false);
-    // feedback შენახვა
-    await supabase.from("unmatch_feedback").insert({
-      from_user_id: myUserId,
-      to_user_id: otherUserId,
-      match_id: matchId,
-      reason,
-    });
-    // notification მეორე მომხმარებელს
-    await supabase.from("notifications").insert({
-      user_id: otherUserId,
-      type: "unmatch",
-      message: ka ? `ვიღაცამ Unmatch გაგიკეთა` : `Someone unmatched you`,
-    }).then(() => {}); // ignore error თუ table არ არსებობს
-    // match წაშლა
+    await supabase.from("unmatch_feedback").insert({ from_user_id: myUserId, to_user_id: otherUserId, match_id: matchId, reason });
+    await supabase.from("notifications").insert({ user_id: otherUserId, type: "unmatch", message: ka ? "ვიღაცამ Unmatch გაგიკეთა" : "Someone unmatched you" }).then(() => {});
     await supabase.from("matches").delete().eq("id", matchId);
     router.replace("/chat");
   }
@@ -356,10 +406,11 @@ export default function ChatThreadPage() {
 
   const avatar = useMemo(() => { const src = photoSrc(otherProfile?.photo1_url ?? null); return src || null; }, [otherProfile]);
   const otherName = otherProfile?.nickname ?? otherProfile?.first_name ?? "...";
+  const hasFocusOrText = focused || text.trim().length > 0;
 
   if (!isLoaded) return (
-    <div className="flex justify-center bg-[#111]" style={{ height: "100dvh" }}>
-      <div className="w-full max-w-lg flex flex-col bg-[#111]" style={{ height: "100dvh" }}>
+    <div className="fixed inset-0 bg-[#111] flex justify-center">
+      <div className="w-full max-w-lg flex flex-col bg-[#111]">
         <div className="flex items-center gap-3 px-4 py-3 bg-zinc-950 border-b border-white/8 shrink-0">
           <div className="w-9 h-9 rounded-full bg-white/10 animate-pulse" />
           <div className="flex items-center gap-3 flex-1">
@@ -380,159 +431,235 @@ export default function ChatThreadPage() {
   );
 
   return (
-    <div className="flex justify-center bg-[#111]" style={{ height: "100dvh" }}>
-      <div className="w-full max-w-lg flex flex-col bg-[#111] text-white"
-        style={{ height: "100dvh" }}
+    <>
+      <div id="chat-root" className="fixed inset-0 bg-[#111] flex justify-center"
+        style={{ bottom: 0, transition: "bottom 0.12s ease-out" }}
         onClick={() => { showEmoji && setShowEmoji(false); selectedMsgId && setSelectedMsgId(null); }}>
+        <div className="w-full max-w-lg flex flex-col bg-[#111] text-white h-full">
 
-        {/* HEADER */}
-        <div className="flex items-center gap-3 px-4 py-3 bg-zinc-950 border-b border-white/8 shrink-0">
-          <button onClick={() => router.push("/chat")}
-            className="rounded-full bg-white/8 w-9 h-9 flex items-center justify-center text-white shrink-0 hover:bg-white/12 transition">←</button>
-          <div className="flex items-center gap-3 flex-1 cursor-pointer"
-            onClick={() => otherUserId && router.push(`/profile/${otherUserId}`)}>
-            <div className="relative shrink-0">
-              <SafeImg src={avatar} className="w-10 h-10 rounded-full object-cover ring-2 ring-white/10"
-                fallback={<div className="w-10 h-10 rounded-full bg-zinc-700 flex items-center justify-center text-sm">👤</div>} />
-              {isOnline && <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-400 border-2 border-zinc-950" />}
+          {/* HEADER */}
+          <div className="flex items-center gap-3 px-4 py-3 bg-zinc-950 border-b border-white/8 shrink-0">
+            <button onClick={() => router.push("/chat")}
+              className="rounded-full bg-white/8 w-9 h-9 flex items-center justify-center text-white shrink-0 hover:bg-white/12 transition">←</button>
+            <div className="flex items-center gap-3 flex-1 cursor-pointer"
+              onClick={() => otherUserId && router.push(`/profile/${otherUserId}`)}>
+              <div className="relative shrink-0">
+                <SafeImg src={avatar} className="w-10 h-10 rounded-full object-cover ring-2 ring-white/10"
+                  fallback={<div className="w-10 h-10 rounded-full bg-zinc-700 flex items-center justify-center text-sm">👤</div>} />
+                {isOnline && <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-400 border-2 border-zinc-950" />}
+              </div>
+              <div className="min-w-0">
+                <div className="font-semibold text-sm truncate">{otherName}</div>
+                <div className={`text-[11px] ${isOnline ? "text-green-400" : "text-white/40"}`}>{statusText}</div>
+              </div>
             </div>
-            <div className="min-w-0">
-              <div className="font-semibold text-sm truncate">{otherName}</div>
-              <div className={`text-[11px] ${isOnline ? "text-green-400" : "text-white/40"}`}>{statusText}</div>
-            </div>
+            <button onClick={(e) => { e.stopPropagation(); setShowMenu(true); }}
+              className="w-9 h-9 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/8 transition shrink-0 text-lg font-bold tracking-widest">
+              ···
+            </button>
           </div>
-          <button onClick={(e) => { e.stopPropagation(); setShowMenu(true); }}
-            className="w-9 h-9 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/8 transition shrink-0 text-lg font-bold tracking-widest">
-            ···
-          </button>
-        </div>
 
-        {/* MESSAGES */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3"
-          style={{ transform: `translateY(${pullY}px)`, transition: pullY === 0 ? "transform 0.2s" : "none" }}
-          onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-          {(pullY > 10 || refreshing) && (
-            <div className="flex justify-center mb-2 -mt-8">
-              <span className={`text-white/40 text-xs ${refreshing ? "animate-spin" : ""}`}>
-                {refreshing ? "↻" : "↓ " + (ka ? "განახლება" : "Pull to refresh")}
-              </span>
-            </div>
-          )}
-          <div className="space-y-0.5">
-            {msgs.map((m, i) => {
-              const mine = m.sender_anon === myAnonId;
-              const isTemp = m.id.startsWith("temp");
-              const isRead = !!m.read_at;
-              const prevSame = i > 0 && msgs[i-1].sender_anon === m.sender_anon;
-              const isSelected = selectedMsgId === m.id;
-              return (
-                <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"} ${prevSame ? "mt-0.5" : "mt-3"} relative`}
-                  onPointerDown={() => onMsgPointerDown(m.id)} onPointerUp={onMsgPointerUp} onPointerLeave={onMsgPointerUp}
-                  onContextMenu={e => e.preventDefault()}
-                  style={{ WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none" }}>
-                  {isSelected && mine && (
-                    <div className="absolute bottom-full right-0 mb-1 z-30 bg-zinc-800 rounded-xl shadow-xl ring-1 ring-white/10 overflow-hidden">
-                      <button onClick={() => deleteMessage(m.id)}
-                        className="flex items-center gap-2 px-4 py-3 text-red-400 text-sm font-medium hover:bg-red-500/10 transition w-full">
-                        🗑 {ka ? "წაშლა" : "Delete"}
-                      </button>
-                    </div>
-                  )}
-                  {m.type === "voice" ? (
-                    <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl max-w-[270px]
-                      ${mine ? "bg-[#7C3AED] rounded-tr-sm" : "bg-zinc-800 rounded-tl-sm"}
-                      ${isTemp ? "opacity-60" : ""} ${isSelected ? "ring-2 ring-red-400" : ""}`}>
-                      <span className="text-lg shrink-0">🎤</span>
-                      <audio controls src={m.content} className="h-8 max-w-[160px]" preload="metadata" />
-                      <div className="flex items-center gap-0.5 shrink-0">
-                        <span className="text-[10px] text-white/40">{fmtTime(m.created_at)}</span>
-                        <Ticks sent={!isTemp} read={isRead} mine={mine} />
+          {/* MESSAGES */}
+          <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3"
+            style={{ transform: `translateY(${pullY}px)`, transition: pullY === 0 ? "transform 0.2s" : "none" }}
+            onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+            {(pullY > 10 || refreshing) && (
+              <div className="flex justify-center mb-2 -mt-8">
+                <span className={`text-white/40 text-xs ${refreshing ? "animate-spin" : ""}`}>
+                  {refreshing ? "↻" : "↓ " + (ka ? "განახლება" : "Pull to refresh")}
+                </span>
+              </div>
+            )}
+            <div className="space-y-0.5">
+              {myAnonId && msgs.map((m, i) => {
+                const mine = m.sender_anon === myAnonId;
+                const isTemp = m.id.startsWith("temp");
+                const isRead = !!m.read_at;
+                const prevSame = i > 0 && msgs[i-1].sender_anon === m.sender_anon;
+                const isSelected = selectedMsgId === m.id;
+                return (
+                  <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"} ${prevSame ? "mt-0.5" : "mt-3"} relative`}
+                    onPointerDown={() => onMsgPointerDown(m.id)} onPointerUp={onMsgPointerUp} onPointerLeave={onMsgPointerUp}
+                    onContextMenu={e => e.preventDefault()}
+                    style={{ WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none" }}>
+                    {isSelected && mine && (
+                      <div className="absolute bottom-full right-0 mb-1 z-30 bg-zinc-800 rounded-xl shadow-xl ring-1 ring-white/10 overflow-hidden">
+                        <button onClick={() => deleteMessage(m.id)}
+                          className="flex items-center gap-2 px-4 py-3 text-red-400 text-sm font-medium hover:bg-red-500/10 transition w-full">
+                          🗑 {ka ? "წაშლა" : "Delete"}
+                        </button>
                       </div>
-                    </div>
-                  ) : (
-                    <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words max-w-[78%] select-none
-                      ${mine ? "bg-[#7C3AED] rounded-2xl rounded-tr-sm" : "bg-zinc-800 rounded-2xl rounded-tl-sm"}
-                      ${isTemp ? "opacity-60" : ""} ${isSelected ? "ring-2 ring-red-400 opacity-80" : ""}`}>
-                      <span>{m.content}</span>
-                      <span className="inline-flex items-center gap-0.5 ml-2">
-                        <span className={`text-[10px] ${mine ? "text-purple-200/50" : "text-white/25"}`}>{fmtTime(m.created_at)}</span>
-                        <Ticks sent={!isTemp} read={isRead} mine={mine} />
-                      </span>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-            <div ref={bottomRef} />
+                    )}
+                    {m.type === "voice" ? (
+                      <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl max-w-[270px]
+                        ${mine ? "bg-[#7C3AED] rounded-tr-sm" : "bg-zinc-800 rounded-tl-sm"}
+                        ${isTemp ? "opacity-60" : ""} ${isSelected ? "ring-2 ring-red-400" : ""}`}>
+                        <span className="text-lg shrink-0">🎤</span>
+                        <audio controls src={m.content} className="h-8 max-w-[160px]" preload="metadata" />
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <span className="text-[10px] text-white/40">{fmtTime(m.created_at)}</span>
+                          <Ticks sent={!isTemp} read={isRead} mine={mine} />
+                        </div>
+                      </div>
+                    ) : m.type === "image" ? (
+                      <div className={`rounded-2xl overflow-hidden max-w-[260px] ${mine ? "rounded-tr-sm" : "rounded-tl-sm"} ${isTemp ? "opacity-60" : ""}`}>
+                        <img src={m.content} className="max-w-full max-h-[280px] object-cover block" alt=""
+                          onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
+                      </div>
+                    ) : (
+                      <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words max-w-[78%] select-none
+                        ${mine ? "bg-[#7C3AED] rounded-2xl rounded-tr-sm" : "bg-zinc-800 rounded-2xl rounded-tl-sm"}
+                        ${isTemp ? "opacity-60" : ""} ${isSelected ? "ring-2 ring-red-400 opacity-80" : ""}`}>
+                        <span>{m.content}</span>
+                        <span className="inline-flex items-center gap-0.5 ml-2">
+                          <span className={`text-[10px] ${mine ? "text-purple-200/50" : "text-white/25"}`}>{fmtTime(m.created_at)}</span>
+                          <Ticks sent={!isTemp} read={isRead} mine={mine} />
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <div ref={bottomRef} />
+            </div>
           </div>
-        </div>
 
-        {/* INPUT */}
-        <div className="shrink-0 bg-zinc-950 border-t border-white/8 px-3 pt-2 pb-3"
-          style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 0px)" }}
-          onClick={e => e.stopPropagation()}>
-          {showEmoji && (
-            <div className="mb-2"><EmojiPicker onEmojiClick={e => setText(p => p + e.emoji)} width="100%" height={280} theme={"dark" as any} /></div>
-          )}
-          {recording && (
-            <div className="flex items-center gap-2 mb-2 px-3 py-2.5 rounded-2xl bg-red-500/10 border border-red-500/20">
-              <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse shrink-0" />
-              <span className="text-red-400 font-bold text-sm tabular-nums shrink-0">{fmtTimer(recordTime)}</span>
-              <div className="flex-1 flex items-end gap-[2px] h-6 overflow-hidden">
-                {Array.from({length:30}).map((_,i) => (
-                  <div key={i} className="bg-red-400/60 rounded-full shrink-0" style={{width:"2px",height:`${5+((i*7+recordTime*13)%16)}px`}} />
-                ))}
+          {/* INPUT BAR */}
+          <div className="shrink-0 bg-zinc-950 border-t border-white/8 px-3 pt-2"
+            style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 8px)" }}
+            onClick={e => e.stopPropagation()}>
+
+            {showEmoji && (
+              <div className="mb-2">
+                <EmojiPicker onEmojiClick={e => setText(p => p + e.emoji)} width="100%" height={260} theme={"dark" as any} />
               </div>
-              <button onClick={cancelRecording} className="text-white/30 hover:text-red-400 shrink-0">🗑</button>
-              <button onClick={stopRecording} className="rounded-full bg-red-500 px-3 py-1.5 text-xs font-bold text-white shrink-0">
-                {ka ? "გაჩერება" : "Stop"}
-              </button>
-            </div>
-          )}
-          {!recording && audioBlob && (
-            <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-2xl bg-[#7C3AED]/15 border border-[#7C3AED]/25">
-              <span className="text-[#A78BFA] font-semibold text-xs shrink-0">🎤 {ka ? "ხმა მზადაა" : "Voice ready"}</span>
-              <div className="flex-1 flex items-end gap-[2px] h-5 overflow-hidden">
-                {Array.from({length:26}).map((_,i) => (
-                  <div key={i} className="bg-[#A78BFA]/50 rounded-full shrink-0" style={{width:"2px",height:`${4+Math.abs(Math.sin(i*0.9))*12}px`}} />
-                ))}
+            )}
+
+            {recording && (
+              <div className="flex items-center gap-2 mb-2 px-3 py-2.5 rounded-2xl bg-red-500/10 border border-red-500/20">
+                <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+                <span className="text-red-400 font-bold text-sm tabular-nums shrink-0">{fmtTimer(recordTime)}</span>
+                <div className="flex-1 flex items-end gap-[2px] h-6 overflow-hidden">
+                  {Array.from({length:28}).map((_,i) => (
+                    <div key={i} className="bg-red-400/60 rounded-full shrink-0" style={{width:"2px",height:`${5+((i*7+recordTime*13)%16)}px`}} />
+                  ))}
+                </div>
+                <button onClick={cancelRecording} className="text-white/40 hover:text-red-400 shrink-0 px-1">🗑</button>
+                <button onClick={stopRecording} className="rounded-full bg-red-500 px-3 py-1.5 text-xs font-bold text-white shrink-0">
+                  {ka ? "გაჩერება" : "Stop"}
+                </button>
               </div>
-              <button onClick={() => setAudioBlob(null)} className="text-white/30 hover:text-white shrink-0">✕</button>
-            </div>
-          )}
-          {!recording && (
-            <div className="flex items-center gap-2">
-              <button onClick={e => { e.stopPropagation(); setShowEmoji(!showEmoji); }}
-                className="shrink-0 w-9 h-9 flex items-center justify-center text-xl text-white/35 hover:text-white/60 transition">😊</button>
-              <div className="flex-1 flex items-center bg-zinc-800 rounded-full px-4 py-2.5 gap-2 min-w-0">
-                <input ref={inputRef} value={text} onChange={e => setText(e.target.value)}
-                  autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
-                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-                  className="flex-1 bg-transparent outline-none text-white text-sm placeholder-white/25 min-w-0"
-                  placeholder={ka ? "შეიყვანე მესიჯი..." : "Message..."} />
-                {!text.trim() && !audioBlob && (
-                  <button onPointerDown={e => { e.preventDefault(); startRecording(); }}
-                    className="text-white/35 hover:text-white/60 text-lg shrink-0 transition">🎤</button>
+            )}
+
+            {!recording && audioBlob && audioPreviewUrl && (
+              <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-2xl bg-zinc-800 border border-white/10">
+                <span className="text-white/70 text-xs shrink-0">🎤</span>
+                <audio controls src={audioPreviewUrl} className="flex-1 h-8" preload="auto" />
+                <button onClick={cancelRecording} className="text-white/40 hover:text-white shrink-0 text-lg leading-none">✕</button>
+              </div>
+            )}
+
+            <input ref={galleryInputRef} type="file" accept="image/*" className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) setImagePreview({ file: f, url: URL.createObjectURL(f) }); e.target.value=""; }} />
+            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) setImagePreview({ file: f, url: URL.createObjectURL(f) }); e.target.value=""; }} />
+
+            {!recording && (
+              <div className="flex items-center gap-1.5 pb-1">
+
+                {!hasFocusOrText ? (
+                  <>
+                    <button onClick={() => setShowAttachSheet(true)}
+                      className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                        <path d="M12 5v14M5 12h14"/>
+                      </svg>
+                    </button>
+                    <button onClick={() => cameraInputRef.current?.click()}
+                      className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90">
+                      <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                        <circle cx="12" cy="13" r="4"/>
+                      </svg>
+                    </button>
+                    <button onClick={() => galleryInputRef.current?.click()}
+                      className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90" disabled={uploadingImg}>
+                      <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <path d="m21 15-5-5L5 21"/>
+                      </svg>
+                    </button>
+                    <button onPointerDown={e => { e.preventDefault(); startRecording(); }}
+                      className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                        <line x1="12" y1="19" x2="12" y2="23"/>
+                        <line x1="8" y1="23" x2="16" y2="23"/>
+                      </svg>
+                    </button>
+                  </>
+                ) : (
+                  // ✅ › ღილაკი — keyboard არ დახუროს
+                  <button
+                    onMouseDown={e => { e.preventDefault(); setFocused(false); setText(""); }}
+                    onTouchStart={e => { e.preventDefault(); setFocused(false); setText(""); }}
+                    className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition text-2xl font-bold">
+                    ›
+                  </button>
+                )}
+
+                <div className="flex-1 flex items-center bg-zinc-800 rounded-full px-4 py-2.5 gap-2 min-w-0">
+                  <input ref={inputRef} value={text}
+                    onChange={e => setText(e.target.value)}
+                    onFocus={() => setFocused(true)}
+                    onBlur={() => { setTimeout(() => { if (!text.trim()) setFocused(false); }, 150); }}
+                    autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
+                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+                    className="flex-1 bg-transparent outline-none text-white text-sm placeholder-white/40 min-w-0"
+                    placeholder={hasFocusOrText ? "Type a message..." : "Message"} />
+                </div>
+
+                {text.trim() ? (
+                  <button onClick={send} disabled={sending}
+                    className="shrink-0 w-10 h-10 rounded-full bg-[#7C3AED] flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+                  </button>
+                ) : audioBlob ? (
+                  <button onClick={sendVoice} disabled={uploadingVoice}
+                    className="shrink-0 w-10 h-10 rounded-full bg-[#7C3AED] flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg">
+                    {uploadingVoice ? <span className="text-xs text-white">⏳</span>
+                      : <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>}
+                  </button>
+                ) : (
+                  <button onClick={e => { e.stopPropagation(); setShowEmoji(!showEmoji); }}
+                    className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition text-xl">
+                    🙂
+                  </button>
                 )}
               </div>
-              {text.trim() ? (
-                <button onClick={send} disabled={sending}
-                  className="shrink-0 w-10 h-10 rounded-full bg-[#7C3AED] flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
-                </button>
-              ) : audioBlob ? (
-                <button onClick={sendVoice} disabled={uploadingVoice}
-                  className="shrink-0 w-10 h-10 rounded-full bg-[#7C3AED] flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg">
-                  {uploadingVoice ? <span className="text-xs">⏳</span>
-                    : <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>}
-                </button>
-              ) : <div className="w-10 h-10 shrink-0" />}
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
-      {/* 3-DOT MENU */}
+      {imagePreview && (
+        <div className="fixed inset-0 z-50 bg-black flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3" style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 12px)" }}>
+            <button onClick={() => setImagePreview(null)} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white text-lg">✕</button>
+            <button onClick={async () => { const f = imagePreview.file; setImagePreview(null); await uploadImage(f); }}
+              disabled={uploadingImg}
+              className="w-12 h-12 rounded-full bg-[#7C3AED] flex items-center justify-center shadow-xl disabled:opacity-50 active:scale-90 transition">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+            </button>
+          </div>
+          <div className="flex-1 flex items-center justify-center p-4">
+            <img src={imagePreview.url} className="max-w-full max-h-full object-contain rounded-2xl" alt="" />
+          </div>
+        </div>
+      )}
+
       {showMenu && (
         <ChatMenu lang={lang}
           onClose={() => setShowMenu(false)}
@@ -542,19 +669,21 @@ export default function ChatThreadPage() {
         />
       )}
 
-      {/* UNMATCH FEEDBACK MODAL */}
       {showUnmatchModal && (
-        <UnmatchModal
-          ka={ka}
-          onClose={() => setShowUnmatchModal(false)}
-          onConfirm={handleUnmatchConfirm}
+        <UnmatchModal ka={ka} onClose={() => setShowUnmatchModal(false)} onConfirm={handleUnmatchConfirm} />
+      )}
+
+      {showAttachSheet && (
+        <AttachSheet lang={lang}
+          onClose={() => setShowAttachSheet(false)}
+          onGallery={() => galleryInputRef.current?.click()}
+          onCamera={() => cameraInputRef.current?.click()}
         />
       )}
 
-      {/* DELETE CONFIRM OVERLAY */}
       {selectedMsgId && (
         <div className="fixed inset-0 z-40" onClick={() => setSelectedMsgId(null)} />
       )}
-    </div>
+    </>
   );
 }
