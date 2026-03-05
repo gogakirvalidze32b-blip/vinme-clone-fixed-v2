@@ -92,7 +92,7 @@ window.location.href = "/auth/redirect";
           {view === "main" && (
             <>
               <div className="flex flex-col items-center mb-12">
-<img src="/logo1.png" className="h-32 drop-shadow-2xl mb-5" fetchPriority="high" />
+<img src="/logo1.webp" className="h-32 drop-shadow-2xl mb-5" fetchPriority="high" />
                 <p className="text-white/45 text-sm tracking-wide text-center">
                   {ka ? "შეხვდი ახალ ადამიანებს — მარტივად." : "Meet new people — easily."}
                 </p>
