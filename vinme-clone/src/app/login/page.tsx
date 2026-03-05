@@ -181,8 +181,19 @@ export default function LoginPage() {
                     setOtp(val);
                     setError(null);
 useEffect(() => {
-  if (otp.replace(/\s/g,"").length === 8) verifyOtp();
-}, [otp]);          }}
+  const code = otp.replace(/\s/g,"");
+  if (code.length === 8) {
+    const run = async () => {
+      setLoading(true); setError(null);
+      const { error: e } = await supabase.auth.verifyOtp({
+        email: email.trim(), token: code, type: "email"
+      });
+      if (e) { setError(ka ? "არასწორი კოდი, სცადე თავიდან" : "Wrong code, try again"); setLoading(false); return; }
+      window.location.href = "/";
+    };
+    run();
+  }
+}, [otp]);         }}
                   placeholder="კოდი"
                   className="w-full bg-transparent px-4 py-5 text-3xl font-black text-center outline-none placeholder-white/20 tracking-[12px]"
                   autoFocus autoComplete="one-time-code"
