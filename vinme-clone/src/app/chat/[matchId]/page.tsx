@@ -529,11 +529,23 @@ export default function ChatThreadPage() {
             style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 8px)" }}
             onClick={e => e.stopPropagation()}>
 
-            {showEmoji && (
-              <div className="mb-2">
-                <EmojiPicker onEmojiClick={e => setText(p => p + e.emoji)} width="100%" height={260} theme={"dark" as any} />
-              </div>
-            )}
+        {showEmoji && (
+  <>
+    <div className="fixed inset-0 z-40" onClick={() => setShowEmoji(false)} />
+    <div className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl overflow-hidden shadow-2xl"
+      style={{ bottom: document.getElementById("chat-root")?.style.bottom || 0 }}>
+      <EmojiPicker
+        onEmojiClick={e => { setText(p => p + e.emoji); }}
+        width="100%"
+        height={380}
+        theme={"dark" as any}
+        searchDisabled={false}
+        skinTonesDisabled
+        previewConfig={{ showPreview: false }}
+      />
+    </div>
+  </>
+)}
 
             {recording && (
               <div className="flex items-center gap-2 mb-2 px-3 py-2.5 rounded-2xl bg-red-500/10 border border-red-500/20">
@@ -602,12 +614,13 @@ export default function ChatThreadPage() {
                   </>
                 ) : (
                   // ✅ › ღილაკი — keyboard არ დახუროს
-                  <button
-                    onMouseDown={e => { e.preventDefault(); setFocused(false); setText(""); }}
-                    onTouchStart={e => { e.preventDefault(); setFocused(false); setText(""); }}
-                    className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition text-2xl font-bold">
-                    ›
-                  </button>
+                 <button
+  onMouseDown={e => e.preventDefault()}
+  onTouchStart={e => e.preventDefault()}
+  onClick={() => setFocused(false)}
+  className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition text-2xl font-bold">
+  ›
+</button>
                 )}
 
                 <div className="flex-1 flex items-center bg-zinc-800 rounded-full px-4 py-2.5 gap-2 min-w-0">
