@@ -13,6 +13,12 @@ type MsgRow = {
   id: string; match_id: number; sender_anon: string;
   content: string; created_at: string; read_at: string | null;
   type?: "text" | "voice" | "image";
+  reply_to_id?: string | null;
+  reply_preview?: string | null;
+};
+
+type Reaction = {
+  id: string; message_id: string; sender_anon: string; emoji: string;
 };
 
 function fmtTimer(sec: number) { const m = Math.floor(sec/60), s = sec%60; return `${m}:${s<10?"0":""}${s}`; }
@@ -45,6 +51,56 @@ function Ticks({ sent, read, mine }: { sent: boolean; read: boolean; mine: boole
         <path d="M1 6l4 4 9-9" stroke="rgba(255,255,255,0.45)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     </span>
+  );
+}
+
+// ===== REACTION BUBBLE =====
+function ReactionBar({ msgId, myAnonId, reactions, onReact, onClose }: {
+  msgId: string; myAnonId: string; reactions: Reaction[];
+  onReact: (msgId: string, emoji: string) => void; onClose: () => void;
+}) {
+  const emojis = ["❤️", "😂", "😮", "😢", "😡", "👍"];
+  return (
+    <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 bg-zinc-800 rounded-full px-3 py-2 shadow-2xl ring-1 ring-white/10"
+      onClick={e => e.stopPropagation()}>
+      {emojis.map(e => {
+        const myReaction = reactions.find(r => r.message_id === msgId && r.sender_anon === myAnonId && r.emoji === e);
+        return (
+          <button key={e} onClick={() => { onReact(msgId, e); onClose(); }}
+            className={`text-2xl transition active:scale-75 hover:scale-125 ${myReaction ? "opacity-100 scale-110" : "opacity-80"}`}
+            style={{ lineHeight: 1 }}>
+            {e}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ===== REACTIONS DISPLAY =====
+function ReactionsDisplay({ msgId, reactions, myAnonId, onReact }: {
+  msgId: string; reactions: Reaction[]; myAnonId: string;
+  onReact: (msgId: string, emoji: string) => void;
+}) {
+  const msgReactions = reactions.filter(r => r.message_id === msgId);
+  if (!msgReactions.length) return null;
+  const grouped: Record<string, number> = {};
+  msgReactions.forEach(r => { grouped[r.emoji] = (grouped[r.emoji] ?? 0) + 1; });
+  return (
+    <div className="flex gap-1 flex-wrap mt-0.5">
+      {Object.entries(grouped).map(([emoji, count]) => {
+        const isMine = msgReactions.some(r => r.emoji === emoji && r.sender_anon === myAnonId);
+        return (
+          <button key={emoji} onClick={() => onReact(msgId, emoji)}
+            className={`flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs transition active:scale-90 ${
+              isMine ? "bg-[#7C3AED]/40 ring-1 ring-[#7C3AED]" : "bg-zinc-700/80 ring-1 ring-white/10"
+            }`}>
+            <span>{emoji}</span>
+            {count > 1 && <span className="text-white/70 font-medium">{count}</span>}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -163,11 +219,10 @@ export default function ChatThreadPage() {
   const matchId = Number(params?.matchId);
   const lang = getLang();
   const ka = lang !== "en";
-
-  // ✅ context-იდან anonId — სწრაფი, არ ელოდება DB-ს
   const { anonId: ctxAnonId } = useUser();
 
   const [msgs, setMsgs] = useState<MsgRow[]>([]);
+  const [reactions, setReactions] = useState<Reaction[]>([]);
   const [text, setText] = useState("");
   const [myAnonId, setMyAnonId] = useState<string|null>(null);
   const [myUserId, setMyUserId] = useState<string|null>(null);
@@ -179,9 +234,23 @@ export default function ChatThreadPage() {
   const [showMenu, setShowMenu] = useState(false);
   const [showUnmatchModal, setShowUnmatchModal] = useState(false);
   const [showAttachSheet, setShowAttachSheet] = useState(false);
+
+  // long press → reaction bar or delete
+  const [reactionMsgId, setReactionMsgId] = useState<string|null>(null);
   const [selectedMsgId, setSelectedMsgId] = useState<string|null>(null);
-  const [focused, setFocused] = useState(false);
   const longPressTimer = useRef<NodeJS.Timeout|null>(null);
+  const longPressFired = useRef(false);
+
+  // reply
+  const [replyTo, setReplyTo] = useState<MsgRow|null>(null);
+
+  // swipe
+  const swipeStartX = useRef<number>(0);
+  const swipeStartY = useRef<number>(0);
+  const swipeMsgId = useRef<string|null>(null);
+  const [swipeOffsets, setSwipeOffsets] = useState<Record<string, number>>({});
+
+  const [focused, setFocused] = useState(false);
   const [pullY, setPullY] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const pullStartY = useRef(0);
@@ -201,12 +270,8 @@ export default function ChatThreadPage() {
   const [uploadingImg, setUploadingImg] = useState(false);
   const [imagePreview, setImagePreview] = useState<{file: File, url: string} | null>(null);
 
-  // ✅ ctxAnonId მზად რომ გახდეს — myAnonId დაყენება
-  useEffect(() => {
-    if (ctxAnonId && !myAnonId) setMyAnonId(ctxAnonId);
-  }, [ctxAnonId]);
+  useEffect(() => { if (ctxAnonId && !myAnonId) setMyAnonId(ctxAnonId); }, [ctxAnonId]);
 
-  // ✅ keyboard fix — DOM პირდაპირ, React state-ის გარეშე
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
@@ -249,19 +314,22 @@ export default function ChatThreadPage() {
         supabase.from("profiles").select("anon_id").eq("user_id", user.id).maybeSingle(),
         supabase.from("matches").select("user_a,user_b").eq("id", matchId).maybeSingle(),
       ]);
-      // ✅ DB-დან ან context-იდან — რომელიც პირველი მოვა
       const anonId = meRes.data?.anon_id ?? ctxAnonId ?? null;
       setMyAnonId(anonId);
       const matchRow = matchRes.data;
       if (!matchRow) return;
       const otherId = matchRow.user_a === user.id ? matchRow.user_b : matchRow.user_a;
       setOtherUserId(otherId);
-      const [profileRes, msgsRes] = await Promise.all([
+      const [profileRes, msgsRes, reactionsRes] = await Promise.all([
         supabase.from("profiles").select("user_id,nickname,first_name,photo1_url,last_seen").eq("user_id", otherId).maybeSingle(),
         supabase.from("messages").select("*").eq("match_id", matchId).order("created_at", { ascending: true }),
+        supabase.from("message_reactions").select("*").in("message_id",
+          (await supabase.from("messages").select("id").eq("match_id", matchId)).data?.map((m: any) => m.id) ?? []
+        ),
       ]);
       setOtherProfile(profileRes.data ?? null);
       setMsgs(msgsRes.data ?? []);
+      setReactions(reactionsRes.data ?? []);
       setIsLoaded(true);
       await markRead(anonId, user.id);
       await supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("user_id", user.id);
@@ -284,11 +352,78 @@ export default function ChatThreadPage() {
         const updated = payload.new as MsgRow;
         setMsgs(prev => prev.map(m => m.id === updated.id ? { ...m, read_at: updated.read_at } : m));
       })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "message_reactions" }, (payload) => {
+        const r = payload.new as Reaction;
+        setReactions(prev => prev.some(x => x.id === r.id) ? prev : [...prev, r]);
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "message_reactions" }, (payload) => {
+        const r = payload.old as Reaction;
+        setReactions(prev => prev.filter(x => x.id !== r.id));
+      })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [matchId, markRead]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs.length]);
+
+  // ===== REACTION HANDLER =====
+  async function handleReact(msgId: string, emoji: string) {
+    if (!myAnonId) return;
+    const existing = reactions.find(r => r.message_id === msgId && r.sender_anon === myAnonId);
+    if (existing) {
+      if (existing.emoji === emoji) {
+        // toggle off
+        setReactions(prev => prev.filter(r => r.id !== existing.id));
+        await supabase.from("message_reactions").delete().eq("id", existing.id);
+      } else {
+        // change emoji
+        setReactions(prev => prev.map(r => r.id === existing.id ? { ...r, emoji } : r));
+        await supabase.from("message_reactions").update({ emoji }).eq("id", existing.id);
+      }
+    } else {
+      const tempId = `r-${Date.now()}`;
+      setReactions(prev => [...prev, { id: tempId, message_id: msgId, sender_anon: myAnonId, emoji }]);
+      const { data } = await supabase.from("message_reactions").insert({ message_id: msgId, sender_anon: myAnonId, emoji }).select().single();
+      if (data) setReactions(prev => prev.map(r => r.id === tempId ? data as Reaction : r));
+    }
+  }
+
+  // ===== LONG PRESS =====
+  function onMsgPointerDown(msgId: string, mine: boolean) {
+    longPressFired.current = false;
+    longPressTimer.current = setTimeout(() => {
+      longPressFired.current = true;
+      if (mine) setSelectedMsgId(msgId);
+      else setReactionMsgId(msgId);
+      // show reactions for own messages too
+      setReactionMsgId(msgId);
+    }, 500);
+  }
+  function onMsgPointerUp() { if (longPressTimer.current) clearTimeout(longPressTimer.current); }
+
+  // ===== SWIPE TO REPLY =====
+  function onMsgTouchStart(e: React.TouchEvent, msgId: string) {
+    swipeStartX.current = e.touches[0].clientX;
+    swipeStartY.current = e.touches[0].clientY;
+    swipeMsgId.current = msgId;
+  }
+  function onMsgTouchMove(e: React.TouchEvent, msgId: string) {
+    const dx = e.touches[0].clientX - swipeStartX.current;
+    const dy = Math.abs(e.touches[0].clientY - swipeStartY.current);
+    if (dy > 20) return; // vertical scroll — ignore
+    if (dx > 0 && dx < 80) {
+      setSwipeOffsets(prev => ({ ...prev, [msgId]: dx }));
+    }
+  }
+  function onMsgTouchEnd(e: React.TouchEvent, msg: MsgRow) {
+    const dx = swipeOffsets[msg.id] ?? 0;
+    if (dx > 50) {
+      setReplyTo(msg);
+      inputRef.current?.focus();
+    }
+    setSwipeOffsets(prev => ({ ...prev, [msg.id]: 0 }));
+    swipeMsgId.current = null;
+  }
 
   function onTouchStart(e: React.TouchEvent) { pullStartY.current = e.touches[0].clientY; }
   function onTouchMove(e: React.TouchEvent) {
@@ -305,9 +440,6 @@ export default function ChatThreadPage() {
       setRefreshing(false);
     } else { setPullY(0); }
   }
-
-  function onMsgPointerDown(msgId: string) { longPressTimer.current = setTimeout(() => setSelectedMsgId(msgId), 500); }
-  function onMsgPointerUp() { if (longPressTimer.current) clearTimeout(longPressTimer.current); }
 
   async function deleteMessage(msgId: string) {
     await supabase.from("messages").delete().eq("id", msgId);
@@ -338,8 +470,11 @@ export default function ChatThreadPage() {
     if (!t2 || !myAnonId || sending) return;
     setSending(true); setText("");
     const tempId = `temp-${Date.now()}`;
-    setMsgs(prev => [...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: t2, created_at: new Date().toISOString(), read_at: null, type: "text" }]);
-    const { data } = await supabase.from("messages").insert({ match_id: matchId, sender_anon: myAnonId, content: t2, type: "text" }).select().single();
+    const replyPreview = replyTo ? (replyTo.type === "voice" ? "🎤 Voice" : replyTo.type === "image" ? "📷 Photo" : replyTo.content.slice(0, 60)) : null;
+    const replyId = replyTo?.id ?? null;
+    setReplyTo(null);
+    setMsgs(prev => [...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: t2, created_at: new Date().toISOString(), read_at: null, type: "text", reply_to_id: replyId, reply_preview: replyPreview }]);
+    const { data } = await supabase.from("messages").insert({ match_id: matchId, sender_anon: myAnonId, content: t2, type: "text", reply_to_id: replyId, reply_preview: replyPreview }).select().single();
     if (data) setMsgs(prev => prev.map(m => m.id === tempId ? (data as MsgRow) : m));
     await supabase.from("matches").update({ has_unread: true }).eq("id", matchId);
     if (myUserId) await supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("user_id", myUserId);
@@ -434,7 +569,7 @@ export default function ChatThreadPage() {
     <>
       <div id="chat-root" className="fixed inset-0 bg-[#111] flex justify-center"
         style={{ bottom: 0, transition: "bottom 0.12s ease-out" }}
-        onClick={() => { showEmoji && setShowEmoji(false); selectedMsgId && setSelectedMsgId(null); }}>
+        onClick={() => { showEmoji && setShowEmoji(false); reactionMsgId && setReactionMsgId(null); selectedMsgId && setSelectedMsgId(null); }}>
         <div className="w-full max-w-lg flex flex-col bg-[#111] text-white h-full">
 
           {/* HEADER */}
@@ -477,46 +612,83 @@ export default function ChatThreadPage() {
                 const isRead = !!m.read_at;
                 const prevSame = i > 0 && msgs[i-1].sender_anon === m.sender_anon;
                 const isSelected = selectedMsgId === m.id;
+                const showReactionBar = reactionMsgId === m.id;
+                const swipeOffset = swipeOffsets[m.id] ?? 0;
+
                 return (
-                  <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"} ${prevSame ? "mt-0.5" : "mt-3"} relative`}
-                    onPointerDown={() => onMsgPointerDown(m.id)} onPointerUp={onMsgPointerUp} onPointerLeave={onMsgPointerUp}
-                    onContextMenu={e => e.preventDefault()}
-                    style={{ WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none" }}>
-                    {isSelected && mine && (
-                      <div className="absolute bottom-full right-0 mb-1 z-30 bg-zinc-800 rounded-xl shadow-xl ring-1 ring-white/10 overflow-hidden">
-                        <button onClick={() => deleteMessage(m.id)}
-                          className="flex items-center gap-2 px-4 py-3 text-red-400 text-sm font-medium hover:bg-red-500/10 transition w-full">
-                          🗑 {ka ? "წაშლა" : "Delete"}
-                        </button>
-                      </div>
-                    )}
-                    {m.type === "voice" ? (
-                      <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl max-w-[270px]
-                        ${mine ? "bg-[#7C3AED] rounded-tr-sm" : "bg-zinc-800 rounded-tl-sm"}
-                        ${isTemp ? "opacity-60" : ""} ${isSelected ? "ring-2 ring-red-400" : ""}`}>
-                        <span className="text-lg shrink-0">🎤</span>
-                        <audio controls src={m.content} className="h-8 max-w-[160px]" preload="metadata" />
-                        <div className="flex items-center gap-0.5 shrink-0">
-                          <span className="text-[10px] text-white/40">{fmtTime(m.created_at)}</span>
-                          <Ticks sent={!isTemp} read={isRead} mine={mine} />
+                  <div key={m.id} className={`flex flex-col ${mine ? "items-end" : "items-start"} ${prevSame ? "mt-0.5" : "mt-3"}`}>
+                    <div className="relative w-full flex"
+                      style={{ justifyContent: mine ? "flex-end" : "flex-start" }}
+                      onPointerDown={() => onMsgPointerDown(m.id, mine)}
+                      onPointerUp={onMsgPointerUp}
+                      onPointerLeave={onMsgPointerUp}
+                      onContextMenu={e => e.preventDefault()}
+                      onTouchStart={e => onMsgTouchStart(e, m.id)}
+                      onTouchMove={e => onMsgTouchMove(e, m.id)}
+                      onTouchEnd={e => onMsgTouchEnd(e, m)}
+>
+                      {/* swipe reply indicator */}
+                      {swipeOffset > 10 && (
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 text-white/50 text-lg pl-1"
+                          style={{ opacity: Math.min(swipeOffset / 50, 1) }}>↩</div>
+                      )}
+
+                      {/* reaction bar */}
+                      {showReactionBar && (
+                        <ReactionBar msgId={m.id} myAnonId={myAnonId} reactions={reactions}
+                          onReact={handleReact} onClose={() => setReactionMsgId(null)} />
+                      )}
+
+                      {/* delete popup */}
+                      {isSelected && mine && (
+                        <div className="absolute bottom-full right-0 mb-1 z-30 bg-zinc-800 rounded-xl shadow-xl ring-1 ring-white/10 overflow-hidden">
+                          <button onClick={() => deleteMessage(m.id)}
+                            className="flex items-center gap-2 px-4 py-3 text-red-400 text-sm font-medium hover:bg-red-500/10 transition w-full">
+                            🗑 {ka ? "წაშლა" : "Delete"}
+                          </button>
                         </div>
+                      )}
+
+                      <div style={{ transform: `translateX(${swipeOffset}px)`, transition: swipeOffset === 0 ? "transform 0.2s" : "none" }}>
+                        {/* reply preview inside bubble */}
+                        {m.reply_preview && (
+                          <div className={`mb-1 px-3 py-1.5 rounded-xl text-xs border-l-2 border-[#7C3AED] bg-white/8 max-w-[240px] truncate text-white/60 ${mine ? "ml-auto" : ""}`}>
+                            ↩ {m.reply_preview}
+                          </div>
+                        )}
+
+                        {m.type === "voice" ? (
+                          <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl max-w-[270px]
+                            ${mine ? "bg-[#7C3AED] rounded-tr-sm" : "bg-zinc-800 rounded-tl-sm"}
+                            ${isTemp ? "opacity-60" : ""} ${isSelected ? "ring-2 ring-red-400" : ""}`}>
+                            <span className="text-lg shrink-0">🎤</span>
+                            <audio controls src={m.content} className="h-8 max-w-[160px]" preload="metadata" />
+                            <div className="flex items-center gap-0.5 shrink-0">
+                              <span className="text-[10px] text-white/40">{fmtTime(m.created_at)}</span>
+                              <Ticks sent={!isTemp} read={isRead} mine={mine} />
+                            </div>
+                          </div>
+                        ) : m.type === "image" ? (
+                          <div className={`rounded-2xl overflow-hidden max-w-[260px] ${mine ? "rounded-tr-sm" : "rounded-tl-sm"} ${isTemp ? "opacity-60" : ""}`}>
+                            <img src={m.content} className="max-w-full max-h-[280px] object-cover block" alt=""
+                              onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
+                          </div>
+                        ) : (
+                          <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words max-w-[78%] select-none
+                            ${mine ? "bg-[#7C3AED] rounded-2xl rounded-tr-sm" : "bg-zinc-800 rounded-2xl rounded-tl-sm"}
+                            ${isTemp ? "opacity-60" : ""} ${isSelected ? "ring-2 ring-red-400 opacity-80" : ""}`}>
+                            <span>{m.content}</span>
+                            <span className="inline-flex items-center gap-0.5 ml-2">
+                              <span className={`text-[10px] ${mine ? "text-purple-200/50" : "text-white/25"}`}>{fmtTime(m.created_at)}</span>
+                              <Ticks sent={!isTemp} read={isRead} mine={mine} />
+                            </span>
+                          </div>
+                        )}
                       </div>
-                    ) : m.type === "image" ? (
-                      <div className={`rounded-2xl overflow-hidden max-w-[260px] ${mine ? "rounded-tr-sm" : "rounded-tl-sm"} ${isTemp ? "opacity-60" : ""}`}>
-                        <img src={m.content} className="max-w-full max-h-[280px] object-cover block" alt=""
-                          onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
-                      </div>
-                    ) : (
-                      <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words max-w-[78%] select-none
-                        ${mine ? "bg-[#7C3AED] rounded-2xl rounded-tr-sm" : "bg-zinc-800 rounded-2xl rounded-tl-sm"}
-                        ${isTemp ? "opacity-60" : ""} ${isSelected ? "ring-2 ring-red-400 opacity-80" : ""}`}>
-                        <span>{m.content}</span>
-                        <span className="inline-flex items-center gap-0.5 ml-2">
-                          <span className={`text-[10px] ${mine ? "text-purple-200/50" : "text-white/25"}`}>{fmtTime(m.created_at)}</span>
-                          <Ticks sent={!isTemp} read={isRead} mine={mine} />
-                        </span>
-                      </div>
-                    )}
+                    </div>
+
+                    {/* reactions display */}
+                    <ReactionsDisplay msgId={m.id} reactions={reactions} myAnonId={myAnonId} onReact={handleReact} />
                   </div>
                 );
               })}
@@ -529,23 +701,29 @@ export default function ChatThreadPage() {
             style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 8px)" }}
             onClick={e => e.stopPropagation()}>
 
-        {showEmoji && (
-  <>
-    <div className="fixed inset-0 z-40" onClick={() => setShowEmoji(false)} />
-    <div className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl overflow-hidden shadow-2xl"
-      style={{ bottom: document.getElementById("chat-root")?.style.bottom || 0 }}>
-      <EmojiPicker
-        onEmojiClick={e => { setText(p => p + e.emoji); }}
-        width="100%"
-        height={380}
-        theme={"dark" as any}
-        searchDisabled={false}
-        skinTonesDisabled
-        previewConfig={{ showPreview: false }}
-      />
-    </div>
-  </>
-)}
+            {showEmoji && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowEmoji(false)} />
+                <div className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl overflow-hidden shadow-2xl">
+                  <EmojiPicker onEmojiClick={e => { setText(p => p + e.emoji); }}
+                    width="100%" height={380} theme={"dark" as any}
+                    searchDisabled={false} skinTonesDisabled previewConfig={{ showPreview: false }} />
+                </div>
+              </>
+            )}
+
+            {/* reply bar */}
+            {replyTo && (
+              <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-2xl bg-zinc-800 border-l-2 border-[#7C3AED]">
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-[#A78BFA] font-semibold mb-0.5">↩ {ka ? "პასუხი" : "Reply"}</div>
+                  <div className="text-xs text-white/60 truncate">
+                    {replyTo.type === "voice" ? "🎤 Voice" : replyTo.type === "image" ? "📷 Photo" : replyTo.content.slice(0, 60)}
+                  </div>
+                </div>
+                <button onClick={() => setReplyTo(null)} className="text-white/40 hover:text-white text-lg shrink-0">✕</button>
+              </div>
+            )}
 
             {recording && (
               <div className="flex items-center gap-2 mb-2 px-3 py-2.5 rounded-2xl bg-red-500/10 border border-red-500/20">
@@ -578,7 +756,6 @@ export default function ChatThreadPage() {
 
             {!recording && (
               <div className="flex items-center gap-1.5 pb-1">
-
                 {!hasFocusOrText ? (
                   <>
                     <button onClick={() => setShowAttachSheet(true)}
@@ -613,14 +790,11 @@ export default function ChatThreadPage() {
                     </button>
                   </>
                 ) : (
-                  // ✅ › ღილაკი — keyboard არ დახუროს
-                 <button
-  onMouseDown={e => e.preventDefault()}
-  onTouchStart={e => e.preventDefault()}
-  onClick={() => setFocused(false)}
-  className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition text-2xl font-bold">
-  ›
-</button>
+                  <button onMouseDown={e => e.preventDefault()} onTouchStart={e => e.preventDefault()}
+                    onClick={() => setFocused(false)}
+                    className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition text-2xl font-bold">
+                    ›
+                  </button>
                 )}
 
                 <div className="flex-1 flex items-center bg-zinc-800 rounded-full px-4 py-2.5 gap-2 min-w-0">
@@ -631,7 +805,7 @@ export default function ChatThreadPage() {
                     autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
                     onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
                     className="flex-1 bg-transparent outline-none text-white text-sm placeholder-white/40 min-w-0"
-                    placeholder={hasFocusOrText ? "Type a message..." : "Message"} />
+                    placeholder={hasFocusOrText ? (ka ? "მესიჯი..." : "Message...") : (ka ? "მესიჯი" : "Message")} />
                 </div>
 
                 {text.trim() ? (
@@ -694,8 +868,8 @@ export default function ChatThreadPage() {
         />
       )}
 
-      {selectedMsgId && (
-        <div className="fixed inset-0 z-40" onClick={() => setSelectedMsgId(null)} />
+      {(reactionMsgId || selectedMsgId) && (
+        <div className="fixed inset-0 z-30" onClick={() => { setReactionMsgId(null); setSelectedMsgId(null); }} />
       )}
     </>
   );
