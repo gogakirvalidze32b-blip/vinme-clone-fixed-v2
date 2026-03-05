@@ -235,7 +235,7 @@ const totalUnread = matches.filter(m =>
             <h2 className="text-xs text-white/40 uppercase tracking-wider mb-3">{L("ახალი შეხვედრები", "New Matches")}</h2>
             <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
               {newMatches.map(m => {
-                const name = m.other.nickname ?? m.other.first_name ?? "User";
+const name = m.other.first_name ?? m.other.nickname ?? "User";
                 const isOnline = !!onlineText(m.other.last_seen ?? null, ka);
                 return (
                   <div key={m.id} className="flex flex-col items-center min-w-[68px] cursor-pointer shrink-0"
@@ -260,7 +260,7 @@ const totalUnread = matches.filter(m =>
             <h2 className="text-xs text-white/40 uppercase tracking-wider mb-3">{L("მიმოწერა", "Messages")}</h2>
             <div className="flex flex-col gap-0.5" style={{ WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none", touchAction: "manipulation" }}>
               {conversations.map(m => {
-                const name = m.other.nickname ?? m.other.first_name ?? "User";
+const name = m.other.first_name ?? m.other.nickname ?? "User";
                 const isOnline = !!onlineText(m.other.last_seen ?? null, ka);
                 const isMine = m.last_sender_anon && m.last_sender_anon === myAnonId;
                 return (

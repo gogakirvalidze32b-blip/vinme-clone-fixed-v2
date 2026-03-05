@@ -97,7 +97,7 @@ function ReactionsDisplay({ msgId, reactions, myAnonId, mine, onReact }: {
   const grouped: Record<string, number> = {};
   msgReactions.forEach(r => { grouped[r.emoji] = (grouped[r.emoji] ?? 0) + 1; });
   return (
-    <div className={`flex gap-1 flex-wrap mt-1 ${mine ? "justify-end" : "justify-start"}`}>
+<div className={`flex w-full ${mine?"justify-end":"justify-start"} ...`}>
       {Object.entries(grouped).map(([emoji, count]) => {
         const isMine = msgReactions.some(r => r.emoji === emoji && r.sender_anon === myAnonId);
         return (
@@ -690,7 +690,7 @@ setReactions(prev => prev.filter(x =>
                 const isHovered = hoveredMsgId === m.id;
 
                 return (
-                  <div key={m.id} className={`flex flex-col ${mine?"items-end":"items-start"} ${prevSame?"mt-0.5":"mt-3"}`}>
+                  <div key={m.id} className={`flex flex-col w-full ${mine?"items-end":"items-start"} ${prevSame?"mt-0.5":"mt-3"}`}>
                     <div className="relative w-full flex group"
                       style={{ justifyContent: mine ? "flex-end" : "flex-start" }}
                       onMouseEnter={() => setHoveredMsgId(m.id)}
@@ -876,8 +876,7 @@ setReactions(prev => prev.filter(x =>
                     onFocus={() => { setFocused(true); setShowEmoji(false); }}
                     onBlur={() => { setTimeout(() => { if (!text.trim()) setFocused(false); }, 150); }}
                     autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
-                    onKeyDown={e => { if (e.key==="Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-                    className="flex-1 bg-transparent outline-none text-white text-sm placeholder-white/40 min-w-0"
+onKeyDown={e => { if (e.key==="Enter" && !e.shiftKey && !sending) { e.preventDefault(); send(); } }}                    className="flex-1 bg-transparent outline-none text-white text-sm placeholder-white/40 min-w-0"
                     placeholder={ka?"მესიჯი...":"Message..."} />
                 </div>
 

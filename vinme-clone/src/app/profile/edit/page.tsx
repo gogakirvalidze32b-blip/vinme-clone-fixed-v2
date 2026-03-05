@@ -261,7 +261,7 @@ export default function EditProfilePage() {
 
   const progress = calcProgress({ ...p, bio, city, job_title: jobTitle, company, education, gender, orientation, intent, pets, drinking, smoking, workout });
   const photos = PHOTO_KEYS.map((k, i) => ({ key: k, idx: i + 1, src: p?.[k] ? photoSrc(p[k]) : null }));
-  const name = p?.nickname ?? p?.first_name ?? "User";
+const name = p?.first_name ?? p?.nickname ?? "User";
   const age = p?.age ?? null;
 
   if (loading) return <div className="h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
@@ -479,7 +479,7 @@ function PreviewTab({ p, lang }: { p: any; lang: string }) {
     .map(k => p?.[k] ? photoSrc(p[k]) : null).filter(Boolean) as string[];
   const [activePhoto, setActivePhoto] = useState(0);
   const [showDetails, setShowDetails] = useState(false);
-  const name = p?.nickname ?? p?.first_name ?? "User";
+const name = p?.first_name ?? p?.nickname ?? "User";
   const age = p?.age ?? null;
 
   const GENDER_LABEL: Record<string,string> = {
