@@ -86,7 +86,6 @@ function ReactionBar({ msgId, myAnonId, reactions, onReact, onClose, mine }: {
     </div>
   );
 }
-
 // ===== REACTIONS DISPLAY (below message) =====
 function ReactionsDisplay({ msgId, reactions, myAnonId, mine, onReact }: {
   msgId: string; reactions: Reaction[]; myAnonId: string; mine: boolean;
@@ -97,7 +96,7 @@ function ReactionsDisplay({ msgId, reactions, myAnonId, mine, onReact }: {
   const grouped: Record<string, number> = {};
   msgReactions.forEach(r => { grouped[r.emoji] = (grouped[r.emoji] ?? 0) + 1; });
   return (
-<div className={`flex w-full ${mine?"justify-end":"justify-start"} ...`}>
+    <div className={`flex w-full ${mine?"justify-end":"justify-start"}`}>
       {Object.entries(grouped).map(([emoji, count]) => {
         const isMine = msgReactions.some(r => r.emoji === emoji && r.sender_anon === myAnonId);
         return (
@@ -117,28 +116,46 @@ function ReactionsDisplay({ msgId, reactions, myAnonId, mine, onReact }: {
 function UnmatchModal({ onClose, onConfirm, ka }: {
   onClose: () => void; onConfirm: (reason: string) => void; ka: boolean;
 }) {
-  const [selected, setSelected] = useState<string | null>(null);
-  const reasons = ka ? [
-    "არ ვართ თავსებადი", "შეურაცხმყოფელი ქცევა", "სპამი ან ყალბი პროფილი",
-    "უბრალოდ მიმოწერა დამთავრდა", "სხვა მიზეზი",
-  ] : ["Not compatible","Offensive behavior","Spam or fake profile","Conversation ended naturally","Other reason"];
+  const [feedback, setFeedback] = useState("");
+
+  function isRealText(text: string): boolean {
+    if (text.length < 10) return false;
+    const unique = new Set(text.toLowerCase().replace(/\s/g, "")).size;
+    if (unique < 5) return false;
+    if (/(.)\1{4,}/.test(text)) return false;
+    const words = text.trim().split(/\s+/).filter(w => w.length > 1);
+    if (words.length < 2) return false;
+    const uniqueWords = new Set(words.map(w => w.toLowerCase()));
+    if (uniqueWords.size < 2) return false;
+    return true;
+  }
+
+  const canConfirm = isRealText(feedback);
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div className="relative w-full max-w-lg bg-zinc-900 rounded-t-3xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="px-5 pt-5 pb-2">
-          <h2 className="text-lg font-extrabold text-white">{ka ? "რატო ხდება Unmatch?" : "Why are you unmatching?"}</h2>
-          <p className="text-sm text-white/40 mt-1">{ka ? "მიზეზი სავალდებულოა" : "A reason is required"}</p>
-        </div>
-        <div className="px-4 py-3 flex flex-col gap-2">
-          {reasons.map(r => (
-            <button key={r} onClick={() => setSelected(r)}
-              className={`w-full text-left px-4 py-3.5 rounded-2xl text-sm font-medium transition border ${selected===r?"bg-red-500/20 border-red-500/60 text-white":"bg-white/5 border-white/8 text-white/70 hover:bg-white/10"}`}>{r}</button>
+  <div className="px-4 py-3 flex flex-col gap-2">
+          {[
+            ka ? "არ ვართ თავსებადი" : "Not compatible",
+            ka ? "შეურაცხმყოფელი ქცევა" : "Offensive behavior",
+            ka ? "სპამი ან ყალბი პროფილი" : "Spam or fake profile",
+          ].map(r => (
+            <div key={r} className="w-full px-4 py-3.5 rounded-2xl text-sm font-medium bg-white/5 border border-white/8 text-white/70">{r}</div>
           ))}
+          <textarea value={feedback} onChange={e => setFeedback(e.target.value)}
+            placeholder={ka ? "დაწერე უკუკავშირი (მინ. 10 სიმბოლო)..." : "Write feedback (min. 10 chars)..."}
+            rows={4}
+            className="w-full rounded-2xl bg-white/8 border border-white/10 px-4 py-3 text-sm text-white placeholder-white/30 outline-none resize-none focus:border-white/30" />
+          {feedback.length >= 3 && !canConfirm && (
+            <p className="text-xs text-red-400 px-1">{ka ? "გთხოვ ნამდვილი ტექსტი დაწერო" : "Please write meaningful feedback"}</p>
+          )}
         </div>
         <div className="px-4 pb-8 pt-2 flex gap-3">
           <button onClick={onClose} className="flex-1 rounded-2xl bg-white/8 py-3.5 text-sm font-semibold text-white/70">{ka?"გაუქმება":"Cancel"}</button>
-          <button onClick={() => selected && onConfirm(selected)} disabled={!selected}
+          <button onClick={() => { if (!canConfirm) return; onConfirm(feedback); }}
+            disabled={!canConfirm}
             className="flex-1 rounded-2xl bg-red-500 py-3.5 text-sm font-bold text-white disabled:opacity-40 transition">Unmatch</button>
         </div>
       </div>
@@ -287,6 +304,7 @@ export default function ChatThreadPage() {
 
   const [reactionMsgId, setReactionMsgId] = useState<string|null>(null);
   const [selectedMsgId, setSelectedMsgId] = useState<string|null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
   const longPressTimer = useRef<NodeJS.Timeout|null>(null);
   const longPressFired = useRef(false);
 
@@ -455,7 +473,10 @@ setReactions(prev => prev.filter(x =>
     return () => { supabase.removeChannel(ch); };
   }, [matchId, markRead]);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs.length]);
+useEffect(() => {
+  if (!isLoaded) return;
+  bottomRef.current?.scrollIntoView({ behavior: isLoaded ? "instant" : "smooth" });
+}, [msgs.length, isLoaded]);
 
   async function handleReact(msgId: string, emoji: string) {
     if (!myAnonId) return;
@@ -601,13 +622,13 @@ setReactions(prev => prev.filter(x =>
     setAudioBlob(null); setUploadingVoice(false);
   }
 
-  async function handleUnmatchConfirm(reason: string) {
-    setShowUnmatchModal(false);
-    await supabase.from("unmatch_feedback").insert({ from_user_id: myUserId, to_user_id: otherUserId, match_id: matchId, reason });
-    await supabase.from("notifications").insert({ user_id: otherUserId, type: "unmatch", message: ka?"ვიღაცამ Unmatch გაგიკეთა":"Someone unmatched you" }).then(()=>{});
-    await supabase.from("matches").delete().eq("id", matchId);
-    router.replace("/chat");
-  }
+async function handleUnmatchConfirm(reason: string) {
+  setShowUnmatchModal(false);
+  try { await supabase.from("unmatch_feedback").insert({ from_user_id: myUserId, to_user_id: otherUserId, match_id: matchId, reason }); } catch {}
+  try { await supabase.from("messages").delete().eq("match_id", matchId); } catch {}
+  try { await supabase.from("matches").delete().eq("id", matchId); } catch {}
+  window.location.href = "/chat";
+}
   async function handleBlock() {
     if (!confirm(ka?"დაბლოკვა და შეტყობინება?":"Block and report?")) return;
     await supabase.from("matches").delete().eq("id", matchId);
@@ -668,16 +689,19 @@ setReactions(prev => prev.filter(x =>
           </div>
 
           {/* MESSAGES */}
-          <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3"
-            style={{ transform: `translateY(${pullY}px)`, transition: pullY===0?"transform 0.2s":"none" }}
-            onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-            {(pullY > 10 || refreshing) && (
-              <div className="flex justify-center mb-2 -mt-8">
-                <span className={`text-white/40 text-xs ${refreshing?"animate-spin":""}`}>
-                  {refreshing ? "↻" : "↓ "+(ka?"განახლება":"Pull to refresh")}
-                </span>
-              </div>
-            )}
+<div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3"
+  style={{ 
+    transform: `translateY(${pullY}px)`, 
+    transition: pullY===0?"transform 0.2s":"none"
+  } as React.CSSProperties}
+  onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+  {(pullY > 10 || refreshing) && (
+    <div className="flex justify-center mb-2 -mt-8">
+      <span className={`text-white/40 text-xs ${refreshing?"animate-spin":""}`}>
+        {refreshing ? "↻" : "↓ "+(ka?"განახლება":"Pull to refresh")}
+      </span>
+    </div>
+  )}
             <div className="space-y-0.5">
               {myAnonId && msgs.map((m, i) => {
                 const mine = m.sender_anon === myAnonId;

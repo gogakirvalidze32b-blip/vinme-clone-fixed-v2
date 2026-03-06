@@ -36,12 +36,25 @@ export default function BottomNav({ chatBadge }: { chatBadge?: number } = {}) {
       const anonId = myProfile?.anon_id ?? null;
       if (!anonId) return;
 
-      const { data: unreadMsgs } = await supabase
-        .from("messages").select("match_id")
-        .is("read_at", null).neq("sender_anon", anonId).limit(1000);
+      const { data: matches } = await supabase
+        .from("matches").select("id").or(`user_a.eq.${uid},user_b.eq.${uid}`);
 
-      const uniq = new Set((unreadMsgs ?? []).map((r: any) => r.match_id));
-      if (alive) setUnreadPeople(uniq.size);
+      if (!matches?.length) { if (alive) setUnreadPeople(0); return; }
+
+      let unreadCount = 0;
+      for (const match of matches) {
+        const { data: lastMsg } = await supabase
+          .from("messages").select("read_at,sender_anon")
+          .eq("match_id", match.id)
+          .order("created_at", { ascending: false })
+          .limit(1).maybeSingle();
+
+        if (lastMsg && lastMsg.sender_anon !== anonId && !lastMsg.read_at) {
+          unreadCount++;
+        }
+      }
+
+      if (alive) setUnreadPeople(unreadCount);
     }
 
     refresh();
@@ -119,7 +132,7 @@ export default function BottomNav({ chatBadge }: { chatBadge?: number } = {}) {
                   <div className="relative">
                     {item.icon(active)}
                     {!!item.badge && item.badge > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] rounded-full bg-pink-500 px-1 text-[10px] font-black text-white text-center leading-[18px]">
+                      <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] rounded-full bg-red-500 px-1 text-[10px] font-black text-white text-center leading-[18px]">
                         {item.badge > 99 ? "99+" : item.badge}
                       </span>
                     )}

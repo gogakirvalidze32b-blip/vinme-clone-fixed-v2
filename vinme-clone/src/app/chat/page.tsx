@@ -188,10 +188,8 @@ if (anonId && msg.sender_anon !== anonId) {
       if (!b.last_message_time) return -1;
       return new Date(b.last_message_time).getTime() - new Date(a.last_message_time).getTime();
     });
+const totalUnread = matches.reduce((sum, m) => sum + (m._unreadCount > 0 ? 1 : 0), 0);
 
-const totalUnread = matches.filter(m => 
-  m._unreadCount > 0 && m.last_sender_anon !== myAnonId
-).length;
 
   if (loading) return (
     <main className="min-h-[100dvh] bg-black text-white pb-28">

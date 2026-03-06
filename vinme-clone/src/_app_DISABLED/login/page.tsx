@@ -65,11 +65,8 @@ export default function LoginPage() {
           <div className="rounded-3xl bg-zinc-950/60 p-10 ring-1 ring-white/10 backdrop-blur-xl">
             {/* logo + text */}
             <div className="flex flex-col items-center gap-4 text-center">
-              <img
-                src="/logo1.png"
-                alt={texts.login_title}
-                className="h-36 w-auto object-contain"
-              />
+              <img src="/logo1.png" alt={texts.login_title} className="h-48 w-auto object-contain" />
+
 
               <p className="text-sm text-white/70">{texts.login_subtitle}</p>
             </div>

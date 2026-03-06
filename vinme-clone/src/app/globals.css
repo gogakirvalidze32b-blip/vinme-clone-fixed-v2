@@ -1,92 +1,81 @@
-
-/* Prevent body scroll - keyboard shrinks viewport instead */
-@media (max-width: 768px) {
-  html, body {
-    height: 100%;
-    overflow: hidden;
-    position: fixed;
-    width: 100%;
-  }
-}
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0a0a0a;
+  --foreground: #ededed;
   --brand-font: var(--font-brand);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-html,
-body {
+html, body {
   height: 100%;
   margin: 0;
   padding: 0;
-
   background: var(--background);
   color: var(--foreground);
-
-  /*  scroll works (Settings will scroll) */
   overflow-x: hidden;
   overflow-y: auto;
-
-  /*  keep bounce under control without killing scroll */
   overscroll-behavior-x: none;
   overscroll-behavior-y: contain;
-
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
 
-.brand-font {
-  font-family: var(--brand-font);
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
 }
 
-/*  stop blue selection / highlight while swiping */
-* {
-  -webkit-tap-highlight-color: transparent;
+@media (max-width: 768px) {
+  html, body {
+    position: fixed;
+    width: 100%;
+    overflow: hidden;
+  }
 }
+
+/* scrollbar — მხოლოდ chat-ში, მარჯვნივ პატარა */
+#chat-root *::-webkit-scrollbar {
+  width: 3px;
+  height: 0px;
+}
+
+#chat-root *::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.08);
+  border-radius: 999px;
+}
+
+#chat-root *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#chat-root * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.08) transparent;
+}
+
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+.brand-font { font-family: var(--brand-font); }
+
+* { -webkit-tap-highlight-color: transparent; }
 
 img {
   -webkit-user-drag: none;
   user-select: none;
 }
 
-
-/* Chat container - mobile only gets 100dvh, desktop keeps explicit height */
-@media (max-width: 768px) {
-  .chat-container {
-    height: 100dvh !important;
-    height: 100svh !important;
-  }
-}
-
-/* Prevent text selection context menu on long press */
-.no-select {
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
-}
-
-/* Smooth scroll in chat */
-.chat-messages {
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Prevent browser text selection UI on long press for chat rows */
 .no-select, .chat-row {
   -webkit-user-select: none !important;
   user-select: none !important;
   -webkit-touch-callout: none !important;
 }
 
-/* Fix BottomNav safe area */
+.chat-messages {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
 .bottom-nav-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
