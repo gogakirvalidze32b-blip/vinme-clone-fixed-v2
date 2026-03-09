@@ -102,11 +102,12 @@ export default function MessagesClient() {
           if (!cancelled) { setLatestByMatch(latest); setUnreadByMatch(unread); }
         }
 
-        const { data: notifs } = await supabase
-          .from("notifications").select("*")
-          .eq("user_id", user.id).eq("read", false)
-          .order("created_at", { ascending: false });
-        if (!cancelled) setNotifications(notifs ?? []);
+       const { data: notifs } = await supabase
+  .from("notifications")
+  .select("*")
+  .eq("user_id", user.id)
+  .neq("read", true)
+  .order("created_at", { ascending: false });
 
       } catch (e: any) {
         if (!cancelled) setErr(e?.message ?? "Load failed");
