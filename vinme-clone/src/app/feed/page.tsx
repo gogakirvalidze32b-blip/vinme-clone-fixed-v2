@@ -164,8 +164,8 @@ const loadTop = useCallback(async (myProfile: any) => {
   );
 
   return (
-    <div className="bg-black min-h-screen flex justify-center">
-      <div className="w-full max-w-md" style={{ height: "100dvh" }}>
+  <div className="bg-black min-h-screen flex justify-center">
+    <div className="w-full max-w-lg relative" style={{ height: "100dvh" }}>
         <TinderCard
           key={cardUser?.id ?? "empty"}
           user={cardUser}
