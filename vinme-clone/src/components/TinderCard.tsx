@@ -109,14 +109,14 @@ export default function TinderCard({
     <div className="relative w-full bg-black text-white flex flex-col" style={{ height: "100dvh" }}>
 
       {/* ===== CARD ===== */}
-      <div className="flex-1 flex items-start justify-center pt-2 px-2 overflow-hidden">
+     {/* ===== CARD ===== */}
+      <div className="flex-1 flex items-start justify-center pt-2 px-3 overflow-hidden">
         <div
           className="relative overflow-hidden bg-zinc-900 shadow-2xl w-full"
           style={{
-            maxWidth: "460px",
-            // mobile: fills most of screen; PC: fixed aspect
-            height: "min(calc(100dvh - 148px), 620px)",
-            borderRadius: "12px",
+            maxWidth: "420px",
+            height: "min(calc(100dvh - 130px), 680px)",
+            borderRadius: "20px",
             transform: `translateX(${x}px) rotate(${rot}deg)`,
             transition: dragging ? "none" : "transform 200ms ease-out",
             willChange: "transform",
@@ -124,6 +124,7 @@ export default function TinderCard({
             userSelect: "none",
             WebkitUserSelect: "none",
             cursor: dragging ? "grabbing" : "grab",
+            boxShadow: "0 25px 60px rgba(0,0,0,0.6)",
           }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -187,48 +188,40 @@ export default function TinderCard({
 </div>
         </div>
       </div>
+{/* ===== ACTION BUTTONS ===== */}
+      <div className="shrink-0 flex items-center justify-center gap-3 py-2" 
+        style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 68px)" }}>
 
-      {/* ===== ACTION BUTTONS — Tinder სტილი ===== */}
-      <div className="shrink-0 flex items-center justify-center gap-4 py-3" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 72px)" }}>
-
-        {/* UNDO */}
-        <ActionBtn size="sm" disabled={animating} color="#F7BB00"
-          onClick={() => {}}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+        <ActionBtn size="sm" disabled={animating} color="#F7BB00" onClick={() => {}}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/>
           </svg>
         </ActionBtn>
 
-        {/* NOPE (X) */}
         <ActionBtn size="lg" disabled={animating} color="#FF4458"
           style={{ opacity: dir === "left" ? 0.65 + progress * 0.35 : 1, transform: dir === "left" ? `translateY(${-progress * 14}px) scale(${1 + progress * 0.08})` : undefined }}
           onClick={() => finish("skip")}>
-          <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
             <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
           </svg>
         </ActionBtn>
 
-        {/* SUPER LIKE */}
-        <ActionBtn size="sm" disabled={animating} color="#00B4E4"
-          onClick={() => {}}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+        <ActionBtn size="sm" disabled={animating} color="#00B4E4" onClick={() => {}}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
           </svg>
         </ActionBtn>
 
-        {/* LIKE (heart) */}
         <ActionBtn size="lg" disabled={animating} color="#00E08F"
           style={{ opacity: dir === "right" ? 0.65 + progress * 0.35 : 1, transform: dir === "right" ? `translateY(${-progress * 14}px) scale(${1 + progress * 0.08})` : undefined }}
           onClick={() => finish("like")}>
-          <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 21.593c-5.63-5.539-11-10.297-11-14.402 0-3.791 3.068-5.191 5.281-5.191 1.312 0 4.151.501 5.719 4.457 1.59-3.968 4.464-4.447 5.726-4.447 2.54 0 5.274 1.621 5.274 5.181 0 4.069-5.136 8.625-11 14.402z"/>
           </svg>
         </ActionBtn>
 
-        {/* BOOST */}
-        <ActionBtn size="sm" disabled={animating} color="#9B59B6"
-          onClick={() => {}}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+        <ActionBtn size="sm" disabled={animating} color="#9B59B6" onClick={() => {}}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
             <path d="M7 2v11h3v9l7-12h-4l4-8z"/>
           </svg>
         </ActionBtn>
@@ -253,11 +246,11 @@ function ActionBtn({ size, color, onClick, disabled, children, style }: {
   size: "sm" | "lg"; color: string; onClick?: () => void;
   disabled?: boolean; children: React.ReactNode; style?: React.CSSProperties;
 }) {
-  const dim = size === "lg" ? "w-16 h-16" : "w-12 h-12";
+  const dim = size === "lg" ? "w-14 h-14" : "w-11 h-11";
   return (
     <button type="button" onClick={onClick} disabled={disabled}
-      className={`${dim} rounded-full bg-zinc-950 border-2 flex items-center justify-center shadow-lg disabled:opacity-40 active:scale-90 transition`}
-      style={{ ...style, borderColor: color, color }}>
+      className={`${dim} rounded-full flex items-center justify-center shadow-xl disabled:opacity-30 active:scale-90 transition-all duration-150`}
+      style={{ ...style, background: `${color}18`, borderWidth: 2, borderStyle: "solid", borderColor: `${color}60`, color, backdropFilter: "blur(8px)" }}>
       {children}
     </button>
   );
