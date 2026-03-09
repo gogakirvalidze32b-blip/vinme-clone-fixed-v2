@@ -104,14 +104,16 @@ function OrientationModal({ value, visible, lang, onSave, onClose }: {
 // ✅ Reverse geocoding - get city from GPS coordinates
 async function getCityFromCoords(lat: number, lon: number, lang: string): Promise<string | null> {
   try {
-    // fetch both languages in parallel for accuracy
     const acceptLang = lang === "en" ? "en" : "ka";
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=${acceptLang}`,
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=${acceptLang}&zoom=10`,
       { headers: { "User-Agent": "Shekhvdi/1.0" } }
     );
     const data = await res.json();
-    const city = data.address?.city || data.address?.town || data.address?.village || data.address?.suburb || data.address?.county || data.address?.state;
+    const city = data.address?.city 
+      || data.address?.town 
+      || data.address?.municipality
+      || data.address?.village;
     return city ?? null;
   } catch { return null; }
 }

@@ -157,40 +157,34 @@ export default function TinderCard({
               </div>
             </div>
           )}
-
-          {/* INFO — bottom, Tinder style */}
-          <div className="absolute bottom-0 left-0 right-0 z-20 px-4 pb-4">
-            <div className="flex items-end justify-between">
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-[1.75rem] font-black text-white leading-tight drop-shadow-lg">
-                    {user.nickname}
-                  </h2>
-                  <span className="text-[1.6rem] font-light text-white/90">{user.age}</span>
-                  {user.recentlyActive && (
-                    <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-black text-black">●</span>
-                  )}
-                </div>
-                {user.city && (
-                  <p className="text-[13px] text-white/75 mt-0.5 drop-shadow flex items-center gap-1">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 opacity-80"><path d="M10 20S3 10.87 3 7a7 7 0 1 1 14 0c0 3.87-7 13-7 13zm0-11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></svg>
-                    {lang === "en" ? "Lives in " : ""}{user.city}
-                  </p>
-                )}
-                {user.distanceKm != null && (
-                  <p className="text-[13px] text-white/65 mt-0.5 drop-shadow flex items-center gap-1">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 opacity-70"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
-                    {user.distanceKm} {lang === "en" ? "km away" : "კმ-ით შორს"}
-                  </p>
-                )}
-              </div>
-              <button type="button" onClick={onOpenProfile}
-                onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()}
-                className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/30 transition border border-white/20 shrink-0">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-              </button>
-            </div>
-          </div>
+{/* INFO — bottom, Tinder style */}
+<div className="absolute bottom-0 left-0 right-0 z-20 px-4 pb-4">
+  <div className="flex items-end justify-between">
+    <div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <h2 className="text-[1.75rem] font-black text-white leading-tight drop-shadow-lg">
+          {user.nickname}
+        </h2>
+        <span className="text-[1.6rem] font-light text-white/90">{user.age}</span>
+        {user.recentlyActive && (
+          <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-black text-black">●</span>
+        )}
+      </div>
+      <p className="text-[13px] text-white/75 mt-0.5 drop-shadow flex items-center gap-1">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 opacity-80"><path d="M10 20S3 10.87 3 7a7 7 0 1 1 14 0c0 3.87-7 13-7 13zm0-11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></svg>
+        {user.city || (lang === "en" ? "Unknown location" : "უცნობი ადგილი")}
+        {user.distanceKm != null && (
+          <span className="text-white/55 ml-1">· {user.distanceKm} {lang === "en" ? "km away" : "კმ"}</span>
+        )}
+      </p>
+    </div>
+    <button type="button" onClick={onOpenProfile}
+      onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()}
+      className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/30 transition border border-white/20 shrink-0">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+    </button>
+  </div>
+</div>
         </div>
       </div>
 
