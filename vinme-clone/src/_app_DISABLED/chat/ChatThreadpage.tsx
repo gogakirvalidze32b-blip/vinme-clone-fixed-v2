@@ -31,6 +31,8 @@ export default function ChatThreadPage() {
   const [otherProfile, setOtherProfile] = useState<any>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
+  const myAnonIdRef = useRef<string|null>(null);
+  const effectiveAnonId = myAnonId ?? myAnonIdRef.current;
 
   // ✅ mark ALL incoming messages as read for this thread
   async function markThreadRead(inMatchId: number, meAnon: string) {
@@ -303,9 +305,9 @@ export default function ChatThreadPage() {
         )}
 
         <div className="mt-4 space-y-2 max-h-[65dvh] overflow-y-auto">
-          {msgs.map((m) => {
-            const mine = m.sender_anon === myAnonId;
-            return (
+        {msgs.map((m, i) => {
+  const mine = m.sender_anon === effectiveAnonId;
+  return (
               <div
                 key={m.id}
                 className={`flex ${mine ? "justify-end" : "justify-start"}`}

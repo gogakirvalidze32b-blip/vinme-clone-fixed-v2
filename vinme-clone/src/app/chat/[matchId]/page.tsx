@@ -91,6 +91,7 @@ function ReactionsDisplay({ msgId, reactions, myAnonId, mine, onReact }: {
   msgId: string; reactions: Reaction[]; myAnonId: string; mine: boolean;
   onReact: (msgId: string, emoji: string) => void;
 }) {
+
   const msgReactions = reactions.filter(r => r.message_id === msgId);
   if (!msgReactions.length) return null;
   const grouped: Record<string, number> = {};
@@ -98,6 +99,7 @@ function ReactionsDisplay({ msgId, reactions, myAnonId, mine, onReact }: {
   return (
     <div className={`flex w-full ${mine?"justify-end":"justify-start"}`}>
       {Object.entries(grouped).map(([emoji, count]) => {
+        
         const isMine = msgReactions.some(r => r.emoji === emoji && r.sender_anon === myAnonId);
         return (
           <button key={emoji} onClick={() => onReact(msgId, emoji)}
@@ -329,7 +331,11 @@ export default function ChatThreadPage() {
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout|null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const myAnonIdRef = useRef<string|null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [uploadingImg, setUploadingImg] = useState(false);
@@ -385,6 +391,7 @@ export default function ChatThreadPage() {
 
   useEffect(() => {
     (async () => {
+      const effectiveAnonId = myAnonId ?? myAnonIdRef.current;
       const { data: session } = await supabase.auth.getSession();
       const user = session?.session?.user;
       if (!user) { router.replace("/login"); return; }
@@ -393,24 +400,25 @@ export default function ChatThreadPage() {
         supabase.from("profiles").select("anon_id").eq("user_id", user.id).maybeSingle(),
         supabase.from("matches").select("user_a,user_b").eq("id", matchId).maybeSingle(),
       ]);
-      const anonId = meRes.data?.anon_id ?? ctxAnonId ?? null;
-      setMyAnonId(anonId);
-      const matchRow = matchRes.data;
-      if (!matchRow) return;
-      const otherId = matchRow.user_a === user.id ? matchRow.user_b : matchRow.user_a;
-      setOtherUserId(otherId);
-      const [profileRes, msgsRes] = await Promise.all([
-        supabase.from("profiles").select("user_id,nickname,first_name,photo1_url,last_seen").eq("user_id", otherId).maybeSingle(),
-        supabase.from("messages").select("*").eq("match_id", matchId).order("created_at", { ascending: true }),
-      ]);
-      const msgIds = (msgsRes.data ?? []).map((m: any) => m.id);
-      const reactionsRes = msgIds.length
-        ? await supabase.from("message_reactions").select("*").in("message_id", msgIds)
-        : { data: [] };
-      setOtherProfile(profileRes.data ?? null);
-      setMsgs(msgsRes.data ?? []);
-      setReactions(reactionsRes.data ?? []);
-      setIsLoaded(true);
+   const anonId = meRes.data?.anon_id ?? ctxAnonId ?? null;
+setMyAnonId(anonId);
+myAnonIdRef.current = anonId;
+const matchRow = matchRes.data;
+if (!matchRow) return;
+const otherId = matchRow.user_a === user.id ? matchRow.user_b : matchRow.user_a;
+setOtherUserId(otherId);
+const [profileRes, msgsRes] = await Promise.all([
+  supabase.from("profiles").select("user_id,nickname,first_name,photo1_url,last_seen").eq("user_id", otherId).maybeSingle(),
+  supabase.from("messages").select("*").eq("match_id", matchId).order("created_at", { ascending: true }),
+]);
+const msgIds = (msgsRes.data ?? []).map((m: any) => m.id);
+const reactionsRes = msgIds.length
+  ? await supabase.from("message_reactions").select("*").in("message_id", msgIds)
+  : { data: [] };
+setOtherProfile(profileRes.data ?? null);
+setMsgs(msgsRes.data ?? []);
+setReactions(reactionsRes.data ?? []);
+setIsLoaded(true);
       await markRead(anonId, user.id);
       await markDelivered(anonId);
       await supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("user_id", user.id);
@@ -661,6 +669,8 @@ async function handleUnmatchConfirm(reason: string) {
     </div>
   );
 
+  const effectiveAnonId = myAnonId ?? myAnonIdRef.current;
+
   return (
     <>
       <div id="chat-root" className="fixed inset-0 bg-[#111] flex justify-center"
@@ -703,8 +713,9 @@ async function handleUnmatchConfirm(reason: string) {
     </div>
   )}
             <div className="space-y-0.5">
-              {myAnonId && msgs.map((m, i) => {
-                const mine = m.sender_anon === myAnonId;
+                {msgs.map((m, i) => {
+                if (!myAnonId) return null;                
+const mine = myAnonId ? m.sender_anon === myAnonId : false;
                 const isTemp = m.id.startsWith("temp");
                 const isRead = !!m.read_at;
                 const isDelivered = !!m.delivered_at;
@@ -801,8 +812,7 @@ async function handleUnmatchConfirm(reason: string) {
                     </div>
 
                     {/* reactions below */}
-                    <ReactionsDisplay msgId={m.id} reactions={reactions} myAnonId={myAnonId} mine={mine} onReact={handleReact} />
-                  </div>
+<ReactionsDisplay msgId={m.id} reactions={reactions} myAnonId={effectiveAnonId ?? ""} mine={mine} onReact={handleReact} />                  </div>
                 );
               })}
               <div ref={bottomRef} />
