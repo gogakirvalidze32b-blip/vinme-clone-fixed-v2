@@ -605,17 +605,36 @@ export default function ChatThreadPage() {
     setAudioBlob(null); setUploadingVoice(false);
   }
 
- async function handleUnmatchConfirm(reason: string) {
+async function handleUnmatchConfirm(reason: string) {
   setShowUnmatchModal(false);
-  try { await supabase.from("unmatch_feedback").insert({ from_user: myUserId, to_user: otherUserId, match_id: matchId, reason }); } catch {}
-  try { await supabase.from("messages").delete().eq("match_id", matchId); } catch (e) { console.error("messages delete:", e); }
-  try { 
-    const { error } = await supabase.from("matches").delete().eq("id", matchId);
-    console.error("matches delete error:", error);
-  } catch (e) { console.error("matches delete exception:", e); }
+  
+  const isReport = reason === "შეურაცხმყოფელი ქცევა" || reason === "სპამი ან ყალბი პროფილი" ||
+                   reason === "Offensive behavior" || reason === "Spam or fake profile";
+
+  try {
+    await supabase.from("unmatch_feedback").insert({ from_user: myUserId, to_user: otherUserId, match_id: matchId, reason });
+  } catch {}
+
+  if (isReport) {
+    // ადმინთან რეპორტი
+    try {
+      await supabase.from("reports").insert({ from_user: myUserId, to_user: otherUserId, match_id: matchId, reason });
+    } catch {}
+  } else {
+    // მეორე იუზერს შეტყობინება
+    try {
+      await supabase.from("notifications").insert({
+        user_id: otherUserId,
+        type: "unmatch",
+        message: reason,
+      });
+    } catch {}
+  }
+
+  try { await supabase.from("messages").delete().eq("match_id", matchId); } catch {}
+  try { await supabase.from("matches").delete().eq("id", matchId); } catch {}
   window.location.href = "/chat";
 }
-
   async function handleBlock() {
     if (!confirm(ka?"დაბლოკვა და შეტყობინება?":"Block and report?")) return;
     await supabase.from("matches").delete().eq("id", matchId);
