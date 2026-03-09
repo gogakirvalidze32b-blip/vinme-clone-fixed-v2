@@ -76,6 +76,21 @@ function PullToRefresh({ children }: { children: React.ReactNode }) {
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    (async () => {
+      const { supabase } = await import("@/lib/supabase");
+      const { data } = await supabase.auth.getSession();
+      const uid = data.session?.user?.id;
+      if (!uid || !navigator.geolocation) return;
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        await supabase.from("profiles").update({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+        }).eq("user_id", uid);
+      }, () => {});
+    })();
+  }, []);
+
   return (
     <UserProvider>
       <PullToRefresh>{children}</PullToRefresh>

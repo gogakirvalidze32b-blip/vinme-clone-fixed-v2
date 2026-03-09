@@ -173,9 +173,9 @@ export default function TinderCard({
       <p className="text-[13px] text-white/75 mt-0.5 drop-shadow flex items-center gap-1">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 opacity-80"><path d="M10 20S3 10.87 3 7a7 7 0 1 1 14 0c0 3.87-7 13-7 13zm0-11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></svg>
         {user.city || (lang === "en" ? "Unknown location" : "უცნობი ადგილი")}
-        {user.distanceKm != null && (
-          <span className="text-white/55 ml-1">· {user.distanceKm} {lang === "en" ? "km away" : "კმ"}</span>
-        )}
+       {user.distanceKm != null && user.distanceKm < 5000 && (
+  <span className="text-white/55 ml-1">· {user.distanceKm} {lang === "en" ? "km away" : "კმ"}</span>
+)}
       </p>
     </div>
     <button type="button" onClick={onOpenProfile}
