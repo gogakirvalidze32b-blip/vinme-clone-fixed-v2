@@ -59,39 +59,46 @@ export default function FeedPage() {
 }, []);
 
   const loadMe = useCallback(async () => {
-    const { data } = await supabase.auth.getSession();
-    const user = data.session?.user;
-    if (!user) { router.replace("/login"); return null; }
-    const { data: row } = await supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle();
-    setMe(row);
-    if (row) saveLocation(user.id);
-    return row;
-  }, [router, saveLocation]);
+  const { data } = await supabase.auth.getSession();
+  const user = data.session?.user;
+  if (!user) { router.replace("/login"); return null; }
+  const { data: row } = await supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle();
+  
+  if (row) {
+    await saveLocation(user.id);
+    const { data: updated } = await supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle();
+    setMe(updated ?? row);
+    return updated ?? row;
+  }
+  
+  setMe(row);
+  return row;
+}, [router, saveLocation]);
 
-  const loadTop = useCallback(async (myProfile: any) => {
-    if (loadingTopRef.current) return;
-    loadingTopRef.current = true;
+const loadTop = useCallback(async (myProfile: any) => {
+  if (loadingTopRef.current) return;
+  loadingTopRef.current = true;
 
-    const myId = myProfile.user_id;
-    const seeking = myProfile.seeking ?? "everyone";
-    const myGender = myProfile.gender ?? null;
+  const myId = myProfile.user_id;
+  const seeking = myProfile.seeking ?? "everyone";
+  const myGender = myProfile.gender ?? null;
 
-    const { data: swiped } = await supabase.from("swipes").select("to_id").eq("from_id", myId);
-    const excludedIds = swiped?.map((s: any) => s.to_id) ?? [];
+  const { data: swiped } = await supabase.from("swipes").select("to_id").eq("from_id", myId);
+  const excludedIds = swiped?.map((s: any) => s.to_id) ?? [];
 
-    let query = supabase.from("profiles").select("*")
-      .eq("onboarding_completed", true)
-      .neq("user_id", myId)
-      .not("photo1_url", "is", null);
+  let query = supabase.from("profiles").select("*")
+    .eq("onboarding_completed", true)
+    .neq("user_id", myId)
+    .not("photo1_url", "is", null);
 
-    if (seeking !== "everyone") query = query.eq("gender", seeking);
-    if (myGender) query = query.or(`seeking.eq.everyone,seeking.eq.${myGender}`);
-    if (excludedIds.length > 0) query = query.not("user_id", "in", `(${excludedIds.join(",")})`);
+  if (seeking !== "everyone") query = query.eq("gender", seeking);
+  if (myGender) query = query.or(`seeking.eq.everyone,seeking.eq.${myGender}`);
+  if (excludedIds.length > 0) query = query.not("user_id", "in", `(${excludedIds.join(",")})`);
 
-    const { data } = await query.order("created_at", { ascending: false }).limit(1).maybeSingle();
-    setTop(data ?? null);
-    loadingTopRef.current = false;
-  }, []);
+  const { data } = await query.order("created_at", { ascending: false }).limit(1).maybeSingle();
+  setTop(data ?? null);
+  loadingTopRef.current = false;
+}, []);
 
   useEffect(() => {
     let alive = true;
