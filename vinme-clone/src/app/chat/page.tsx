@@ -167,6 +167,11 @@ if (anonId && msg.sender_anon !== anonId) {
           };
         }));
       })
+
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "matches" }, (payload) => {
+  setMatches(prev => prev.filter(m => String(m.id) !== String(payload.old.id)));
+})
+
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, (payload) => {
         const msg = payload.new as any;
         if (msg.read_at) {

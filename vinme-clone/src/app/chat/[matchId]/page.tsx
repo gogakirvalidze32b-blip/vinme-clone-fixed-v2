@@ -114,10 +114,10 @@ function ReactionsDisplay({ msgId, reactions, myAnonId, mine, onReact }: {
     </div>
   );
 }
-
 function UnmatchModal({ onClose, onConfirm, ka }: {
   onClose: () => void; onConfirm: (reason: string) => void; ka: boolean;
 }) {
+  const [selected, setSelected] = useState<string|null>(null);
   const [feedback, setFeedback] = useState("");
 
   function isRealText(text: string): boolean {
@@ -127,44 +127,62 @@ function UnmatchModal({ onClose, onConfirm, ka }: {
     if (/(.)\1{4,}/.test(text)) return false;
     const words = text.trim().split(/\s+/).filter(w => w.length > 1);
     if (words.length < 2) return false;
-    const uniqueWords = new Set(words.map(w => w.toLowerCase()));
-    if (uniqueWords.size < 2) return false;
-    return true;
+    return new Set(words.map(w => w.toLowerCase())).size >= 2;
   }
 
-  const canConfirm = isRealText(feedback);
+  const canConfirm = selected !== null || isRealText(feedback);
+
+  function handleConfirm() {
+    if (!canConfirm) return;
+    onConfirm(selected ?? feedback);
+  }
+
+  const reasons = [
+    ka ? "არ ვართ თავსებადი" : "Not compatible",
+    ka ? "შეურაცხმყოფელი ქცევა" : "Offensive behavior",
+    ka ? "სპამი ან ყალბი პროფილი" : "Spam or fake profile",
+  ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div className="relative w-full max-w-lg bg-zinc-900 rounded-t-3xl overflow-hidden" onClick={e => e.stopPropagation()}>
-  <div className="px-4 py-3 flex flex-col gap-2">
-          {[
-            ka ? "არ ვართ თავსებადი" : "Not compatible",
-            ka ? "შეურაცხმყოფელი ქცევა" : "Offensive behavior",
-            ka ? "სპამი ან ყალბი პროფილი" : "Spam or fake profile",
-          ].map(r => (
-            <div key={r} className="w-full px-4 py-3.5 rounded-2xl text-sm font-medium bg-white/5 border border-white/8 text-white/70">{r}</div>
+        <div className="px-5 pt-5 pb-2 border-b border-white/8">
+          <h2 className="text-white font-bold text-lg">{ka ? "რატო ხდება Unmatch?" : "Why Unmatch?"}</h2>
+          <p className="text-white/40 text-sm">{ka ? "მიზეზი სავალდებულოა" : "Reason required"}</p>
+        </div>
+        <div className="px-4 py-3 flex flex-col gap-2">
+          {reasons.map(r => (
+            <button key={r} onClick={() => setSelected(selected === r ? null : r)}
+              className={`w-full px-4 py-3.5 rounded-2xl text-sm font-medium text-left transition border ${
+                selected === r
+                  ? "bg-[#7C3AED]/20 border-[#7C3AED] text-white"
+                  : "bg-white/5 border-white/8 text-white/70"
+              }`}>
+              {r}
+            </button>
           ))}
-          <textarea value={feedback} onChange={e => setFeedback(e.target.value)}
-            placeholder={ka ? "დაწერე უკუკავშირი (მინ. 10 სიმბოლო)..." : "Write feedback (min. 10 chars)..."}
-            rows={4}
+          <textarea value={feedback} onChange={e => { setFeedback(e.target.value); if (e.target.value) setSelected(null); }}
+            placeholder={ka ? "ან დაწერე უკუკავშირი (მინ. 10 სიმბოლო)..." : "Or write feedback (min. 10 chars)..."}
+            rows={3}
             className="w-full rounded-2xl bg-white/8 border border-white/10 px-4 py-3 text-sm text-white placeholder-white/30 outline-none resize-none focus:border-white/30" />
-          {feedback.length >= 3 && !canConfirm && (
+          {feedback.length >= 3 && !isRealText(feedback) && !selected && (
             <p className="text-xs text-red-400 px-1">{ka ? "გთხოვ ნამდვილი ტექსტი დაწერო" : "Please write meaningful feedback"}</p>
           )}
         </div>
         <div className="px-4 pb-8 pt-2 flex gap-3">
-          <button onClick={onClose} className="flex-1 rounded-2xl bg-white/8 py-3.5 text-sm font-semibold text-white/70">{ka?"გაუქმება":"Cancel"}</button>
-          <button onClick={() => { if (!canConfirm) return; onConfirm(feedback); }}
-            disabled={!canConfirm}
-            className="flex-1 rounded-2xl bg-red-500 py-3.5 text-sm font-bold text-white disabled:opacity-40 transition">Unmatch</button>
+          <button onClick={onClose} className="flex-1 rounded-2xl bg-white/8 py-3.5 text-sm font-semibold text-white/70">
+            {ka?"გაუქმება":"Cancel"}
+          </button>
+          <button onClick={handleConfirm} disabled={!canConfirm}
+            className="flex-1 rounded-2xl bg-red-500 py-3.5 text-sm font-bold text-white disabled:opacity-40 transition">
+            Unmatch
+          </button>
         </div>
       </div>
     </div>
   );
 }
-
 function ChatMenu({ onClose, onViewProfile, onUnmatch, onBlock, lang }: {
   onClose: () => void; onViewProfile: () => void; onUnmatch: () => void; onBlock: () => void; lang: string;
 }) {
@@ -471,12 +489,13 @@ setIsLoaded(true);
     ));
   }
 })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "message_reactions" }, (payload) => {
+.on("postgres_changes", { event: "DELETE", schema: "public", table: "message_reactions" }, (payload) => {
         const r = payload.old as Reaction;
-setReactions(prev => prev.filter(x => 
-  x.id !== r.id && 
-  !(x.message_id === r.message_id && x.sender_anon === r.sender_anon)
-));      })
+        setReactions(prev => prev.filter(x =>
+          x.id !== r.id &&
+          !(x.message_id === r.message_id && x.sender_anon === r.sender_anon)
+        ));
+      })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [matchId, markRead]);
