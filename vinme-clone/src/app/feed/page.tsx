@@ -151,7 +151,7 @@ const loadTop = useCallback(async (myProfile: any) => {
       id: top.user_id, user_id: top.user_id,
       nickname: top.first_name ?? top.nickname ?? "Anonymous",
       age: top.age ?? 18,
-      city: top.city ?? "",
+      city: top.city || undefined,
       distanceKm,
       recentlyActive: top.last_seen ? (Date.now() - new Date(top.last_seen).getTime()) < 30 * 60 * 1000 : false,
       photo_url: top.photo1_url ? photoSrc(top.photo1_url) : null,
