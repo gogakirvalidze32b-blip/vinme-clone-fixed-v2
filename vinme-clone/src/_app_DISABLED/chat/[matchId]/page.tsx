@@ -606,7 +606,11 @@ export default function ChatThreadPage() {
   }
 
 async function handleUnmatchConfirm(reason: string) {
+  
   setShowUnmatchModal(false);
+   console.log("🔥 handleUnmatchConfirm called, reason:", reason);
+  console.log("myUserId:", myUserId, "otherUserId:", otherUserId);
+
   
   const isReport = reason === "შეურაცხმყოფელი ქცევა" || reason === "სპამი ან ყალბი პროფილი" ||
                    reason === "Offensive behavior" || reason === "Spam or fake profile";
