@@ -24,16 +24,39 @@ export default function FeedPage() {
   const [showMatch, setShowMatch] = useState(false);
   const loadingTopRef = useRef(false);
 
-  // ✅ get user geolocation and save to DB
-  const saveLocation = useCallback(async (uid: string) => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(async (pos) => {
-      await supabase.from("profiles").update({
-        latitude: pos.coords.latitude,
-        longitude: pos.coords.longitude,
-      }).eq("user_id", uid);
-    }, () => {});
-  }, []);
+ const saveLocation = useCallback(async (uid: string) => {
+  if (!navigator.geolocation) return;
+
+  const { data: existing } = await supabase
+    .from("profiles").select("latitude,longitude,city").eq("user_id", uid).maybeSingle();
+  if (existing?.latitude && existing?.longitude && existing?.city) return;
+
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const lat = pos.coords.latitude;
+    const lon = pos.coords.longitude;
+
+    let city = "";
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
+        { headers: { "Accept-Language": "ka" } }
+      );
+      const json = await res.json();
+      city = json.address?.city ?? json.address?.town ?? json.address?.village ?? json.address?.county ?? "";
+    } catch {}
+
+    await supabase.from("profiles").update({ latitude: lat, longitude: lon, city }).eq("user_id", uid);
+    
+    // ✅ setMe განახლება coordinates-ით რომ distanceKm სწორად დაითვალოს
+    setMe((prev: any) => prev ? { ...prev, latitude: lat, longitude: lon, city } : prev);
+  }, (err) => {
+    console.error("Geolocation error:", err);
+  }, {
+    enableHighAccuracy: true,
+    timeout: 10000,
+    maximumAge: 0
+  });
+}, []);
 
   const loadMe = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
@@ -109,7 +132,6 @@ export default function FeedPage() {
     await loadTop(me);
   };
 
-  // ✅ real km calculation
   const distanceKm = useMemo(() => {
     if (!me?.latitude || !me?.longitude) return undefined;
     if (!top?.latitude || !top?.longitude) return undefined;
@@ -120,7 +142,7 @@ export default function FeedPage() {
     if (!top) return null;
     return {
       id: top.user_id, user_id: top.user_id,
-nickname: top.first_name ?? top.nickname ?? "Anonymous",
+      nickname: top.first_name ?? top.nickname ?? "Anonymous",
       age: top.age ?? 18,
       city: top.city ?? "",
       distanceKm,
