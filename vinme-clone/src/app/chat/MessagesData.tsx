@@ -171,38 +171,52 @@ export default function MessagesClient() {
           </div>
         ))}
 
-        {matchesWithMessages.length === 0 && notifications.length === 0 ? (
-          <div className="text-center text-white/60 mt-20">No chats yet</div>
-        ) : (
-          matchesWithMessages.map((m) => {
-            const otherId = otherUserId(m);
-            const p = profilesByUser[otherId];
-            const last = latestByMatch[m.id];
+{notifications.map(n => (
+          <div key={n.id} className="flex items-center gap-3 rounded-2xl bg-zinc-800/80 border border-white/8 px-4 py-3">
+            <span className="text-2xl shrink-0">💔</span>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-white">Unmatch მოხდა</div>
+              <div className="text-xs text-white/50 mt-0.5">{n.message}</div>
+            </div>
+            <button onClick={async () => {
+              await supabase.from("notifications").update({ read: true }).eq("id", n.id);
+              setNotifications(prev => prev.filter(x => x.id !== n.id));
+            }} className="text-white/30 hover:text-white text-lg shrink-0">✕</button>
+          </div>
+        ))}
 
-            return (
-              <SwipeToDeleteRow key={m.id} onDelete={() => {}}>
-                <button
-                  onClick={() => router.push(`/chat/${m.id}`)}
-                  className="w-full flex items-center gap-3 rounded-2xl bg-white/5 p-3">
-                  <div className="h-12 w-12 rounded-full bg-white/10 overflow-hidden shrink-0">
-                    {p?.photo1_url && (
-                      <img src={photoSrc(p.photo1_url)} className="h-full w-full object-cover" />
-                    )}
-                  </div>
-                  <div className="flex-1 text-left min-w-0">
-                    <div className="font-semibold">{displayNameFor(m)}</div>
-                    <div className="text-sm text-white/60 truncate">{last?.content ?? "No messages yet"}</div>
-                  </div>
-                  {unreadByMatch[m.id] > 0 && (
-                    <div className="h-6 min-w-[24px] rounded-full bg-pink-500 text-black text-xs font-bold flex items-center justify-center px-2 shrink-0">
-                      {unreadByMatch[m.id]}
-                    </div>
-                  )}
-                </button>
-              </SwipeToDeleteRow>
-            );
-          })
+        {matchesWithMessages.length === 0 && notifications.length === 0 && (
+          <div className="text-center text-white/60 mt-20">No chats yet</div>
         )}
+
+        {matchesWithMessages.map((m) => {
+          const otherId = otherUserId(m);
+          const p = profilesByUser[otherId];
+          const last = latestByMatch[m.id];
+
+          return (
+            <SwipeToDeleteRow key={m.id} onDelete={() => {}}>
+              <button
+                onClick={() => router.push(`/chat/${m.id}`)}
+                className="w-full flex items-center gap-3 rounded-2xl bg-white/5 p-3">
+                <div className="h-12 w-12 rounded-full bg-white/10 overflow-hidden shrink-0">
+                  {p?.photo1_url && (
+                    <img src={photoSrc(p.photo1_url)} className="h-full w-full object-cover" />
+                  )}
+                </div>
+                <div className="flex-1 text-left min-w-0">
+                  <div className="font-semibold">{displayNameFor(m)}</div>
+                  <div className="text-sm text-white/60 truncate">{last?.content ?? "No messages yet"}</div>
+                </div>
+                {unreadByMatch[m.id] > 0 && (
+                  <div className="h-6 min-w-[24px] rounded-full bg-pink-500 text-black text-xs font-bold flex items-center justify-center px-2 shrink-0">
+                    {unreadByMatch[m.id]}
+                  </div>
+                )}
+              </button>
+            </SwipeToDeleteRow>
+          );
+        })}
       </div>
 
       <BottomNav chatBadge={bottomUnreadChats} />
