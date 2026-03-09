@@ -300,7 +300,7 @@ function QuickEmojiPicker({ onPick, onClose }: { onPick: (e: string) => void; on
   );
 }
 
-export default async function ChatThreadPage() {
+export default function ChatThreadPage() {
   const router = useRouter();
   const params = useParams();
   const matchId = Number(params?.matchId);
@@ -648,15 +648,13 @@ useEffect(() => {
     if (audioPreviewUrl) { URL.revokeObjectURL(audioPreviewUrl); setAudioPreviewUrl(null); }
     setAudioBlob(null); setUploadingVoice(false);
   }
-
-  async function handleUnmatch(reason: string) {
-    await supabase.from("unmatch_feedback").insert({
-      from_user: myUserId,
-      to_user: otherUserId,
-      match_id: matchId,
-      reason
-    });
-  }
+async function handleUnmatchConfirm(reason: string) {
+  setShowUnmatchModal(false);
+  try { await supabase.from("unmatch_feedback").insert({ from_user: myUserId, to_user: otherUserId, match_id: matchId, reason }); } catch {}
+  try { await supabase.from("messages").delete().eq("match_id", matchId); } catch {}
+  try { await supabase.from("matches").delete().eq("id", matchId); } catch {}
+  window.location.href = "/chat";
+}
 
   async function handleBlock() {
     if (!confirm(ka?"დაბლოკვა და შეტყობინება?":"Block and report?")) return;
