@@ -134,7 +134,7 @@ export default function TinderCard({
           {/* PHOTO */}
           {imgSrc
             ? <img src={imgSrc} alt="" draggable={false} onDragStart={e => e.preventDefault()}
-                className="absolute inset-0 w-full h-full object-cover object-top select-none pointer-events-none" />
+className="absolute inset-0 w-full h-full object-cover object-center select-none pointer-events-none" />
             : <div className="absolute inset-0 bg-zinc-800 flex items-center justify-center text-7xl">👤</div>
           }
 
@@ -189,9 +189,8 @@ export default function TinderCard({
         </div>
       </div>
 {/* ===== ACTION BUTTONS ===== */}
-      <div className="shrink-0 flex items-center justify-center gap-3 py-2" 
-        style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 68px)" }}>
-
+      <div className="shrink-0 flex items-center justify-center gap-4 py-1.5" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 72px)" }} 
+onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()}>
         <ActionBtn size="sm" disabled={animating} color="#F7BB00" onClick={() => {}}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/>
