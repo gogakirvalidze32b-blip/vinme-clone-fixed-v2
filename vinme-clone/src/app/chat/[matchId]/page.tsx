@@ -276,18 +276,24 @@ function QuickEmojiPicker({ onPick, onClose }: { onPick: (e: string) => void; on
 
   return (
     <div className="bg-zinc-900 border-t border-white/8 rounded-t-2xl" onClick={e => e.stopPropagation()}>
-      {/* search */}
-      <div className="px-3 pt-3 pb-2">
+      {/* header with back */}
+      <div className="flex items-center gap-2 px-3 pt-3 pb-2">
+        <button onClick={onClose} 
+          className="shrink-0 w-8 h-8 flex items-center justify-center text-white/60 hover:text-white transition">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M15 18l-6-6 6-6"/>
+          </svg>
+        </button>
         <input value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="🔍 Search..."
-          className="w-full bg-zinc-800 rounded-full px-4 py-2 text-sm text-white placeholder-white/30 outline-none ring-0 focus:ring-0 focus:outline-none"  />
+          placeholder="🔍 Search emojis..."
+          className="flex-1 bg-zinc-800 rounded-full px-3 py-2 text-sm text-white placeholder-white/30 outline-none" />
       </div>
       {/* grid */}
       <div className="overflow-y-auto px-2 pb-3" style={{ maxHeight: 240 }}>
         {rows.map((row, ri) => (
           <div key={ri} className="flex flex-wrap">
             {row.map((e, ei) => (
-              <button key={ei} onClick={() => onPick(e)}
+              <button key={ei} onClick={() => { onPick(e); if (search) setSearch(""); }}
                 className="w-10 h-10 flex items-center justify-center text-2xl hover:bg-white/10 rounded-xl transition active:scale-90"
                 style={{ lineHeight: 1 }}>
                 {e}
@@ -954,9 +960,9 @@ const mine = myAnonId ? m.sender_anon === myAnonId : false;
                     <input ref={inputRef} value={text}
                     onChange={e => setText(e.target.value)}
                     onFocus={() => { setFocused(true); setShowEmoji(false); }}
-                    onBlur={() => { setTimeout(() => { if (!text.trim()) setFocused(false); }, 150); }}
+                    onBlur={() => { setTimeout(() => { if (!text.trim() && !showEmoji) setFocused(false); }, 150); }}
                     autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
-onKeyDown={e => { if (e.key==="Enter" && !e.shiftKey && !sending) { e.preventDefault(); send(); } }}
+                    onKeyDown={e => { if (e.key==="Enter" && !e.shiftKey && !sending) { e.preventDefault(); send(); } }}
                     placeholder={ka?"მესიჯი...":"Message..."} />
                 </div>
 
@@ -972,7 +978,7 @@ onKeyDown={e => { if (e.key==="Enter" && !e.shiftKey && !sending) { e.preventDef
                       : <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>}
                   </button>
                 ) : (
-                  <button onClick={e => { e.stopPropagation(); setShowEmoji(p => !p); inputRef.current?.blur(); }}
+                  <button onClick={e => { e.stopPropagation(); setShowEmoji(p => !p); }}
                     className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition text-xl">
                     🙂
                   </button>
