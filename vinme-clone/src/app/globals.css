@@ -27,9 +27,9 @@ body::-webkit-scrollbar {
 
 @media (max-width: 768px) {
   html, body {
-    position: fixed;
+    position: static;
     width: 100%;
-    overflow: hidden;
+    overflow-y: auto;
   }
 }
 
