@@ -358,6 +358,7 @@ export default function ChatThreadPage() {
 
   const myAnonIdRef = useRef<string|null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const sendingRef = useRef(false);
 
 
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -603,26 +604,38 @@ useEffect(() => {
 
 
   
+  const sendingRef = useRef(false);
+
   async function send() {
     const t2 = text.trim();
-    if (!t2 || !myAnonId || sending) return;
+    if (!t2 || !myAnonId || sending || sendingRef.current) return;
+    
+    sendingRef.current = true;
     setSending(true); 
     setText("");
-    const tempId = `temp-${Date.now()}`;
+    
+    const tempId = `temp-${Date.now()}-${Math.random()}`;
     const replyPreview = replyTo ? (replyTo.type==="voice"?"🎤 Voice":replyTo.type==="image"?"📷 Photo":replyTo.content.slice(0,60)) : null;
     const replyId = replyTo?.id ?? null;
     setReplyTo(null);
+    
     setMsgs(prev => [...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: t2, created_at: new Date().toISOString(), read_at: null, delivered_at: null, type: "text", reply_to_id: replyId, reply_preview: replyPreview }]);
+    
     try {
       const { data } = await supabase.from("messages").insert({ match_id: matchId, sender_anon: myAnonId, content: t2, type: "text", reply_to_id: replyId, reply_preview: replyPreview }).select().single();
-      if (data) setMsgs(prev => prev.map(m => m.id === tempId ? (data as MsgRow) : m));
+      if (data) {
+        setMsgs(prev => prev.map(m => m.id === tempId ? (data as MsgRow) : m));
+      }
       await supabase.from("matches").update({ has_unread: true }).eq("id", matchId);
       if (myUserId) await supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("user_id", myUserId);
     } catch (err) {
       console.error("Send error:", err);
+      setMsgs(prev => prev.filter(m => m.id !== tempId));
+    } finally {
+      setSending(false);
+      sendingRef.current = false;
+      setTimeout(() => inputRef.current?.focus(), 50);
     }
-    setSending(false);
-    setTimeout(() => inputRef.current?.focus(), 50);
   }
 
   async function startRecording() {
@@ -735,7 +748,7 @@ async function handleUnmatchConfirm(reason: string) {
         <div className="w-full max-w-lg flex flex-col bg-[#111] text-white h-full">
 
           {/* HEADER */}
-          <div className="flex items-center gap-3 px-4 py-3 bg-zinc-950 border-b border-white/8 shrink-0">
+          <div className="flex items-center gap-3 px-4 py-3 bg-zinc-950 border-b border-white/8 shrink-0 sticky top-0 z-40">
 <button onClick={() => { setReactionMsgId(null); setSelectedMsgId(null); router.push("/chat"); }}
               className="rounded-full bg-white/8 w-9 h-9 flex items-center justify-center text-white shrink-0 hover:bg-white/12 transition">←</button>
             <div className="flex items-center gap-3 flex-1 cursor-pointer"
