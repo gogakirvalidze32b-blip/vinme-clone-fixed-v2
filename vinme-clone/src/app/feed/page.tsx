@@ -131,12 +131,14 @@ export default function FeedPage() {
     await supabase.from("swipes").insert({ from_id: me.user_id, to_id: top.user_id, action: "like" });
     const mid = await checkAndCreateMatch(me.user_id, top.user_id);
     if (mid) { setMatchId(mid); setShowMatch(true); }
+      setTop(null); // ← დაამატე, ძველი კარტი მაშინვე გაქრეს
     await loadTop(me);
   };
 
   const onSkip = async () => {
     if (!me || !top) return;
     await supabase.from("swipes").insert({ from_id: me.user_id, to_id: top.user_id, action: "skip" });
+      setTop(null); // ← დაამატე
     await loadTop(me);
   };
 

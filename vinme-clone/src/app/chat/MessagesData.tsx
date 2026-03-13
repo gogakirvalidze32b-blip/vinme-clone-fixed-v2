@@ -189,28 +189,35 @@ setNotifications((notifs ?? []).map((n: any) => ({
       </div>
 
       {/* NOTIFICATIONS PANEL */}
-      {showNotifications && (
-        <div className="mx-auto w-full max-w-md px-4 pb-2 space-y-2">
-          {notifications.length === 0 ? (
-            <div className="text-center text-white/40 text-sm py-4">შეტყობინება არ არის</div>
-          ) : (
-            notifications.map(n => (
-              <div key={n.id} className="flex items-start gap-3 rounded-2xl bg-zinc-800/80 border border-white/8 px-4 py-3">
-                <span className="text-xl shrink-0 mt-0.5">💔</span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-white">Unmatch მოხდა</div>
-                  <div className="text-xs text-white/50 mt-0.5">{n.message}</div>
-                </div>
-                <button onClick={async () => {
-                  await supabase.from("notifications").update({ read: true }).eq("id", n.id);
-                  setNotifications(prev => prev.filter(x => x.id !== n.id));
-                }} className="text-white/30 hover:text-white text-lg shrink-0">✕</button>
-              </div>
-            ))
-          )}
+     {showNotifications && (
+  <div className="mb-4 space-y-2">
+    {notifications.length === 0 ? (
+      <div className="text-center text-white/40 text-sm py-3">შეტყობინება არ არის</div>
+    ) : (
+      notifications.map(n => (
+        <div key={n.id} className="flex items-start gap-3 rounded-2xl bg-zinc-800/80 border border-white/8 px-4 py-3">
+          <div className="w-10 h-10 rounded-full bg-zinc-700 overflow-hidden shrink-0">
+            {n.from_photo ? (
+              <img src={photoSrc(n.from_photo)} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-lg">👤</div>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold text-white">
+              {n.from_name}-მ გააკეთა Unmatch
+            </div>
+            <div className="text-xs text-white/50 mt-0.5">{n.message}</div>
+          </div>
+          <button onClick={async () => {
+            await supabase.from("notifications").update({ read: true }).eq("id", n.id);
+            setNotifications(prev => prev.filter(x => x.id !== n.id));
+          }} className="text-white/30 hover:text-white text-lg shrink-0">✕</button>
         </div>
-      )}
-
+      ))
+    )}
+  </div>
+)}
       {/* CHAT LIST */}
       <div className="mx-auto w-full max-w-md px-4 space-y-3">
         {matchesWithMessages.length === 0 && (

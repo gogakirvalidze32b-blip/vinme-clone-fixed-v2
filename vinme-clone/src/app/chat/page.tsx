@@ -148,24 +148,28 @@ const { data: notifs } = await supabase
   .order("created_at", { ascending: false });
 
 const fromUserIds = (notifs ?? []).map((n: any) => n.from_user).filter(Boolean);
-let fromProfiles: Record<string, string> = {};
+const fromProfileMap: Record<string, {name: string, photo: string|null}> = {};
 if (fromUserIds.length > 0) {
   const { data: fps } = await supabase
     .from("profiles")
-    .select("user_id, first_name, nickname")
+    .select("user_id, first_name, nickname, photo1_url")
     .in("user_id", fromUserIds);
   (fps ?? []).forEach((p: any) => {
-    fromProfiles[p.user_id] = p.first_name ?? p.nickname ?? "ვინმე";
+    fromProfileMap[p.user_id] = {
+      name: p.first_name ?? p.nickname ?? "ვინმე",
+      photo: p.photo1_url ?? null
+    };
   });
 }
 
 setNotifications((notifs ?? []).map((n: any) => ({
   ...n,
-  from_name: fromProfiles[n.from_user] ?? "ვინმე"
+  from_name: fromProfileMap[n.from_user]?.name ?? "ვინმე",
+  from_photo: fromProfileMap[n.from_user]?.photo ?? null
 })));
     })();
   }, [ctxReady]);
-
+  
   useEffect(() => {
     if (!myId || !myAnonId) return;
     const ch = supabase.channel(`chat-list-${Date.now()}`)
@@ -263,26 +267,34 @@ setNotifications((notifs ?? []).map((n: any) => ({
         </div>
 
         {showNotifications && (
-          <div className="mb-4 space-y-2">
-            {notifications.length === 0 ? (
-              <div className="text-center text-white/40 text-sm py-3">შეტყობინება არ არის</div>
+  <div className="mb-4 space-y-2">
+    {notifications.length === 0 ? (
+      <div className="text-center text-white/40 text-sm py-3">შეტყობინება არ არის</div>
+    ) : (
+      notifications.map(n => (
+        <div key={n.id} className="flex items-start gap-3 rounded-2xl bg-zinc-800/80 border border-white/8 px-4 py-3">
+          <div className="w-10 h-10 rounded-full bg-zinc-700 overflow-hidden shrink-0">
+            {n.from_photo ? (
+              <img src={photoSrc(n.from_photo)} className="w-full h-full object-cover" />
             ) : (
-              notifications.map(n => (
-                <div key={n.id} className="flex items-start gap-3 rounded-2xl bg-zinc-800/80 border border-white/8 px-4 py-3">
-                  <span className="text-xl shrink-0 mt-0.5">💔</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-white">Unmatch მოხდა</div>
-                    <div className="text-xs text-white/50 mt-0.5">{n.message}</div>
-                  </div>
-                  <button onClick={async () => {
-                    await supabase.from("notifications").update({ read: true }).eq("id", n.id);
-                    setNotifications(prev => prev.filter(x => x.id !== n.id));
-                  }} className="text-white/30 hover:text-white text-lg shrink-0">✕</button>
-                </div>
-              ))
+              <div className="w-full h-full flex items-center justify-center text-lg">👤</div>
             )}
           </div>
-        )}
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold text-white">
+              {n.from_name}-მ გააკეთა Unmatch
+            </div>
+            <div className="text-xs text-white/50 mt-0.5">{n.message}</div>
+          </div>
+          <button onClick={async () => {
+            await supabase.from("notifications").update({ read: true }).eq("id", n.id);
+            setNotifications(prev => prev.filter(x => x.id !== n.id));
+          }} className="text-white/30 hover:text-white text-lg shrink-0">✕</button>
+        </div>
+      ))
+    )}
+  </div>
+)}
 
         {newMatches.length > 0 && (
           <div className="mb-6">
