@@ -42,16 +42,17 @@ export default function ChatPage() {
   const ka = lang !== "en";
   const L = (k: string, e: string) => ka ? k : e;
 
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
   const { anonId: ctxAnonId } = useUser();
   const [ctxReady, setCtxReady] = useState(false);
-
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [myId, setMyId] = useState<string | null>(null);
   const [myAnonId, setMyAnonId] = useState<string | null>(null);
   const loadingRef = useRef(false);
-  const [selectedMatchId, setSelectedMatchId] = useState<string|null>(null);
-  const longPressRef = useRef<NodeJS.Timeout|null>(null);
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const longPressRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (ctxAnonId !== null && !ctxReady) setCtxReady(true);
@@ -91,32 +92,25 @@ export default function ChatPage() {
     (profilesRes.data ?? []).forEach((p: any) => profileMap.set(p.user_id, p));
 
     const allMsgs = msgsRes.data;
-
     const lastMsgMap = new Map<string, any>();
     const unreadMap = new Map<string, number>();
+
     for (const msg of (allMsgs ?? [])) {
       if (!lastMsgMap.has(msg.match_id)) lastMsgMap.set(msg.match_id, msg);
-  
-
-if (anonId && msg.sender_anon !== anonId) {
-  if (!unreadMap.has(msg.match_id)) {
-    // მხოლოდ ბოლო მესიჯი ამოწმებს (desc order-ით პირველი = ბოლო)
-    unreadMap.set(msg.match_id, !msg.read_at ? 1 : 0);
-  }
-}
-
+      if (anonId && msg.sender_anon !== anonId) {
+        if (!unreadMap.has(msg.match_id)) {
+          unreadMap.set(msg.match_id, !msg.read_at ? 1 : 0);
+        }
+      }
     }
 
     const result: Match[] = [];
-
     for (const row of rows) {
       const otherId = row.user_a === uid ? row.user_b : row.user_a;
       const profile = profileMap.get(otherId);
       if (!profile) continue;
-
       const lastMsg = lastMsgMap.get(row.id);
       const unreadCount = unreadMap.get(row.id) ?? 0;
-
       result.push({
         ...row,
         _unreadCount: unreadCount,
@@ -146,6 +140,14 @@ if (anonId && msg.sender_anon !== anonId) {
       setMyId(uid);
       setMyAnonId(ctxAnonId);
       await loadMatches(uid, ctxAnonId);
+
+      const { data: notifs } = await supabase
+        .from("notifications")
+        .select("*")
+        .eq("user_id", uid)
+        .neq("read", true)
+        .order("created_at", { ascending: false });
+      setNotifications(notifs ?? []);
     })();
   }, [ctxReady]);
 
@@ -167,11 +169,9 @@ if (anonId && msg.sender_anon !== anonId) {
           };
         }));
       })
-
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "matches" }, (payload) => {
-  setMatches(prev => prev.filter(m => String(m.id) !== String(payload.old.id)));
-})
-
+        setMatches(prev => prev.filter(m => String(m.id) !== String(payload.old.id)));
+      })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, (payload) => {
         const msg = payload.new as any;
         if (msg.read_at) {
@@ -193,8 +193,7 @@ if (anonId && msg.sender_anon !== anonId) {
       if (!b.last_message_time) return -1;
       return new Date(b.last_message_time).getTime() - new Date(a.last_message_time).getTime();
     });
-const totalUnread = matches.reduce((sum, m) => sum + (m._unreadCount > 0 ? 1 : 0), 0);
-
+  const totalUnread = matches.reduce((sum, m) => sum + (m._unreadCount > 0 ? 1 : 0), 0);
 
   if (loading) return (
     <main className="min-h-[100dvh] bg-black text-white pb-28">
@@ -226,19 +225,56 @@ const totalUnread = matches.reduce((sum, m) => sum + (m._unreadCount > 0 ? 1 : 0
 
         <div className="flex items-center justify-between mb-5">
           <h1 className="text-2xl font-extrabold">{L("ჩათი", "Messages")}</h1>
-          {totalUnread > 0 && (
-            <span className="rounded-full bg-pink-500 px-3 py-1 text-xs font-black text-white">
-              {totalUnread > 99 ? "99+" : totalUnread} {L("ახალი", "new")}
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {totalUnread > 0 && (
+              <span className="rounded-full bg-pink-500 px-3 py-1 text-xs font-black text-white">
+                {totalUnread > 99 ? "99+" : totalUnread} {L("ახალი", "new")}
+              </span>
+            )}
+            <button
+              onClick={() => setShowNotifications(v => !v)}
+              className="relative w-10 h-10 flex items-center justify-center rounded-full bg-white/8 hover:bg-white/12 transition"
+            >
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              {notifications.length > 0 && (
+                <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
+                  {notifications.length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
+
+        {showNotifications && (
+          <div className="mb-4 space-y-2">
+            {notifications.length === 0 ? (
+              <div className="text-center text-white/40 text-sm py-3">შეტყობინება არ არის</div>
+            ) : (
+              notifications.map(n => (
+                <div key={n.id} className="flex items-start gap-3 rounded-2xl bg-zinc-800/80 border border-white/8 px-4 py-3">
+                  <span className="text-xl shrink-0 mt-0.5">💔</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-white">Unmatch მოხდა</div>
+                    <div className="text-xs text-white/50 mt-0.5">{n.message}</div>
+                  </div>
+                  <button onClick={async () => {
+                    await supabase.from("notifications").update({ read: true }).eq("id", n.id);
+                    setNotifications(prev => prev.filter(x => x.id !== n.id));
+                  }} className="text-white/30 hover:text-white text-lg shrink-0">✕</button>
+                </div>
+              ))
+            )}
+          </div>
+        )}
 
         {newMatches.length > 0 && (
           <div className="mb-6">
             <h2 className="text-xs text-white/40 uppercase tracking-wider mb-3">{L("ახალი შეხვედრები", "New Matches")}</h2>
             <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
               {newMatches.map(m => {
-const name = m.other.first_name ?? m.other.nickname ?? "User";
+                const name = m.other.first_name ?? m.other.nickname ?? "User";
                 const isOnline = !!onlineText(m.other.last_seen ?? null, ka);
                 return (
                   <div key={m.id} className="flex flex-col items-center min-w-[68px] cursor-pointer shrink-0"
@@ -263,7 +299,7 @@ const name = m.other.first_name ?? m.other.nickname ?? "User";
             <h2 className="text-xs text-white/40 uppercase tracking-wider mb-3">{L("მიმოწერა", "Messages")}</h2>
             <div className="flex flex-col gap-0.5" style={{ WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none", touchAction: "manipulation" }}>
               {conversations.map(m => {
-const name = m.other.first_name ?? m.other.nickname ?? "User";
+                const name = m.other.first_name ?? m.other.nickname ?? "User";
                 const isOnline = !!onlineText(m.other.last_seen ?? null, ka);
                 const isMine = m.last_sender_anon && m.last_sender_anon === myAnonId;
                 return (
@@ -283,9 +319,9 @@ const name = m.other.first_name ?? m.other.nickname ?? "User";
                     )}
                     <div className="relative shrink-0">
                       {photoSrc(m.other.photo1_url)
-                      ? <img src={photoSrc(m.other.photo1_url)} alt="" className="w-14 h-14 rounded-full object-cover"
-                          onError={e => { const t = e.target as HTMLImageElement; t.style.display="none"; t.parentElement && (t.parentElement.innerHTML = "<div class=\"w-14 h-14 rounded-full bg-zinc-700 flex items-center justify-center text-xl\">👤</div>"); }} />
-                      : <div className="w-14 h-14 rounded-full bg-zinc-700 flex items-center justify-center text-xl">👤</div>}
+                        ? <img src={photoSrc(m.other.photo1_url)} alt="" className="w-14 h-14 rounded-full object-cover"
+                            onError={e => { const t = e.target as HTMLImageElement; t.style.display="none"; t.parentElement && (t.parentElement.innerHTML = "<div class=\"w-14 h-14 rounded-full bg-zinc-700 flex items-center justify-center text-xl\">👤</div>"); }} />
+                        : <div className="w-14 h-14 rounded-full bg-zinc-700 flex items-center justify-center text-xl">👤</div>}
                       {isOnline && <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-400 border-2 border-black" />}
                       {m._unreadCount > 0 && (
                         <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-pink-500 px-1 text-[10px] font-black text-white text-center leading-[18px]">
@@ -325,6 +361,7 @@ const name = m.other.first_name ?? m.other.nickname ?? "User";
             </button>
           </div>
         )}
+
       </div>
       <BottomNav />
     </main>
