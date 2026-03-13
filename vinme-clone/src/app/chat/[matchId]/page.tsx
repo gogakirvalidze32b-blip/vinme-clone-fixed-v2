@@ -350,6 +350,7 @@ export default function ChatThreadPage() {
   const [uploadingImg, setUploadingImg] = useState(false);
   const [imagePreview, setImagePreview] = useState<{file: File, url: string} | null>(null);
 
+
   useEffect(() => { if (ctxAnonId && !myAnonId) setMyAnonId(ctxAnonId); }, [ctxAnonId]);
 
   useEffect(() => {
@@ -507,13 +508,13 @@ export default function ChatThreadPage() {
     setUploadingImg(false);
   }
 
-  async function send() {
-    const t2 = text.trim();
-    if (!t2 || !myAnonId || sending || sendingRef.current) return;
-    
-    sendingRef.current = true;
-    setSending(true); 
-    setText("");
+ async function send() {
+  const t2 = text.trim();
+  if (!t2 || !myAnonId || sendingRef.current) return;
+  sendingRef.current = true;
+  setSending(true);
+  setText("");
+  // დანარჩენი კოდი...
     
     const tempId = `temp-${Date.now()}-${Math.random()}`;
     const replyPreview = replyTo ? (replyTo.type==="voice"?"🎤 Voice":replyTo.type==="image"?"📷 Photo":replyTo.content.slice(0,60)) : null;
@@ -638,9 +639,10 @@ export default function ChatThreadPage() {
   const effectiveAnonId = myAnonId ?? myAnonIdRef.current;
 
 return (
-  <div className="fixed inset-0 bg-[#111] flex justify-center overflow-hidden">
+  <div className="fixed inset-0 bg-[#111] flex justify-center overflow-hidden"
+    style={{ height: "100svh" }}>
     <div className="w-full max-w-lg flex flex-col bg-[#111] text-white overflow-hidden"
-      style={{ height: "100dvh" }}>
+      style={{ height: "100svh" }}>
         {/* HEADER - FIXED */}
 <div className="flex items-center gap-3 px-4 py-3 bg-zinc-950 border-b border-white/8 shrink-0"
   style={{ position: "sticky", top: 0, zIndex: 10 }}>
