@@ -269,8 +269,7 @@ const name = p?.first_name ?? p?.nickname ?? "User";
   if (loading) return <div className="h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
 
   return (
-    <div className="bg-black text-white min-h-[100dvh]">
-      <div className="mx-auto w-full max-w-lg">
+<div className="bg-black text-white" style={{ minHeight: "100dvh", overflowY: "auto" }}>      <div className="mx-auto w-full max-w-lg">
 
         {/* HEADER */}
         <div className="sticky top-0 z-20 bg-black/90 backdrop-blur border-b border-white/8 px-4 py-3">
@@ -307,7 +306,7 @@ const name = p?.first_name ?? p?.nickname ?? "User";
           <PreviewTab p={{ ...p, bio, city, job_title: jobTitle, company, education, gender, orientation, intent, pets, drinking, smoking, workout }} lang={lang} />
         ) : (
           /* ====== EDIT ====== */
-          <div className="px-4 pt-4 space-y-6" style={{ paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))" }}>
+<div className="px-4 pt-4 space-y-6 overflow-y-auto" style={{ paddingBottom: "calc(140px + env(safe-area-inset-bottom, 0px))" }}>
 
             {/* PHOTOS */}
             <Section title={L("ფოტოები", "Photos")}>
