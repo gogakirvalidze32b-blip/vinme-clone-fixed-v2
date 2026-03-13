@@ -650,8 +650,7 @@ useEffect(() => {
   }
 async function handleUnmatchConfirm(reason: string) {
   setShowUnmatchModal(false);
-    console.log("🔥 handleUnmatchConfirm called, reason:", reason);
-  console.log("myUserId:", myUserId, "otherUserId:", otherUserId);
+   
   
   const isReport = reason === "შეურაცხმყოფელი ქცევა" || reason === "სპამი ან ყალბი პროფილი" ||
                    reason === "Offensive behavior" || reason === "Spam or fake profile";
@@ -672,6 +671,8 @@ async function handleUnmatchConfirm(reason: string) {
         user_id: otherUserId,
         type: "unmatch",
         message: reason,
+          from_user: myUserId  // ← დაამატე
+
       });
     } catch {}
   }
