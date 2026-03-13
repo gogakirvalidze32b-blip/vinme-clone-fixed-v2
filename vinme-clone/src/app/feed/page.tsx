@@ -149,11 +149,15 @@ export default function FeedPage() {
     await loadTop(me);
   };
 
-  const distanceKm = useMemo(() => {
-    if (!me?.latitude || !me?.longitude) return undefined;
-    if (!top?.latitude || !top?.longitude) return undefined;
-    return haversineKm(me.latitude, me.longitude, top.latitude, top.longitude);
-  }, [me, top]);
+const distanceKm = useMemo(() => {
+  if (!me?.latitude || !me?.longitude) return undefined;
+  if (!top?.latitude || !top?.longitude) return undefined;
+  console.log("me:", me.latitude, me.longitude);
+  console.log("top:", top.latitude, top.longitude);
+  const d = haversineKm(me.latitude, me.longitude, top.latitude, top.longitude);
+  console.log("distance:", d);
+  return d;
+}, [me, top]);
 
   const cardUser = useMemo(() => {
     if (!top) return null;

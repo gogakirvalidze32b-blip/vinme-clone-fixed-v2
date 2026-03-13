@@ -142,11 +142,11 @@ export default function UserProfilePage() {
                   <span className="text-3xl font-black drop-shadow">{name}</span>
                   {age && <span className="text-3xl font-light text-white/85 drop-shadow">{age}</span>}
                 </div>
-                {(distanceKm != null || profile.city) && (
-                  <div className="flex items-center gap-1 text-sm text-white/70 mt-0.5">
-                    📍 {distanceKm != null ? `${distanceKm} ${ka ? "კმ-ით შორს" : "km away"}` : profile.city}
-                  </div>
-                )}
+              {(distanceKm != null || profile.city) && (
+  <div className="flex items-center gap-1 text-sm text-white/70 mt-0.5">
+    📍 {profile.city}{distanceKm != null ? ` · ${distanceKm} ${ka ? "კმ" : "km"}` : ""}
+  </div>
+)}
               </div>
               {/* ↑ arrow — Tinder style */}
               <button
