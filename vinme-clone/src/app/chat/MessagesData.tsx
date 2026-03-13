@@ -40,9 +40,9 @@ export default function MessagesClient() {
   const [latestByMatch, setLatestByMatch] = useState<Record<number, MsgRow | null>>({});
   const [unreadByMatch, setUnreadByMatch] = useState<Record<number, number>>({});
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [q, setQ] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -71,12 +71,13 @@ export default function MessagesClient() {
 
         const userIds = Array.from(new Set(mm.flatMap((m) => [m.user_a, m.user_b])));
 
-        const { data: profiles } = await supabase
-          .from("profiles").select("user_id, nickname, first_name, photo1_url").in("user_id", userIds);
-
-        const map: Record<string, ProfileRow> = {};
-        (profiles ?? []).forEach((p) => (map[p.user_id] = p));
-        setProfilesByUser(map);
+        if (userIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from("profiles").select("user_id, nickname, first_name, photo1_url").in("user_id", userIds);
+          const map: Record<string, ProfileRow> = {};
+          (profiles ?? []).forEach((p) => (map[p.user_id] = p));
+          setProfilesByUser(map);
+        }
 
         const matchIds = mm.map((m) => m.id);
         if (matchIds.length === 0) {
@@ -91,23 +92,21 @@ export default function MessagesClient() {
 
           const latest: Record<number, MsgRow | null> = {};
           const unread: Record<number, number> = {};
-
           mm.forEach((m) => { latest[m.id] = null; unread[m.id] = 0; });
-
           (msgs ?? []).forEach((msg) => {
             if (!latest[msg.match_id]) latest[msg.match_id] = msg;
             if (!msg.read_at && msg.sender_anon !== me?.anon_id) unread[msg.match_id]++;
           });
-
           if (!cancelled) { setLatestByMatch(latest); setUnreadByMatch(unread); }
         }
 
-       const { data: notifs } = await supabase
-  .from("notifications")
-  .select("*")
-  .eq("user_id", user.id)
-  .neq("read", true)
-  .order("created_at", { ascending: false });
+        const { data: notifs } = await supabase
+          .from("notifications")
+          .select("*")
+          .eq("user_id", user.id)
+          .neq("read", true)
+          .order("created_at", { ascending: false });
+        if (!cancelled) setNotifications(notifs ?? []);
 
       } catch (e: any) {
         if (!cancelled) setErr(e?.message ?? "Load failed");
@@ -154,38 +153,52 @@ export default function MessagesClient() {
   );
 
   return (
-    <main className="h-[100dvh] bg-black text-white pb-28">
-      <div className="mx-auto w-full max-w-md px-4 pt-4 space-y-3">
+    <main className="h-[100dvh] bg-black text-white pb-28 overflow-y-auto">
 
-        {notifications.map(n => (
-          <div key={n.id} className="flex items-center gap-3 rounded-2xl bg-zinc-800/80 border border-white/8 px-4 py-3">
-            <span className="text-2xl shrink-0">💔</span>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold text-white">Unmatch მოხდა</div>
-              <div className="text-xs text-white/50 mt-0.5">{n.message}</div>
-            </div>
-            <button onClick={async () => {
-              await supabase.from("notifications").update({ read: true }).eq("id", n.id);
-              setNotifications(prev => prev.filter(x => x.id !== n.id));
-            }} className="text-white/30 hover:text-white text-lg shrink-0">✕</button>
-          </div>
-        ))}
+      {/* HEADER */}
+      <div className="sticky top-0 z-10 bg-black/90 backdrop-blur px-4 pt-4 pb-3 flex items-center justify-between">
+        <h1 className="text-xl font-extrabold">ჩათი</h1>
+        <button
+          onClick={() => setShowNotifications(v => !v)}
+          className="relative w-10 h-10 flex items-center justify-center rounded-full bg-white/8 hover:bg-white/12 transition"
+        >
+          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+          </svg>
+          {notifications.length > 0 && (
+            <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
+              {notifications.length}
+            </span>
+          )}
+        </button>
+      </div>
 
-{notifications.map(n => (
-          <div key={n.id} className="flex items-center gap-3 rounded-2xl bg-zinc-800/80 border border-white/8 px-4 py-3">
-            <span className="text-2xl shrink-0">💔</span>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold text-white">Unmatch მოხდა</div>
-              <div className="text-xs text-white/50 mt-0.5">{n.message}</div>
-            </div>
-            <button onClick={async () => {
-              await supabase.from("notifications").update({ read: true }).eq("id", n.id);
-              setNotifications(prev => prev.filter(x => x.id !== n.id));
-            }} className="text-white/30 hover:text-white text-lg shrink-0">✕</button>
-          </div>
-        ))}
+      {/* NOTIFICATIONS PANEL */}
+      {showNotifications && (
+        <div className="mx-auto w-full max-w-md px-4 pb-2 space-y-2">
+          {notifications.length === 0 ? (
+            <div className="text-center text-white/40 text-sm py-4">შეტყობინება არ არის</div>
+          ) : (
+            notifications.map(n => (
+              <div key={n.id} className="flex items-start gap-3 rounded-2xl bg-zinc-800/80 border border-white/8 px-4 py-3">
+                <span className="text-xl shrink-0 mt-0.5">💔</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-white">Unmatch მოხდა</div>
+                  <div className="text-xs text-white/50 mt-0.5">{n.message}</div>
+                </div>
+                <button onClick={async () => {
+                  await supabase.from("notifications").update({ read: true }).eq("id", n.id);
+                  setNotifications(prev => prev.filter(x => x.id !== n.id));
+                }} className="text-white/30 hover:text-white text-lg shrink-0">✕</button>
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
-        {matchesWithMessages.length === 0 && notifications.length === 0 && (
+      {/* CHAT LIST */}
+      <div className="mx-auto w-full max-w-md px-4 space-y-3">
+        {matchesWithMessages.length === 0 && (
           <div className="text-center text-white/60 mt-20">No chats yet</div>
         )}
 
