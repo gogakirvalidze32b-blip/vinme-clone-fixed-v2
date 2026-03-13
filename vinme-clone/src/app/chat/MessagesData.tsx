@@ -99,14 +99,29 @@ export default function MessagesClient() {
           });
           if (!cancelled) { setLatestByMatch(latest); setUnreadByMatch(unread); }
         }
+const { data: notifs } = await supabase
+  .from("notifications")
+  .select("*")
+  .eq("user_id", uid)
+  .neq("read", true)
+  .order("created_at", { ascending: false });
 
-        const { data: notifs } = await supabase
-          .from("notifications")
-          .select("*")
-          .eq("user_id", user.id)
-          .neq("read", true)
-          .order("created_at", { ascending: false });
-        if (!cancelled) setNotifications(notifs ?? []);
+const fromUserIds = (notifs ?? []).map((n: any) => n.from_user).filter(Boolean);
+let fromProfiles: Record<string, string> = {};
+if (fromUserIds.length > 0) {
+  const { data: fps } = await supabase
+    .from("profiles")
+    .select("user_id, first_name, nickname")
+    .in("user_id", fromUserIds);
+  (fps ?? []).forEach((p: any) => {
+    fromProfiles[p.user_id] = p.first_name ?? p.nickname ?? "ვინმე";
+  });
+}
+
+setNotifications((notifs ?? []).map((n: any) => ({
+  ...n,
+  from_name: fromProfiles[n.from_user] ?? "ვინმე"
+})));
 
       } catch (e: any) {
         if (!cancelled) setErr(e?.message ?? "Load failed");
