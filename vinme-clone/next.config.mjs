@@ -6,6 +6,12 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  compress: true,
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "*.supabase.co" },
+    ],
+  },
   experimental: {
     optimizeCss: true,
   },

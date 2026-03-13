@@ -6,6 +6,7 @@ import { photoSrc } from "@/lib/photos";
 import MatchModal from "./MatchModal";
 import { supabase } from "@/lib/supabase";
 import { getLang, t } from "@/lib/i18n";
+import Image from "next/image";
 
 type CardUser = {
   user_id: string;
@@ -132,11 +133,15 @@ export default function TinderCard({
           onPointerCancel={onPointerUp}
         >
           {/* PHOTO */}
-          {imgSrc
-            ? <img src={imgSrc} alt="" draggable={false} onDragStart={e => e.preventDefault()}
-className="absolute inset-0 w-full h-full object-cover object-center select-none pointer-events-none" />
-            : <div className="absolute inset-0 bg-zinc-800 flex items-center justify-center text-7xl">👤</div>
-          }
+       {imgSrc
+  ? <Image src={imgSrc} alt="" fill draggable={false}
+      className="object-cover object-center select-none pointer-events-none"
+      onDragStart={e => e.preventDefault()}
+      sizes="(max-width: 460px) 100vw, 460px"
+      priority
+      unoptimized={false} />
+  : <div className="absolute inset-0 bg-zinc-800 flex items-center justify-center text-7xl">👤</div>
+}
 
           {/* GRADIENT — ქვემოდან */}
           <div className="absolute inset-0 bg-gradient-to-b from-transparent from-50% to-black/85" />
