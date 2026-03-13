@@ -31,12 +31,15 @@ type Props = {
   externalShowMatch?: boolean;
   onCloseMatch?: () => void;
   onOpenChat?: () => void;
+  matchedUserName?: string;
+  matchedUserPhoto?: string | null;
 };
 
 export default function TinderCard({
   user, otherUserId, myProfile, loading,
   onLike, onSkip, onOpenProfile,
   externalMatchId, externalShowMatch, onCloseMatch, onOpenChat,
+  matchedUserName, matchedUserPhoto,
 }: Props) {
   const router = useRouter();
   const lang = getLang();
@@ -233,16 +236,16 @@ onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()}>
       </div>
 
       {/* MATCH MODAL */}
-      {externalShowMatch && externalMatchId && (
-        <MatchModal
-          onClose={onCloseMatch ?? (() => {})}
-          onOpenChat={onOpenChat ?? (() => {})}
-          meName={myProfile?.nickname ?? myProfile?.first_name ?? "Me"}
-          myPhoto={myProfile?.photo1_url ?? null}
-          matchName={otherUser?.nickname ?? otherUser?.first_name ?? "Someone"}
-          theirPhoto={otherUser?.photo1_url ?? null}
-        />
-      )}
+{externalShowMatch && externalMatchId && (
+  <MatchModal
+    onClose={onCloseMatch ?? (() => {})}
+    onOpenChat={onOpenChat ?? (() => {})}
+    meName={myProfile?.first_name ?? myProfile?.nickname ?? "Me"}
+    myPhoto={myProfile?.photo1_url ?? null}
+    matchName={matchedUserName ?? otherUser?.first_name ?? otherUser?.nickname ?? "Someone"}
+    theirPhoto={matchedUserPhoto ?? otherUser?.photo1_url ?? null}
+  />
+)}
     </div>
   );
 }

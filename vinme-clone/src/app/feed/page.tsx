@@ -23,6 +23,7 @@ export default function FeedPage() {
   const [matchId, setMatchId] = useState<string | null>(null);
   const [showMatch, setShowMatch] = useState(false);
   const loadingTopRef = useRef(false);
+const [matchedUser, setMatchedUser] = useState<any>(null);
 
   const saveLocation = useCallback(async (uid: string) => {
     if (!navigator.geolocation) return;
@@ -126,14 +127,18 @@ export default function FeedPage() {
     return created?.id ? String(created.id) : null;
   }
 
-  const onLike = async () => {
-    if (!me || !top) return;
-    await supabase.from("swipes").insert({ from_id: me.user_id, to_id: top.user_id, action: "like" });
-    const mid = await checkAndCreateMatch(me.user_id, top.user_id);
-    if (mid) { setMatchId(mid); setShowMatch(true); }
-      setTop(null); // ← დაამატე, ძველი კარტი მაშინვე გაქრეს
-    await loadTop(me);
-  };
+const onLike = async () => {
+  if (!me || !top) return;
+  await supabase.from("swipes").insert({ from_id: me.user_id, to_id: top.user_id, action: "like" });
+  const mid = await checkAndCreateMatch(me.user_id, top.user_id);
+  if (mid) {
+    setMatchedUser(top); // ← match მოხდა, top შევინახოთ
+    setMatchId(mid);
+    setShowMatch(true);
+  }
+  setTop(null);
+  await loadTop(me);
+};
 
   const onSkip = async () => {
     if (!me || !top) return;
