@@ -888,45 +888,45 @@ export default function ChatThreadPage() {
             <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
               onChange={e => { const f = e.target.files?.[0]; if (f) setImagePreview({ file: f, url: URL.createObjectURL(f) }); e.target.value=""; }} />
 
-            {!recording && (
-              <div className="flex items-center gap-1.5 px-3 py-2"
-                style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 8px)" }}>
-                {!hasFocusOrText ? (
-                  <button onClick={() => setShowAttachSheet(true)}
-                    className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90 text-xl">
-                    +
-                  </button>
-                ) : null}
+     {!recording && (
+  <div className="flex items-center gap-1.5 px-3 py-2"
+    style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 8px)" }}>
+    {!hasFocusOrText ? (
+      <button onClick={() => setShowAttachSheet(true)}
+        className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90 text-xl">
+        +
+      </button>
+    ) : null}
 
-                <div className="flex-1 flex items-center bg-zinc-800 rounded-full px-4 py-2.5 gap-2 min-w-0 border-0 outline-none ring-0">
-                  <input ref={inputRef} value={text}
-                    onChange={e => setText(e.target.value)}
-                    onFocus={() => { setFocused(true); setShowEmoji(false); }}
-                    onBlur={() => { setTimeout(() => { if (!text.trim() && !showEmoji) setFocused(false); }, 150); }}
-                    autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
-                    onKeyDown={e => { if (e.key==="Enter" && !e.shiftKey && !sending) { e.preventDefault(); send(); } }}
-                    placeholder={ka?"მესიჯი...":"Message..."} />
-                </div>
+    <div className="flex-1 flex items-center bg-zinc-800 rounded-full px-4 py-2.5 gap-2 min-w-0 border-0 outline-none ring-0">
+        <input ref={inputRef} value={text}
+        onChange={e => setText(e.target.value)}
+        onFocus={() => { setFocused(true); setShowEmoji(false); }}
+        onBlur={() => { setTimeout(() => { if (!text.trim() && !showEmoji) setFocused(false); }, 150); }}
+        autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
+        onKeyDown={e => { if (e.key==="Enter" && !e.shiftKey && !sending) { e.preventDefault(); send(); } }}
+        placeholder={ka?"მესიჯი...":"Message..."} />
+    </div>
 
-                {text.trim() ? (
-                  <button onClick={send} disabled={sending}
-                    className="shrink-0 w-10 h-10 rounded-full bg-[#7C3AED] flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
-                  </button>
-                ) : audioBlob ? (
-                  <button onClick={sendVoice} disabled={uploadingVoice}
-                    className="shrink-0 w-10 h-10 rounded-full bg-[#7C3AED] flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg">
-                    {uploadingVoice ? <span className="text-xs text-white">⏳</span>
-                      : <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>}
-                  </button>
-                ) : (
-                  <button onClick={e => { e.stopPropagation(); setShowEmoji(p => !p); }}
-                    className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition text-xl">
-                    🙂
-                  </button>
-                )}
-              </div>
-            )}
+    {text.trim() ? (
+      <button onClick={send} disabled={sending}
+        className="shrink-0 w-10 h-10 rounded-full bg-[#7C3AED] flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+      </button>
+    ) : audioBlob ? (
+      <button onClick={sendVoice} disabled={uploadingVoice}
+        className="shrink-0 w-10 h-10 rounded-full bg-[#7C3AED] flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg">
+        {uploadingVoice ? <span className="text-xs text-white">⏳</span>
+          : <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>}
+      </button>
+    ) : (
+      <button onClick={e => { e.stopPropagation(); setShowEmoji(p => !p); }}
+        className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition text-xl">
+        🙂
+      </button>
+    )}
+  </div>
+)}
           </div>
         </div>
       </div>
