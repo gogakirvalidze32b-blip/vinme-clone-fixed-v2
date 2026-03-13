@@ -25,31 +25,31 @@ export default function FeedPage() {
   const [matchedUser, setMatchedUser] = useState<any>(null);
   const loadingTopRef = useRef(false);
   const meRef = useRef<any>(null);
+const saveLocation = useCallback(async (uid: string) => {
+  if (!navigator.geolocation) return;
 
-  const saveLocation = useCallback(async (uid: string) => {
-    if (!navigator.geolocation) return;
-    const { data: existing } = await supabase
-      .from("profiles").select("latitude,longitude,city").eq("user_id", uid).maybeSingle();
-    if (existing?.latitude && existing?.longitude && existing?.city) return;
-    navigator.geolocation.getCurrentPosition(async (pos) => {
-      const lat = pos.coords.latitude;
-      const lon = pos.coords.longitude;
-      let city = "";
-      try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
-          { headers: { "Accept-Language": "ka" } }
-        );
-        const json = await res.json();
-        city = json.address?.city ?? json.address?.town ?? json.address?.village ?? json.address?.county ?? "";
-      } catch {}
-      await supabase.from("profiles").update({ latitude: lat, longitude: lon, city }).eq("user_id", uid);
-      setMe((prev: any) => prev ? { ...prev, latitude: lat, longitude: lon, city } : prev);
-    }, (err) => { console.error("Geolocation error:", err); }, {
-      enableHighAccuracy: true, timeout: 10000, maximumAge: 0
-    });
-  }, []);
-
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const lat = pos.coords.latitude;
+    const lon = pos.coords.longitude;
+    let city = "";
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
+        { headers: { "Accept-Language": "ka" } }
+      );
+      const json = await res.json();
+      city = json.address?.city ?? json.address?.town ?? json.address?.village ?? json.address?.county ?? "";
+    } catch {}
+    await supabase.from("profiles").update({ latitude: lat, longitude: lon, city }).eq("user_id", uid);
+    setMe((prev: any) => prev ? { ...prev, latitude: lat, longitude: lon, city } : prev);
+  }, (err) => {
+    console.error("Geolocation error:", err);
+  }, {
+    enableHighAccuracy: true,
+    timeout: 10000,
+    maximumAge: 0
+  });
+}, []);
   const loadMe = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
     const user = data.session?.user;
