@@ -140,7 +140,7 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-[100dvh] bg-zinc-950 text-white flex justify-center">
-      <div className="w-full max-w-lg flex flex-col min-h-[100dvh]">
+  <div className="w-full max-w-lg">
 
         {/* HEADER */}
         <div className="sticky top-0 z-20 bg-zinc-950/90 backdrop-blur border-b border-white/8 px-4 py-3 flex items-center gap-3">
@@ -150,8 +150,7 @@ export default function SettingsPage() {
           <h1 className="text-lg font-extrabold flex-1">{L("პარამეტრები", "Settings")}</h1>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 pt-3" style={{ paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))" }}>
-
+<div className="px-4 pt-3" style={{ paddingBottom: "calc(140px + env(safe-area-inset-bottom, 0px))" }}>
           {/* SCHEDULED DELETION BANNER */}
           {scheduledDeletion && (
             <div className="mt-2 rounded-2xl bg-red-500/15 ring-1 ring-red-500/30 p-4 flex items-center justify-between gap-3">
