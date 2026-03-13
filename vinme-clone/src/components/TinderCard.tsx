@@ -57,12 +57,13 @@ export default function TinderCard({
   const imgSrc = useMemo(() => photoSrc(user?.photo1_url ?? user?.photo_url ?? null),
     [user?.photo1_url, user?.photo_url]);
 
-  useEffect(() => {
-    if (!otherUserId) return;
-    supabase.from("profiles").select("user_id,first_name,nickname,photo1_url")
-      .eq("user_id", otherUserId).maybeSingle()
-      .then(({ data }) => setOtherUser(data ?? null));
-  }, [otherUserId]);
+ useEffect(() => {
+  if (!otherUserId) { setOtherUser(null); return; }
+  setOtherUser(null); // ← გასუფთავე ძველი
+  supabase.from("profiles").select("user_id,first_name,nickname,photo1_url")
+    .eq("user_id", otherUserId).maybeSingle()
+    .then(({ data }) => setOtherUser(data ?? null));
+}, [otherUserId]);
 
   if (loading === true) return <TinderSkeleton />;
   if (!user) return <TinderEmpty onOpenProfile={onOpenProfile} lang={lang} />;

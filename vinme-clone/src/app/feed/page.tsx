@@ -177,10 +177,10 @@ export default function FeedPage() {
           onLike={onLike}
           onSkip={onSkip}
           onOpenProfile={() => cardUser && router.push(`/profile/${cardUser.user_id}`)}
-          externalMatchId={matchId}
-          externalShowMatch={showMatch}
-          onCloseMatch={() => setShowMatch(false)}
-          onOpenChat={() => matchId && router.push(`/chat/${matchId}`)}
+      externalMatchId={matchId}
+externalShowMatch={showMatch}
+onCloseMatch={() => { setShowMatch(false); setMatchId(null); }}
+onOpenChat={() => matchId && router.push(`/chat/${matchId}`)}
         />
       </div>
       <BottomNav />
