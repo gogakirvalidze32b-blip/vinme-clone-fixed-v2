@@ -358,7 +358,7 @@ export default function ChatThreadPage() {
 
   const myAnonIdRef = useRef<string|null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const sendingRef = useRef(false);
+async function send() {
 
 
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -1010,4 +1010,5 @@ const mine = myAnonId ? m.sender_anon === myAnonId : false;
       )}
     </>
   );
+}
 }
