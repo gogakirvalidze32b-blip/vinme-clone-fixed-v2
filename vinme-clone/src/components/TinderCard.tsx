@@ -68,6 +68,7 @@ export default function TinderCard({
     .then(({ data }) => setOtherUser(data ?? null));
 }, [otherUserId]);
 
+  if (loading === true) return <TinderSkeleton />;
   if (!user) return <TinderEmpty onOpenProfile={onOpenProfile} lang={lang} />;
 
   function onPointerDown(e: React.PointerEvent) {
@@ -90,7 +91,7 @@ export default function TinderCard({
     setAnimating(true);
     setX(action === "like" ? window.innerWidth : -window.innerWidth);
     setRot(action === "like" ? 15 : -15);
-    await new Promise((r) => setTimeout(r, 120));
+    await new Promise((r) => setTimeout(r, 220));
     try {
       if (action === "like") await onLike?.();
       else await onSkip?.();
@@ -260,6 +261,21 @@ function ActionBtn({ size, color, onClick, disabled, children, style }: {
       style={{ ...style, background: `${color}18`, borderWidth: 2, borderStyle: "solid", borderColor: `${color}60`, color, backdropFilter: "blur(8px)" }}>
       {children}
     </button>
+  );
+}
+
+function TinderSkeleton() {
+  return (
+    <div className="w-full flex flex-col items-center bg-black" style={{ height: "100dvh" }}>
+      <div className="flex-1 flex items-start justify-center pt-2 px-2 w-full">
+        <div className="w-full max-w-[460px] bg-zinc-900 animate-pulse rounded-xl" style={{ height: "min(calc(100dvh - 148px), 620px)" }} />
+      </div>
+      <div className="shrink-0 flex gap-4 py-3 pb-20 items-center justify-center">
+        {[12, 16, 12, 16, 12].map((s, i) => (
+          <div key={i} className="rounded-full bg-zinc-800 animate-pulse" style={{ width: `${s * 4}px`, height: `${s * 4}px` }} />
+        ))}
+      </div>
+    </div>
   );
 }
 
