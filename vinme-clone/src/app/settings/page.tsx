@@ -236,19 +236,19 @@ export default function SettingsPage() {
                 type="range" min={18} max={80} value={ageMin}
                 onChange={e => setAgeMin(Math.min(+e.target.value, ageMax - 1))}
                 className="w-full h-1.5 rounded-full appearance-none cursor-pointer mb-3"
-                style={{
-                  background: `linear-gradient(to right, rgba(255,255,255,0.1) ${((ageMin - 18) / 62) * 100}%, #f43f5e ${((ageMin - 18) / 62) * 100}%, #f43f5e ${((ageMax - 18) / 62) * 100}%, rgba(255,255,255,0.1) ${((ageMax - 18) / 62) * 100}%)`,
-                  accentColor: "#f43f5e"
-                }}
+               style={{
+  background: `linear-gradient(to right, #f43f5e ${((ageMin - 18) / 62) * 100}%, rgba(255,255,255,0.1) ${((ageMin - 18) / 62) * 100}%)`,
+  accentColor: "#f43f5e"
+}}
               />
               <input
                 type="range" min={18} max={80} value={ageMax}
                 onChange={e => setAgeMax(Math.max(+e.target.value, ageMin + 1))}
                 className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
-                style={{
-                  background: `linear-gradient(to right, rgba(255,255,255,0.1) ${((ageMin - 18) / 62) * 100}%, #f43f5e ${((ageMin - 18) / 62) * 100}%, #f43f5e ${((ageMax - 18) / 62) * 100}%, rgba(255,255,255,0.1) ${((ageMax - 18) / 62) * 100}%)`,
-                  accentColor: "#f43f5e"
-                }}
+              style={{
+  background: `linear-gradient(to right, #f43f5e ${((ageMax - 18) / 62) * 100}%, rgba(255,255,255,0.1) ${((ageMax - 18) / 62) * 100}%)`,
+  accentColor: "#f43f5e"
+}}
               />
               <div className="flex justify-between text-xs text-white/30 mt-1.5">
                 <span>18</span>
