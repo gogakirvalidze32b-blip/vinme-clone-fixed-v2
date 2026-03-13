@@ -24,81 +24,82 @@ export default function FeedPage() {
   const [showMatch, setShowMatch] = useState(false);
   const loadingTopRef = useRef(false);
 
- const saveLocation = useCallback(async (uid: string) => {
-  if (!navigator.geolocation) return;
+  const saveLocation = useCallback(async (uid: string) => {
+    if (!navigator.geolocation) return;
 
-  const { data: existing } = await supabase
-    .from("profiles").select("latitude,longitude,city").eq("user_id", uid).maybeSingle();
-  if (existing?.latitude && existing?.longitude && existing?.city) return;
+    const { data: existing } = await supabase
+      .from("profiles").select("latitude,longitude,city").eq("user_id", uid).maybeSingle();
+    if (existing?.latitude && existing?.longitude && existing?.city) return;
 
-  navigator.geolocation.getCurrentPosition(async (pos) => {
-    const lat = pos.coords.latitude;
-    const lon = pos.coords.longitude;
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
 
-    let city = "";
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
-        { headers: { "Accept-Language": "ka" } }
-      );
-      const json = await res.json();
-      city = json.address?.city ?? json.address?.town ?? json.address?.village ?? json.address?.county ?? "";
-    } catch {}
+      let city = "";
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
+          { headers: { "Accept-Language": "ka" } }
+        );
+        const json = await res.json();
+        city = json.address?.city ?? json.address?.town ?? json.address?.village ?? json.address?.county ?? "";
+      } catch {}
 
-    await supabase.from("profiles").update({ latitude: lat, longitude: lon, city }).eq("user_id", uid);
-    
-    // ✅ setMe განახლება coordinates-ით რომ distanceKm სწორად დაითვალოს
-    setMe((prev: any) => prev ? { ...prev, latitude: lat, longitude: lon, city } : prev);
-  }, (err) => {
-    console.error("Geolocation error:", err);
-  }, {
-    enableHighAccuracy: true,
-    timeout: 10000,
-    maximumAge: 0
-  });
-}, []);
+      await supabase.from("profiles").update({ latitude: lat, longitude: lon, city }).eq("user_id", uid);
+      setMe((prev: any) => prev ? { ...prev, latitude: lat, longitude: lon, city } : prev);
+    }, (err) => {
+      console.error("Geolocation error:", err);
+    }, {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 0
+    });
+  }, []);
 
   const loadMe = useCallback(async () => {
-  const { data } = await supabase.auth.getSession();
-  const user = data.session?.user;
-  if (!user) { router.replace("/login"); return null; }
-  const { data: row } = await supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle();
-  
-  if (row) {
-    await saveLocation(user.id);
-    const { data: updated } = await supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle();
-    setMe(updated ?? row);
-    return updated ?? row;
-  }
-  
-  setMe(row);
-  return row;
-}, [router, saveLocation]);
+    const { data } = await supabase.auth.getSession();
+    const user = data.session?.user;
+    if (!user) { router.replace("/login"); return null; }
 
-const loadTop = useCallback(async (myProfile: any) => {
-  if (loadingTopRef.current) return;
-  loadingTopRef.current = true;
+    const { data: row } = await supabase
+      .from("profiles")
+      .select("user_id,anon_id,seeking,gender,age,first_name,nickname,photo1_url,last_seen,latitude,longitude,city,onboarding_completed")
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-  const myId = myProfile.user_id;
-  const seeking = myProfile.seeking ?? "everyone";
-  const myGender = myProfile.gender ?? null;
+    setMe(row);
 
-  const { data: swiped } = await supabase.from("swipes").select("to_id").eq("from_id", myId);
-  const excludedIds = swiped?.map((s: any) => s.to_id) ?? [];
+    // ლოკაცია background-ში — არ ელოდება
+    if (row) saveLocation(user.id);
 
-  let query = supabase.from("profiles").select("*")
-    .eq("onboarding_completed", true)
-    .neq("user_id", myId)
-    .not("photo1_url", "is", null);
+    return row;
+  }, [router, saveLocation]);
 
-  if (seeking !== "everyone") query = query.eq("gender", seeking);
-  if (myGender) query = query.or(`seeking.eq.everyone,seeking.eq.${myGender}`);
-  if (excludedIds.length > 0) query = query.not("user_id", "in", `(${excludedIds.join(",")})`);
+  const loadTop = useCallback(async (myProfile: any) => {
+    if (loadingTopRef.current) return;
+    loadingTopRef.current = true;
 
-  const { data } = await query.order("created_at", { ascending: false }).limit(1).maybeSingle();
-  setTop(data ?? null);
-  loadingTopRef.current = false;
-}, []);
+    const myId = myProfile.user_id;
+    const seeking = myProfile.seeking ?? "everyone";
+    const myGender = myProfile.gender ?? null;
+
+    const { data: swiped } = await supabase.from("swipes").select("to_id").eq("from_id", myId);
+    const excludedIds = swiped?.map((s: any) => s.to_id) ?? [];
+
+    let query = supabase.from("profiles")
+      .select("user_id,first_name,nickname,age,city,photo1_url,last_seen,latitude,longitude,seeking,gender,onboarding_completed")
+      .eq("onboarding_completed", true)
+      .neq("user_id", myId)
+      .not("photo1_url", "is", null);
+
+    if (seeking !== "everyone") query = query.eq("gender", seeking);
+    if (myGender) query = query.or(`seeking.eq.everyone,seeking.eq.${myGender}`);
+    if (excludedIds.length > 0) query = query.not("user_id", "in", `(${excludedIds.join(",")})`);
+
+    const { data } = await query.order("created_at", { ascending: false }).limit(1).maybeSingle();
+    setTop(data ?? null);
+    loadingTopRef.current = false;
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -164,8 +165,8 @@ const loadTop = useCallback(async (myProfile: any) => {
   );
 
   return (
-  <div className="bg-black min-h-screen flex justify-center">
-    <div className="w-full max-w-lg relative" style={{ height: "100dvh" }}>
+    <div className="bg-black min-h-screen flex justify-center">
+      <div className="w-full max-w-lg relative" style={{ height: "100dvh" }}>
         <TinderCard
           key={cardUser?.id ?? "empty"}
           user={cardUser}
