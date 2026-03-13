@@ -34,19 +34,24 @@ const saveLocation = useCallback(async (uid: string) => {
     let city = "";
     try {
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
-        { headers: { "Accept-Language": "ka" } }
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=10&addressdetails=1`,
+        { headers: { "Accept-Language": "ka" }, signal: AbortSignal.timeout(5000) }
       );
-      const json = await res.json();
-      city = json.address?.city ?? json.address?.town ?? json.address?.village ?? json.address?.county ?? "";
-    } catch {}
+      if (res.ok) {
+        const json = await res.json();
+        // ჯერ city, მერე village, მერე town, მერე county
+        city = json.address?.city || json.address?.town || json.address?.village || json.address?.county || "";
+      }
+    } catch (err) {
+      console.log("Geocoding failed, using defaults");
+    }
     await supabase.from("profiles").update({ latitude: lat, longitude: lon, city }).eq("user_id", uid);
     setMe((prev: any) => prev ? { ...prev, latitude: lat, longitude: lon, city } : prev);
   }, (err) => {
     console.error("Geolocation error:", err);
   }, {
     enableHighAccuracy: true,
-    timeout: 10000,
+    timeout: 5000,
     maximumAge: 0
   });
 }, []);
@@ -152,10 +157,7 @@ const saveLocation = useCallback(async (uid: string) => {
 const distanceKm = useMemo(() => {
   if (!me?.latitude || !me?.longitude) return undefined;
   if (!top?.latitude || !top?.longitude) return undefined;
-  console.log("me:", me.latitude, me.longitude);
-  console.log("top:", top.latitude, top.longitude);
   const d = haversineKm(me.latitude, me.longitude, top.latitude, top.longitude);
-  console.log("distance:", d);
   return d;
 }, [me, top]);
 
@@ -172,10 +174,6 @@ const distanceKm = useMemo(() => {
       photo1_url: top.photo1_url,
     };
   }, [top, distanceKm]);
-
-  if (loading) return (
-    <div className="flex h-[100dvh] items-center justify-center bg-black text-white">Loading…</div>
-  );
 
   return (
     <div className="bg-black min-h-screen flex justify-center">
