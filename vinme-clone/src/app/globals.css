@@ -85,3 +85,9 @@ input:focus {
   box-shadow: none !important;
   border: none !important;
 }
+
+body {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+}

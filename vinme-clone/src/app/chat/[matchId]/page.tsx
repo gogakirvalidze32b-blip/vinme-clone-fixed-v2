@@ -638,8 +638,8 @@ export default function ChatThreadPage() {
   const effectiveAnonId = myAnonId ?? myAnonIdRef.current;
 
 return (
-  <div className="fixed inset-0 bg-[#111] flex justify-center">
-    <div className="w-full max-w-lg flex flex-col bg-[#111] text-white"
+  <div className="fixed inset-0 bg-[#111] flex justify-center overflow-hidden">
+    <div className="w-full max-w-lg flex flex-col bg-[#111] text-white overflow-hidden"
       style={{ height: "100dvh" }}>
         {/* HEADER - FIXED */}
         <div className="flex items-center gap-3 px-4 py-3 bg-zinc-950 border-b border-white/8 shrink-0">
