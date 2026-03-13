@@ -188,7 +188,7 @@ export default function UserProfilePage() {
 
             <div className="rounded-2xl bg-zinc-900 ring-1 ring-white/8 divide-y divide-white/5 overflow-hidden">
               {profile.gender && <InfoRow icon="⚧" label={ka?"სქესი":"Gender"} value={ka?(GENDER_KA[profile.gender]??profile.gender):(GENDER_EN[profile.gender]??profile.gender)} />}
-              {profile.orientation && <InfoRow icon="🏳️‍🌈" label={ka?"ორიენტაცია":"Orientation"} value={ka?(ORIENT_KA[profile.orientation]??profile.orientation):(ORIENT_EN[profile.orientation]??profile.orientation)} />}
+              {profile.orientation && <InfoRow icon="" label={ka?"ორიენტაცია":"Orientation"} value={ka?(ORIENT_KA[profile.orientation]??profile.orientation):(ORIENT_EN[profile.orientation]??profile.orientation)} />}
               {profile.intent && <InfoRow icon="🎯" label={ka?"მიზანი":"Looking for"} value={ka?(INTENT_KA[profile.intent]??profile.intent):(INTENT_EN[profile.intent]??profile.intent)} />}
               {profile.job_title && <InfoRow icon="💼" label={ka?"სამსახური":"Job"} value={`${profile.job_title}${profile.company?" · "+profile.company:""}`} />}
               {profile.education && <InfoRow icon="🎓" label={ka?"განათლება":"Education"} value={profile.education} />}
