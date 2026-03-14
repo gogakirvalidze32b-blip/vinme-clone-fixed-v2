@@ -84,7 +84,6 @@ function ReactionBar({ msgId, myAnonId, reactions, onReact, onClose, mine }: {
     </div>
   );
 }
-
 function ReactionsDisplay({ msgId, reactions, myAnonId, mine, onReact }: {
   msgId: string; reactions: Reaction[]; myAnonId: string; mine: boolean;
   onReact: (msgId: string, emoji: string) => void;
@@ -94,19 +93,19 @@ function ReactionsDisplay({ msgId, reactions, myAnonId, mine, onReact }: {
   const grouped: Record<string, number> = {};
   msgReactions.forEach(r => { grouped[r.emoji] = (grouped[r.emoji] ?? 0) + 1; });
   return (
-    <div className={`flex w-full ${mine?"justify-end":"justify-start"}`}>
-      {Object.entries(grouped).map(([emoji, count]) => {
-        const isMine = msgReactions.some(r => r.emoji === emoji && r.sender_anon === myAnonId);
-        return (
-          <button key={emoji} onClick={() => onReact(msgId, emoji)}
-            className={`flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs transition active:scale-90 ${
-              isMine ? "bg-[#7C3AED]/40 ring-1 ring-[#7C3AED]" : "bg-zinc-700/80 ring-1 ring-white/10"
-            }`}>
-            <span style={{ fontSize: 14 }}>{emoji}</span>
-            {count > 1 && <span className="text-white/70 font-medium">{count}</span>}
-          </button>
-        );
-      })}
+    <div className="flex w-full justify-end pr-2 -mt-2 relative z-10">
+      <div className="flex items-center gap-0.5 bg-zinc-700 rounded-full px-2 py-0.5 shadow-lg">
+        {Object.entries(grouped).map(([emoji, count]) => {
+          const isMine = msgReactions.some(r => r.emoji === emoji && r.sender_anon === myAnonId);
+          return (
+            <button key={emoji} onClick={() => onReact(msgId, emoji)}
+              className={`flex items-center gap-0.5 text-xs transition active:scale-90 ${isMine ? "opacity-100" : "opacity-70"}`}>
+              <span style={{ fontSize: 14 }}>{emoji}</span>
+              {count > 1 && <span className="text-white/70 font-medium">{count}</span>}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
