@@ -361,21 +361,24 @@ const [keyboardHeight, setKeyboardHeight] = useState(0);
       setSelectedMsgId(null);
     };
   }, []);
-
- useEffect(() => {
+useEffect(() => {
   const vv = window.visualViewport;
   if (!vv) return;
   
   function onResize() {
-    const kbHeight = Math.max(0, window.innerHeight - vv!.height);
+    const kbHeight = Math.max(0, window.innerHeight - vv!.height - vv!.offsetTop);
     setKeyboardHeight(kbHeight);
     if (kbHeight > 0) {
-      bottomRef.current?.scrollIntoView({ behavior: "instant" });
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "instant" }), 50);
     }
   }
   
   vv.addEventListener("resize", onResize);
-  return () => vv.removeEventListener("resize", onResize);
+  vv.addEventListener("scroll", onResize);
+  return () => {
+    vv.removeEventListener("resize", onResize);
+    vv.removeEventListener("scroll", onResize);
+  };
 }, []);
 
   const isOnline = useMemo(() => {
@@ -689,10 +692,7 @@ return (
 
         {/* MESSAGES - SCROLLABLE */}
 <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3"
-  style={{ 
-    overscrollBehavior: "none",
-    paddingBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : undefined 
-  }}>
+  style={{ overscrollBehavior: "none" }}>
   <div className="flex flex-col justify-end min-h-full space-y-0.5">
 
             {msgs.map((m, i) => {
