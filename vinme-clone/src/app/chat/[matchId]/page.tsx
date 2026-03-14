@@ -665,8 +665,9 @@ return (
         </div>
 
         {/* MESSAGES - SCROLLABLE */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3">
-          <div className="space-y-0.5">
+       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3"
+  style={{ overscrollBehavior: "none" }}>
+  <div className="space-y-0.5">
             {msgs.map((m, i) => {
               if (!myAnonId) return null;                
               const mine = myAnonId ? m.sender_anon === myAnonId : false;
