@@ -91,3 +91,8 @@ input:focus {
   position: fixed;
   width: 100%;
 } */
+
+
+html {
+  overscroll-behavior: none;
+}

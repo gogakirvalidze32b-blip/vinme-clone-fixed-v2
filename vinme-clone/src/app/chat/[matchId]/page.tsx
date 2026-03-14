@@ -475,6 +475,12 @@ const [keyboardHeight, setKeyboardHeight] = useState(0);
     bottomRef.current?.scrollIntoView({ behavior: "instant" });
   }, [msgs.length, isLoaded]);
 
+  useEffect(() => {
+  if (keyboardHeight > 0) {
+    bottomRef.current?.scrollIntoView({ behavior: "instant" });
+  }
+}, [keyboardHeight]);
+
   async function handleReact(msgId: string, emoji: string) {
     if (!myAnonId) return;
     setReactionMsgId(null);
