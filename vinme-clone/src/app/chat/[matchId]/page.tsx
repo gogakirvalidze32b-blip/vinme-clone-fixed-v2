@@ -782,25 +782,23 @@ ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
             <div ref={bottomRef} />
           </div>
         </div>
-
-   {/* INPUT BAR - FIXED */}
-<div className="shrink-0 bg-zinc-950 border-t border-white/8"
-  style={{ paddingBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : undefined }}>
+{/* INPUT BAR - FIXED */}
+<div className="shrink-0 bg-zinc-950 border-t border-white/8">
 
   {showEmoji && (
     <QuickEmojiPicker onPick={e => setText(p => p + e)} onClose={() => setShowEmoji(false)} />
   )}
-          {replyTo && (
-            <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2 rounded-2xl bg-zinc-800 border-l-2 border-[#7C3AED]">
-              <div className="flex-1 min-w-0">
-                <div className="text-xs text-[#A78BFA] font-semibold mb-0.5">↩ {ka?"პასუხი":"Reply"}</div>
-                <div className="text-xs text-white/60 truncate">
-                  {replyTo.type==="voice"?"🎤 Voice":replyTo.type==="image"?"📷 Photo":replyTo.content.slice(0,60)}
-                </div>
-              </div>
-              <button onClick={() => setReplyTo(null)} className="text-white/40 hover:text-white text-lg shrink-0">✕</button>
-            </div>
-          )}
+  {replyTo && (
+    <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2 rounded-2xl bg-zinc-800 border-l-2 border-[#7C3AED]">
+      <div className="flex-1 min-w-0">
+        <div className="text-xs text-[#A78BFA] font-semibold mb-0.5">↩ {ka?"პასუხი":"Reply"}</div>
+        <div className="text-xs text-white/60 truncate">
+          {replyTo.type==="voice"?"🎤 Voice":replyTo.type==="image"?"📷 Photo":replyTo.content.slice(0,60)}
+        </div>
+      </div>
+      <button onClick={() => setReplyTo(null)} className="text-white/40 hover:text-white text-lg shrink-0">✕</button>
+    </div>
+  )}
 
           {recording && (
             <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2.5 rounded-2xl bg-red-500/10 border border-red-500/20">
