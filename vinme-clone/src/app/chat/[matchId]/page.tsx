@@ -538,15 +538,14 @@ async function handleReact(msgId: string, emoji: string) {
       await supabase.from("message_reactions").update({ emoji }).eq("id", existing.id);
     }
 } else {
-  await supabase.from("message_reactions")
+  const tempId = `r-${Date.now()}`;
+  setReactions(prev => [...prev, { id: tempId, message_id: msgId, sender_anon: myAnonId, emoji }]);
+  const { data } = await supabase.from("message_reactions")
     .upsert({ message_id: msgId, sender_anon: myAnonId, emoji }, 
-      { onConflict: "message_id,sender_anon" });
-  const { data: allReactions } = await supabase
-    .from("message_reactions").select("*").eq("message_id", msgId);
-  setReactions(prev => [
-    ...prev.filter(r => r.message_id !== msgId),
-    ...(allReactions ?? [])
-  ]);
+      { onConflict: "message_id,sender_anon" })
+    .select().single();
+  if (data) setReactions(prev => prev.map(r => r.id === tempId ? data as Reaction : r));
+}
 }
 
   function onMsgPointerDown(msgId: string, mine: boolean) {
@@ -919,5 +918,4 @@ async function handleReact(msgId: string, emoji: string) {
       )}
     </div>
   );
-}
 }
