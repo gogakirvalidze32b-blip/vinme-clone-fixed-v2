@@ -785,6 +785,7 @@ ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
           </div>
         </div>
 {/* INPUT BAR - FIXED */}
+{/* INPUT BAR - FIXED */}
 <div className="shrink-0 bg-zinc-950 border-t border-white/8"
   style={{ paddingBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : undefined }}>
 
