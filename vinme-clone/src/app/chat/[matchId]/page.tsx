@@ -94,8 +94,8 @@ function ReactionsDisplay({ msgId, reactions, myAnonId, mine, onReact }: {
   const grouped: Record<string, number> = {};
   msgReactions.forEach(r => { grouped[r.emoji] = (grouped[r.emoji] ?? 0) + 1; });
   return (
-<div className="flex w-full justify-end pr-2">
-        {Object.entries(grouped).map(([emoji, count]) => {
+    <div className={`flex w-full ${mine?"justify-end":"justify-start"}`}>
+      {Object.entries(grouped).map(([emoji, count]) => {
         const isMine = msgReactions.some(r => r.emoji === emoji && r.sender_anon === myAnonId);
         return (
           <button key={emoji} onClick={() => onReact(msgId, emoji)}
@@ -526,25 +526,27 @@ useEffect(() => {
     }
   }, [keyboardHeight]);
 
-  async function handleReact(msgId: string, emoji: string) {
-    if (!myAnonId) return;
-    setReactionMsgId(null);
-    const existing = reactions.find(r => r.message_id === msgId && r.sender_anon === myAnonId);
-    if (existing) {
-      if (existing.emoji === emoji) {
-        setReactions(prev => prev.filter(r => r.id !== existing.id));
-        await supabase.from("message_reactions").delete().eq("id", existing.id);
-      } else {
-        setReactions(prev => prev.map(r => r.id === existing.id ? { ...r, emoji } : r));
-        await supabase.from("message_reactions").update({ emoji }).eq("id", existing.id);
-      }
+async function handleReact(msgId: string, emoji: string) {
+  if (!myAnonId) return;
+  setReactionMsgId(null);
+  const existing = reactions.find(r => r.message_id === msgId && r.sender_anon === myAnonId);
+  if (existing) {
+    if (existing.emoji === emoji) {
+      setReactions(prev => prev.filter(r => r.id !== existing.id));
+      await supabase.from("message_reactions").delete().eq("id", existing.id);
     } else {
-      const tempId = `r-${Date.now()}`;
-      setReactions(prev => [...prev, { id: tempId, message_id: msgId, sender_anon: myAnonId, emoji }]);
-      const { data } = await supabase.from("message_reactions").insert({ message_id: msgId, sender_anon: myAnonId, emoji }).select().single();
-      if (data) setReactions(prev => prev.map(r => r.id === tempId ? data as Reaction : r));
+      setReactions(prev => prev.map(r => r.id === existing.id ? { ...r, emoji } : r));
+      await supabase.from("message_reactions").update({ emoji }).eq("id", existing.id);
     }
+  } else {
+    const tempId = `r-${Date.now()}`;
+    setReactions(prev => [...prev, { id: tempId, message_id: msgId, sender_anon: myAnonId, emoji }]);
+    const { data } = await supabase.from("message_reactions")
+      .upsert({ message_id: msgId, sender_anon: myAnonId, emoji }, { onConflict: "message_id,sender_anon" })
+      .select().single();
+    if (data) setReactions(prev => prev.map(r => r.id === tempId ? data as Reaction : r));
   }
+}
 
   function onMsgPointerDown(msgId: string, mine: boolean) {
     longPressTimer.current = setTimeout(() => {
