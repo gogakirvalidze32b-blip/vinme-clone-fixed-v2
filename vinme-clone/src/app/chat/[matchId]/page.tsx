@@ -366,7 +366,7 @@ useEffect(() => {
   if (!vv) return;
   
   function onResize() {
-    const kbHeight = Math.max(0, window.screen.height - vv!.height - vv!.pageTop);
+    const kbHeight = Math.max(0, window.innerHeight - vv!.height);
     setKeyboardHeight(kbHeight);
     if (kbHeight > 0) {
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "instant" }), 50);
@@ -374,11 +374,7 @@ useEffect(() => {
   }
   
   vv.addEventListener("resize", onResize);
-  vv.addEventListener("scroll", onResize);
-  return () => {
-    vv.removeEventListener("resize", onResize);
-    vv.removeEventListener("scroll", onResize);
-  };
+  return () => vv.removeEventListener("resize", onResize);
 }, []);
 
   const isOnline = useMemo(() => {
