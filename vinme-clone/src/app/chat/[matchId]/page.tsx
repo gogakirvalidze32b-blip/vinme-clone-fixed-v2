@@ -68,7 +68,8 @@ function ReactionBar({ msgId, myAnonId, reactions, onReact, onClose, mine }: {
 }) {
   const emojis = ["❤️", "😂", "😮", "😢", "😡", "👍"];
   return (
-    <div className={`absolute bottom-full mb-2 z-50 flex items-center gap-1 bg-zinc-800 rounded-full px-3 py-2 shadow-2xl ring-1 ring-white/10 ${mine ? "right-0" : "left-0"}`}
+    <div
+      className={`absolute bottom-full mb-2 z-50 flex items-center gap-1 bg-zinc-800 rounded-full px-3 py-2 shadow-2xl ring-1 ring-white/10 ${mine ? "right-0" : "left-0"}`}
       onClick={e => e.stopPropagation()}>
       {emojis.map(e => {
         const active = reactions.some(r => r.message_id === msgId && r.sender_anon === myAnonId && r.emoji === e);
@@ -116,6 +117,7 @@ function UnmatchModal({ onClose, onConfirm, ka }: {
   const [selected, setSelected] = useState<string|null>(null);
   const [feedback, setFeedback] = useState("");
 
+
   function isRealText(text: string): boolean {
     if (text.length < 10) return false;
     const unique = new Set(text.toLowerCase().replace(/\s/g, "")).size;
@@ -162,6 +164,9 @@ function UnmatchModal({ onClose, onConfirm, ka }: {
             placeholder={ka ? "ან დაწერე უკუკავშირი (მინ. 10 სიმბოლო)..." : "Or write feedback (min. 10 chars)..."}
             rows={3}
             className="w-full rounded-2xl bg-white/8 border border-white/10 px-4 py-3 text-sm text-white placeholder-white/30 outline-none resize-none focus:border-white/30" />
+          {feedback.length >= 3 && !isRealText(feedback) && !selected && (
+            <p className="text-xs text-red-400 px-1">{ka ? "გთხოვ ნამდვილი ტექსტი დაწერო" : "Please write meaningful feedback"}</p>
+          )}
         </div>
         <div className="px-4 pb-8 pt-2 flex gap-3">
           <button onClick={onClose} className="flex-1 rounded-2xl bg-white/8 py-3.5 text-sm font-semibold text-white/70">
@@ -304,7 +309,7 @@ export default function ChatThreadPage() {
   const lang = getLang();
   const ka = lang !== "en";
   const { anonId: ctxAnonId } = useUser();
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const [msgs, setMsgs] = useState<MsgRow[]>([]);
   const [reactions, setReactions] = useState<Reaction[]>([]);
@@ -347,6 +352,7 @@ export default function ChatThreadPage() {
   const [uploadingImg, setUploadingImg] = useState(false);
   const [imagePreview, setImagePreview] = useState<{file: File, url: string} | null>(null);
 
+
   useEffect(() => { if (ctxAnonId && !myAnonId) setMyAnonId(ctxAnonId); }, [ctxAnonId]);
 
   useEffect(() => {
@@ -356,21 +362,21 @@ export default function ChatThreadPage() {
     };
   }, []);
 
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-    
-    function onResize() {
-      const kbHeight = Math.max(0, window.innerHeight - vv!.height);
-      setKeyboardHeight(kbHeight);
-      if (kbHeight > 0) {
-        bottomRef.current?.scrollIntoView({ behavior: "instant" });
-      }
+ useEffect(() => {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  
+  function onResize() {
+    const kbHeight = Math.max(0, window.innerHeight - vv!.height);
+    setKeyboardHeight(kbHeight);
+    if (kbHeight > 0) {
+      bottomRef.current?.scrollIntoView({ behavior: "instant" });
     }
-    
-    vv.addEventListener("resize", onResize);
-    return () => vv.removeEventListener("resize", onResize);
-  }, []);
+  }
+  
+  vv.addEventListener("resize", onResize);
+  return () => vv.removeEventListener("resize", onResize);
+}, []);
 
   const isOnline = useMemo(() => {
     if (!otherProfile?.last_seen) return false;
@@ -469,10 +475,10 @@ export default function ChatThreadPage() {
   }, [msgs.length, isLoaded]);
 
   useEffect(() => {
-    if (keyboardHeight > 0) {
-      bottomRef.current?.scrollIntoView({ behavior: "instant" });
-    }
-  }, [keyboardHeight]);
+  if (keyboardHeight > 0) {
+    bottomRef.current?.scrollIntoView({ behavior: "instant" });
+  }
+}, [keyboardHeight]);
 
   async function handleReact(msgId: string, emoji: string) {
     if (!myAnonId) return;
@@ -526,12 +532,13 @@ export default function ChatThreadPage() {
     setUploadingImg(false);
   }
 
-  async function send() {
-    const t2 = text.trim();
-    if (!t2 || !myAnonId || sendingRef.current) return;
-    sendingRef.current = true;
-    setSending(true);
-    setText("");
+ async function send() {
+  const t2 = text.trim();
+  if (!t2 || !myAnonId || sendingRef.current) return;
+  sendingRef.current = true;
+  setSending(true);
+  setText("");
+  // დანარჩენი კოდი...
     
     const tempId = `temp-${Date.now()}-${Math.random()}`;
     const replyPreview = replyTo ? (replyTo.type==="voice"?"🎤 Voice":replyTo.type==="image"?"📷 Photo":replyTo.content.slice(0,60)) : null;
@@ -594,11 +601,13 @@ export default function ChatThreadPage() {
 
   async function handleUnmatchConfirm(reason: string) {
     setShowUnmatchModal(false);
-    const isReport = reason === "შეურაცხმყოფელი ქ�ევა" || reason === "სპამი ან ყალბი პროფილი" ||
+    const isReport = reason === "შეურაცხმყოფელი ქცევა" || reason === "სპამი ან ყალბი პროფილი" ||
                      reason === "Offensive behavior" || reason === "Spam or fake profile";
+
     try {
       await supabase.from("unmatch_feedback").insert({ from_user: myUserId, to_user: otherUserId, match_id: matchId, reason });
     } catch {}
+
     if (isReport) {
       try {
         await supabase.from("reports").insert({ from_user: myUserId, to_user: otherUserId, match_id: matchId, reason });
@@ -613,6 +622,7 @@ export default function ChatThreadPage() {
         });
       } catch {}
     }
+
     try { await supabase.from("messages").delete().eq("match_id", matchId); } catch {}
     try { await supabase.from("matches").delete().eq("id", matchId); } catch {}
     window.location.href = "/chat";
@@ -652,16 +662,22 @@ export default function ChatThreadPage() {
 
   const effectiveAnonId = myAnonId ?? myAnonIdRef.current;
 
-  return (
-    <div className="fixed inset-0 bg-[#111] flex justify-center overflow-hidden">
-      <div className="w-full max-w-lg flex flex-col bg-[#111] text-white overflow-hidden" style={{ height: "100svh" }}>
-        
-        {/* HEADER - FIXED TOP */}
-        <div className="flex items-center gap-3 px-4 py-3 bg-zinc-950 border-b border-white/8 shrink-0" style={{ position: "sticky", top: 0, zIndex: 10 }}>
-          <button onClick={() => { setReactionMsgId(null); setSelectedMsgId(null); router.push("/chat"); }}
-            className="rounded-full bg-white/8 w-9 h-9 flex items-center justify-center text-white shrink-0 hover:bg-white/12 transition">←</button>
-          <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => otherUserId && router.push(`/profile/${otherUserId}`)}>
-            <div className="relative shrink-0">
+return (
+  <div className="fixed inset-0 bg-[#111] flex justify-center overflow-hidden">
+    <div className="w-full max-w-lg flex flex-col bg-[#111] text-white overflow-hidden"
+      style={{ 
+        height: "100svh",
+        transform: `translateY(-${keyboardHeight}px)`,
+        transition: "transform 0ms"
+      }}>
+        {/* HEADER - FIXED */}
+<div className="flex items-center gap-3 px-4 py-3 bg-zinc-950 border-b border-white/8 shrink-0"
+    style={{ position: "sticky", top: 0, zIndex: 10, transform: "translateZ(0)" }}>
+  <button onClick={() => { setReactionMsgId(null); setSelectedMsgId(null); router.push("/chat"); }}
+    className="rounded-full bg-white/8 w-9 h-9 flex items-center justify-center text-white shrink-0 hover:bg-white/12 transition">←</button>
+  <div className="flex items-center gap-3 flex-1 cursor-pointer"
+    onClick={() => otherUserId && router.push(`/profile/${otherUserId}`)}>
+    <div className="relative shrink-0">
               <SafeImg src={avatar} className="w-10 h-10 rounded-full object-cover ring-2 ring-white/10"
                 fallback={<div className="w-10 h-10 rounded-full bg-zinc-700 flex items-center justify-center text-sm">👤</div>} />
               {isOnline && <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-400 border-2 border-zinc-950" />}
@@ -675,52 +691,11 @@ export default function ChatThreadPage() {
             className="w-9 h-9 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/8 transition shrink-0 text-lg font-bold tracking-widest">···</button>
         </div>
 
-        {/* INPUT BAR - ABOVE MESSAGES */}
-        <div className="shrink-0 bg-zinc-950 border-b border-white/8" style={{ paddingBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : undefined }}>
-          {showEmoji && <QuickEmojiPicker onPick={e => setText(p => p + e)} onClose={() => setShowEmoji(false)} />}
-          {replyTo && (
-            <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2 rounded-2xl bg-zinc-800 border-l-2 border-[#7C3AED]">
-              <div className="flex-1 min-w-0">
-                <div className="text-xs text-[#A78BFA] font-semibold mb-0.5">↩ {ka?"პასუხი":"Reply"}</div>
-                <div className="text-xs text-white/60 truncate">{replyTo.type==="voice"?"🎤 Voice":replyTo.type==="image"?"📷 Photo":replyTo.content.slice(0,60)}</div>
-              </div>
-              <button onClick={() => setReplyTo(null)} className="text-white/40 hover:text-white text-lg shrink-0">✕</button>
-            </div>
-          )}
-          {recording && (
-            <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2.5 rounded-2xl bg-red-500/10 border border-red-500/20">
-              <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse shrink-0" />
-              <span className="text-red-400 font-bold text-sm tabular-nums shrink-0">{fmtTimer(recordTime)}</span>
-              <div className="flex-1 flex items-end gap-[2px] h-6 overflow-hidden">
-                {Array.from({length:28}).map((_,i) => (<div key={i} className="bg-red-400/60 rounded-full shrink-0" style={{width:"2px",height:`${5+((i*7+recordTime*13)%16)}px`}} />))}
-              </div>
-              <button onClick={cancelRecording} className="text-white/40 hover:text-red-400 shrink-0 px-1">🗑</button>
-              <button onClick={stopRecording} className="rounded-full bg-red-500 px-3 py-1.5 text-xs font-bold text-white shrink-0">{ka?"გაჩერება":"Stop"}</button>
-            </div>
-          )}
-          {!recording && audioBlob && audioPreviewUrl && (
-            <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2 rounded-2xl bg-zinc-800 border border-white/10">
-              <span className="text-white/70 text-xs shrink-0">🎤</span>
-              <audio controls src={audioPreviewUrl} className="flex-1 h-8" preload="auto" />
-              <button onClick={cancelRecording} className="text-white/40 hover:text-white shrink-0 text-lg leading-none">✕</button>
-            </div>
-          )}
-          <input ref={galleryInputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) setImagePreview({ file: f, url: URL.createObjectURL(f) }); e.target.value=""; }} />
-          <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) setImagePreview({ file: f, url: URL.createObjectURL(f) }); e.target.value=""; }} />
-          {!recording && (
-            <div className="flex items-center gap-1.5 px-3 py-2" style={{ paddingBottom: "env(safe-area-inset-bottom, 8px)" }}>
-              {!hasFocusOrText ? (<button onClick={() => setShowAttachSheet(true)} className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90 text-xl">+</button>) : null}
-              <div className="flex-1 flex items-center bg-zinc-800 rounded-full px-4 py-2.5 gap-2 min-w-0">
-                <input ref={inputRef} value={text} onChange={e => setText(e.target.value)} onFocus={() => setShowEmoji(false)} autoComplete="off" autoCorrect="off" autoCapitalize="sentences" onKeyDown={e => { if (e.key==="Enter" && !e.shiftKey && !sending) { e.preventDefault(); send(); } }} placeholder={ka?"მესიჯი...":"Message..."} />
-              </div>
-              {text.trim() ? (<button onClick={send} disabled={sending} className="shrink-0 w-10 h-10 rounded-full bg-[#7C3AED] flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg"><svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg></button>) : audioBlob ? (<button onClick={sendVoice} disabled={uploadingVoice} className="shrink-0 w-10 h-10 rounded-full bg-[#7C3AED] flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg">{uploadingVoice ? <span className="text-xs text-white">⏳</span> : <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>}</button>) : (<button onClick={e => { e.stopPropagation(); setShowEmoji(p => !p); }} className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition text-xl">🙂</button>)}
-            </div>
-          )}
-        </div>
+        {/* MESSAGES - SCROLLABLE */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3"
+  style={{ overscrollBehavior: "none" }}>
+  <div className="flex flex-col justify-end min-h-full space-y-0.5">
 
-        {/* MESSAGES - SCROLLABLE BELOW */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3" style={{ overscrollBehavior: "none" }}>
-          <div className="flex flex-col justify-end min-h-full space-y-0.5">
             {msgs.map((m, i) => {
               if (!myAnonId) return null;                
               const mine = myAnonId ? m.sender_anon === myAnonId : false;
@@ -734,32 +709,65 @@ export default function ChatThreadPage() {
 
               return (
                 <div key={m.id} className={`flex flex-col w-full ${mine?"items-end":"items-start"} ${prevSame?"mt-0.5":"mt-3"}`}>
-                  <div className="relative flex w-full px-2" style={{ justifyContent: mine ? "flex-end" : "flex-start" }}
-                    onMouseEnter={() => setHoveredMsgId(m.id)} onMouseLeave={() => setHoveredMsgId(null)}
-                    onPointerDown={() => onMsgPointerDown(m.id, mine)} onPointerUp={onMsgPointerUp} onPointerLeave={onMsgPointerUp} onContextMenu={e => e.preventDefault()}>
+                  <div className="relative flex w-full px-2"
+                    style={{ justifyContent: mine ? "flex-end" : "flex-start" }}
+                    onMouseEnter={() => setHoveredMsgId(m.id)}
+                    onMouseLeave={() => setHoveredMsgId(null)}
+                    onPointerDown={() => onMsgPointerDown(m.id, mine)}
+                    onPointerUp={onMsgPointerUp}
+                    onPointerLeave={onMsgPointerUp}
+                    onContextMenu={e => e.preventDefault()}>
+
                     {isHovered && !showReactionBar && (
                       <div className={`absolute top-1/2 -translate-y-1/2 flex items-center gap-1 z-20 ${mine ? "right-full pr-2" : "left-full pl-2"}`}>
-                        <button onClick={e => { e.stopPropagation(); setReplyTo(m); inputRef.current?.focus(); }} className="w-7 h-7 rounded-full bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center text-white/70 hover:text-white transition text-sm">↩</button>
-                        <button onClick={e => { e.stopPropagation(); setReactionMsgId(m.id); }} className="w-7 h-7 rounded-full bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center transition text-sm">😊</button>
-                        {mine && (<button onClick={e => { e.stopPropagation(); deleteMessage(m.id); }} className="w-7 h-7 rounded-full bg-zinc-700 hover:bg-red-500/80 flex items-center justify-center text-white/50 hover:text-white transition text-xs">🗑</button>)}
+                        <button onClick={e => { e.stopPropagation(); setReplyTo(m); inputRef.current?.focus(); }}
+                          className="w-7 h-7 rounded-full bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center text-white/70 hover:text-white transition text-sm">↩</button>
+                        <button onClick={e => { e.stopPropagation(); setReactionMsgId(m.id); }}
+                          className="w-7 h-7 rounded-full bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center transition text-sm">😊</button>
+                        {mine && (
+                          <button onClick={e => { e.stopPropagation(); deleteMessage(m.id); }}
+                            className="w-7 h-7 rounded-full bg-zinc-700 hover:bg-red-500/80 flex items-center justify-center text-white/50 hover:text-white transition text-xs">🗑</button>
+                        )}
                       </div>
                     )}
-                    {showReactionBar && (<ReactionBar msgId={m.id} myAnonId={myAnonId} reactions={reactions} mine={mine} onReact={handleReact} onClose={() => setReactionMsgId(null)} />)}
+
+                    {showReactionBar && (
+                      <ReactionBar msgId={m.id} myAnonId={myAnonId} reactions={reactions} mine={mine}
+                        onReact={handleReact} onClose={() => setReactionMsgId(null)} />
+                    )}
+
                     <div>
-                      {m.reply_preview && (<div className={`mb-1 px-3 py-1.5 rounded-xl text-xs border-l-2 border-[#7C3AED] bg-white/8 max-w-[240px] truncate text-white/60 ${mine?"ml-auto":""}`}>↩ {m.reply_preview}</div>)}
+                      {m.reply_preview && (
+                        <div className={`mb-1 px-3 py-1.5 rounded-xl text-xs border-l-2 border-[#7C3AED] bg-white/8 max-w-[240px] truncate text-white/60 ${mine?"ml-auto":""}`}>
+                          ↩ {m.reply_preview}
+                        </div>
+                      )}
+
                       {m.type === "voice" ? (
-                        <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl max-w-[270px] ${mine?"bg-[#7C3AED] rounded-tr-sm":"bg-zinc-800 rounded-tl-sm"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
+                        <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl max-w-[270px]
+                          ${mine?"bg-[#7C3AED] rounded-tr-sm":"bg-zinc-800 rounded-tl-sm"}
+                          ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
                           <span className="text-lg shrink-0">🎤</span>
                           <audio controls src={m.content} className="h-8 max-w-[160px]" preload="metadata" />
-                          <div className="flex items-center gap-0.5 shrink-0"><span className="text-[10px] text-white/40">{fmtTime(m.created_at)}</span><Ticks isTemp={isTemp} delivered={isDelivered} read={isRead} mine={mine} /></div>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <span className="text-[10px] text-white/40">{fmtTime(m.created_at)}</span>
+                            <Ticks isTemp={isTemp} delivered={isDelivered} read={isRead} mine={mine} />
+                          </div>
                         </div>
                       ) : m.type === "image" ? (
                         <div className={`rounded-2xl overflow-hidden max-w-[260px] ${mine?"rounded-tr-sm":"rounded-tl-sm"} ${isTemp?"opacity-60":""}`}>
-                          <img src={m.content} className="max-w-full max-h-[280px] object-cover block" alt="" onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
-                          {mine && (<div className="flex justify-end px-2 py-1 bg-black/20"><Ticks isTemp={isTemp} delivered={isDelivered} read={isRead} mine={mine} /></div>)}
+                          <img src={m.content} className="max-w-full max-h-[280px] object-cover block" alt=""
+                            onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
+                          {mine && (
+                            <div className="flex justify-end px-2 py-1 bg-black/20">
+                              <Ticks isTemp={isTemp} delivered={isDelivered} read={isRead} mine={mine} />
+                            </div>
+                          )}
                         </div>
                       ) : (
-                        <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words select-none ${mine?"bg-[#7C3AED] rounded-2xl rounded-tr-sm ml-8":"bg-zinc-800 rounded-2xl rounded-tl-sm mr-8"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
+                        <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words select-none
+${mine?"bg-[#7C3AED] rounded-2xl rounded-tr-sm ml-8":"bg-zinc-800 rounded-2xl rounded-tl-sm mr-8"}
+${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
                           <span>{m.content}</span>
                           <span className="inline-flex items-center gap-0.5 ml-2">
                             <span className={`text-[10px] ${mine?"text-purple-200/50":"text-white/25"}`}>{fmtTime(m.created_at)}</span>
@@ -769,6 +777,7 @@ export default function ChatThreadPage() {
                       )}
                     </div>
                   </div>
+
                   <ReactionsDisplay msgId={m.id} reactions={reactions} myAnonId={effectiveAnonId ?? ""} mine={mine} onReact={handleReact} />
                 </div>
               );
@@ -776,22 +785,122 @@ export default function ChatThreadPage() {
             <div ref={bottomRef} />
           </div>
         </div>
+{/* INPUT BAR - FIXED ჩატის ზედა პანელი*/}
+<div className="shrink-0 bg-zinc-950 border-t border-white/8"
+  style={{ paddingBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : undefined }}>
+
+  {showEmoji && (
+    <QuickEmojiPicker onPick={e => setText(p => p + e)} onClose={() => setShowEmoji(false)} />
+  )}
+  {replyTo && (
+    <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2 rounded-2xl bg-zinc-800 border-l-2 border-[#7C3AED]">
+      <div className="flex-1 min-w-0">
+        <div className="text-xs text-[#A78BFA] font-semibold mb-0.5">↩ {ka?"პასუხი":"Reply"}</div>
+        <div className="text-xs text-white/60 truncate">
+          {replyTo.type==="voice"?"🎤 Voice":replyTo.type==="image"?"📷 Photo":replyTo.content.slice(0,60)}
+        </div>
+      </div>
+      <button onClick={() => setReplyTo(null)} className="text-white/40 hover:text-white text-lg shrink-0">✕</button>
+    </div>
+  )}
+
+          {recording && (
+            <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2.5 rounded-2xl bg-red-500/10 border border-red-500/20">
+              <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+              <span className="text-red-400 font-bold text-sm tabular-nums shrink-0">{fmtTimer(recordTime)}</span>
+              <div className="flex-1 flex items-end gap-[2px] h-6 overflow-hidden">
+                {Array.from({length:28}).map((_,i) => (
+                  <div key={i} className="bg-red-400/60 rounded-full shrink-0" style={{width:"2px",height:`${5+((i*7+recordTime*13)%16)}px`}} />
+                ))}
+              </div>
+              <button onClick={cancelRecording} className="text-white/40 hover:text-red-400 shrink-0 px-1">🗑</button>
+              <button onClick={stopRecording} className="rounded-full bg-red-500 px-3 py-1.5 text-xs font-bold text-white shrink-0">{ka?"გაჩერება":"Stop"}</button>
+            </div>
+          )}
+
+          {!recording && audioBlob && audioPreviewUrl && (
+            <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2 rounded-2xl bg-zinc-800 border border-white/10">
+              <span className="text-white/70 text-xs shrink-0">🎤</span>
+              <audio controls src={audioPreviewUrl} className="flex-1 h-8" preload="auto" />
+              <button onClick={cancelRecording} className="text-white/40 hover:text-white shrink-0 text-lg leading-none">✕</button>
+            </div>
+          )}
+
+          <input ref={galleryInputRef} type="file" accept="image/*" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) setImagePreview({ file: f, url: URL.createObjectURL(f) }); e.target.value=""; }} />
+          <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) setImagePreview({ file: f, url: URL.createObjectURL(f) }); e.target.value=""; }} />
+
+          {!recording && (
+            <div className="flex items-center gap-1.5 px-3 py-2" style={{ paddingBottom: "env(safe-area-inset-bottom, 8px)" }}>
+              {!hasFocusOrText ? (
+                <button onClick={() => setShowAttachSheet(true)}
+                  className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90 text-xl">
+                  +
+                </button>
+              ) : null}
+
+              <div className="flex-1 flex items-center bg-zinc-800 rounded-full px-4 py-2.5 gap-2 min-w-0 border-0 outline-none ring-0">
+                <input ref={inputRef} value={text}
+                  onChange={e => setText(e.target.value)}
+                  onFocus={() => { setShowEmoji(false); }}
+                  autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
+                  onKeyDown={e => { if (e.key==="Enter" && !e.shiftKey && !sending) { e.preventDefault(); send(); } }}
+                  placeholder={ka?"მესიჯი...":"Message..."} />
+              </div>
+
+              {text.trim() ? (
+                <button onClick={send} disabled={sending}
+                  onMouseDown={e => e.preventDefault()}
+                  className="shrink-0 w-10 h-10 rounded-full bg-[#7C3AED] flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+                </button>
+              ) : audioBlob ? (
+                <button onClick={sendVoice} disabled={uploadingVoice}
+                  className="shrink-0 w-10 h-10 rounded-full bg-[#7C3AED] flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg">
+                  {uploadingVoice ? <span className="text-xs text-white">⏳</span>
+                    : <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>}
+                </button>
+              ) : (
+                <button onClick={e => { e.stopPropagation(); setShowEmoji(p => !p); }}
+                  className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition text-xl">
+                  🙂
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {imagePreview && (
         <div className="fixed inset-0 z-50 bg-black flex flex-col">
           <div className="flex items-center justify-between px-4 py-3" style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 12px)" }}>
             <button onClick={() => setImagePreview(null)} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white text-lg">✕</button>
-            <button onClick={async () => { const f = imagePreview.file; setImagePreview(null); await uploadImage(f); }} disabled={uploadingImg} className="w-12 h-12 rounded-full bg-[#7C3AED] flex items-center justify-center shadow-xl disabled:opacity-50 active:scale-90 transition"><svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg></button>
+            <button onClick={async () => { const f = imagePreview.file; setImagePreview(null); await uploadImage(f); }} disabled={uploadingImg}
+              className="w-12 h-12 rounded-full bg-[#7C3AED] flex items-center justify-center shadow-xl disabled:opacity-50 active:scale-90 transition">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+            </button>
           </div>
-          <div className="flex-1 flex items-center justify-center p-4"><img src={imagePreview.url} className="max-w-full max-h-full object-contain rounded-2xl" alt="" /></div>
+          <div className="flex-1 flex items-center justify-center p-4">
+            <img src={imagePreview.url} className="max-w-full max-h-full object-contain rounded-2xl" alt="" />
+          </div>
         </div>
       )}
 
-      {showMenu && <ChatMenu lang={lang} onClose={() => setShowMenu(false)} onViewProfile={() => { setShowMenu(false); otherUserId && router.push(`/profile/${otherUserId}`); }} onUnmatch={() => { setShowMenu(false); setShowUnmatchModal(true); }} onBlock={() => { setShowMenu(false); handleBlock(); }} />}
+      {showMenu && <ChatMenu lang={lang} onClose={() => setShowMenu(false)}
+        onViewProfile={() => { setShowMenu(false); otherUserId && router.push(`/profile/${otherUserId}`); }}
+        onUnmatch={() => { setShowMenu(false); setShowUnmatchModal(true); }}
+        onBlock={() => { setShowMenu(false); handleBlock(); }} />}
+
       {showUnmatchModal && <UnmatchModal ka={ka} onClose={() => setShowUnmatchModal(false)} onConfirm={handleUnmatchConfirm} />}
-      {showAttachSheet && <AttachSheet lang={lang} onClose={() => setShowAttachSheet(false)} onGallery={() => galleryInputRef.current?.click()} onCamera={() => cameraInputRef.current?.click()} />}
-      {(reactionMsgId || selectedMsgId) && (<div className="fixed inset-0 z-30" onClick={() => { setReactionMsgId(null); setSelectedMsgId(null); }} />)}
+
+      {showAttachSheet && <AttachSheet lang={lang} onClose={() => setShowAttachSheet(false)}
+        onGallery={() => galleryInputRef.current?.click()} onCamera={() => cameraInputRef.current?.click()} />}
+
+      {(reactionMsgId || selectedMsgId) && (
+        <div className="fixed inset-0 z-30" onClick={() => { setReactionMsgId(null); setSelectedMsgId(null); }} />
+      )}
     </div>
   );
 }
+    
