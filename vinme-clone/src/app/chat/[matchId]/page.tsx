@@ -366,7 +366,7 @@ useEffect(() => {
   if (!vv) return;
   
   function onResize() {
-    const kbHeight = Math.max(0, window.innerHeight - vv!.height - vv!.offsetTop);
+    const kbHeight = Math.max(0, window.screen.height - vv!.height - vv!.pageTop);
     setKeyboardHeight(kbHeight);
     if (kbHeight > 0) {
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "instant" }), 50);
