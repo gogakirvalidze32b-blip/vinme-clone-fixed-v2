@@ -94,8 +94,8 @@ function ReactionsDisplay({ msgId, reactions, myAnonId, mine, onReact }: {
   const grouped: Record<string, number> = {};
   msgReactions.forEach(r => { grouped[r.emoji] = (grouped[r.emoji] ?? 0) + 1; });
   return (
-    <div className={`flex w-full ${mine?"justify-end":"justify-start"}`}>
-      {Object.entries(grouped).map(([emoji, count]) => {
+<div className="flex w-full justify-end pr-2">
+        {Object.entries(grouped).map(([emoji, count]) => {
         const isMine = msgReactions.some(r => r.emoji === emoji && r.sender_anon === myAnonId);
         return (
           <button key={emoji} onClick={() => onReact(msgId, emoji)}
