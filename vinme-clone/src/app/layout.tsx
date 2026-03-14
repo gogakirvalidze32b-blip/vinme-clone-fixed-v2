@@ -19,7 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ka" className={notoGeo.variable}>
      <head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 </head>
       <body className="min-h-screen bg-black text-white antialiased">
         <Providers>{children}</Providers>

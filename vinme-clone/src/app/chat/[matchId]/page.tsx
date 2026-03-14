@@ -520,19 +520,11 @@ useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "instant" });
   }, [msgs.length, isLoaded]);
 
- useEffect(() => {
-  const vv = window.visualViewport;
-  if (!vv) return;
-  function onResize() {
-    const kbHeight = Math.max(0, window.innerHeight - vv!.height);
-    setKeyboardHeight(kbHeight);
-    if (kbHeight > 0) {
+  useEffect(() => {
+    if (keyboardHeight > 0) {
       bottomRef.current?.scrollIntoView({ behavior: "instant" });
     }
-  }
-  vv.addEventListener("resize", onResize);
-  return () => vv.removeEventListener("resize", onResize);
-}, []);
+  }, [keyboardHeight]);
 
   async function handleReact(msgId: string, emoji: string) {
     if (!myAnonId) return;
