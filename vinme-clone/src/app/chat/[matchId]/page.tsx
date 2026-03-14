@@ -307,7 +307,8 @@ export default function ChatThreadPage() {
   const lang = getLang();
   const ka = lang !== "en";
   const { anonId: ctxAnonId } = useUser();
-
+const swipeStartX = useRef<number>(0);
+const swipeStartY = useRef<number>(0);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [headerTop, setHeaderTop] = useState(0);
   const headerRef = useRef<HTMLDivElement>(null);
@@ -731,14 +732,28 @@ async function handleReact(msgId: string, emoji: string) {
 
               return (
                 <div key={m.id} className={`flex flex-col w-full ${mine?"items-end":"items-start"} ${prevSame?"mt-0.5":"mt-3"}`}>
-                  <div className="relative flex w-full px-2"
-                    style={{ justifyContent: mine ? "flex-end" : "flex-start" }}
-                    onMouseEnter={() => setHoveredMsgId(m.id)}
-                    onMouseLeave={() => setHoveredMsgId(null)}
-                    onPointerDown={() => onMsgPointerDown(m.id, mine)}
-                    onPointerUp={onMsgPointerUp}
-                    onPointerLeave={onMsgPointerUp}
-                    onContextMenu={e => e.preventDefault()}>
+                 <div className="relative flex w-full px-2"
+  style={{ justifyContent: mine ? "flex-end" : "flex-start" }}
+  onMouseEnter={() => setHoveredMsgId(m.id)}
+  onMouseLeave={() => setHoveredMsgId(null)}
+  onPointerDown={e => {
+    onMsgPointerDown(m.id, mine);
+    swipeStartX.current = e.clientX;
+    swipeStartY.current = e.clientY;
+  }}
+  onPointerUp={e => {
+    onMsgPointerUp();
+    const dx = e.clientX - swipeStartX.current;
+    const dy = Math.abs(e.clientY - swipeStartY.current);
+    const isSwipe = Math.abs(dx) > 50 && dy < 30;
+    const correctDir = mine ? dx < 0 : dx > 0;
+    if (isSwipe && correctDir) {
+      setReplyTo(m);
+      inputRef.current?.focus();
+    }
+  }}
+  onPointerLeave={onMsgPointerUp}
+  onContextMenu={e => e.preventDefault()}>
 
                     {isHovered && !showReactionBar && (
                       <div className={`absolute top-1/2 -translate-y-1/2 flex items-center gap-1 z-20 ${mine ? "right-full pr-2" : "left-full pl-2"}`}>
@@ -850,41 +865,51 @@ async function handleReact(msgId: string, emoji: string) {
           <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) setImagePreview({ file: f, url: URL.createObjectURL(f) }); e.target.value=""; }} />
 
-          {!recording && (
-            <div className="flex items-center gap-1.5 px-3 py-2" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)" }}>
-              {!hasFocusOrText && (
-                <button onClick={() => setShowAttachSheet(true)}
-                  className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90 text-xl">
-                  +
-                </button>
-              )}
-              <div className="flex-1 flex items-center bg-zinc-800 rounded-full px-4 py-1.5 gap-2 min-w-0">
-                <input ref={inputRef} value={text}
-                  onChange={e => setText(e.target.value)}
-                  onFocus={() => setShowEmoji(false)}
-                  autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
-                  onKeyDown={e => { if (e.key==="Enter" && !e.shiftKey && !sending) { e.preventDefault(); send(); } }}
-                  placeholder={ka?"მესიჯი...":"Message..."} />
-              </div>
-              {text.trim() ? (
-                <button onClick={send} disabled={sending} onMouseDown={e => e.preventDefault()}
-                  className="shrink-0 w-10 h-10 rounded-full bg-[#7C3AED] flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
-                </button>
-              ) : audioBlob ? (
-                <button onClick={sendVoice} disabled={uploadingVoice}
-                  className="shrink-0 w-10 h-10 rounded-full bg-[#7C3AED] flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg">
-                  {uploadingVoice ? <span className="text-xs text-white">⏳</span>
-                    : <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>}
-                </button>
-              ) : (
-                <button onClick={e => { e.stopPropagation(); setShowEmoji(p => !p); }}
-                  className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition text-xl">
-                  🙂
-                </button>
-              )}
-            </div>
-          )}
+         {!recording && (
+  <div className="flex items-center gap-1.5 px-3 py-2" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)" }}>
+    <button onClick={() => setShowAttachSheet(true)}
+      className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90 text-xl">
+      +
+    </button>
+    {!hasFocusOrText && (
+      <button
+        onPointerDown={e => { e.preventDefault(); startRecording(); }}
+        className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/>
+          <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+      </button>
+    )}
+    <div className="flex-1 flex items-center bg-zinc-800 rounded-full px-4 py-1.5 gap-2 min-w-0">
+      <input ref={inputRef} value={text}
+        onChange={e => setText(e.target.value)}
+        onFocus={() => setShowEmoji(false)}
+        autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
+        onKeyDown={e => { if (e.key==="Enter" && !e.shiftKey && !sending) { e.preventDefault(); send(); } }}
+        placeholder={ka?"მესიჯი...":"Message..."} />
+    </div>
+    {text.trim() ? (
+      <button onClick={send} disabled={sending} onMouseDown={e => e.preventDefault()}
+        className="shrink-0 w-10 h-10 rounded-full bg-[#7C3AED] flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+      </button>
+    ) : audioBlob ? (
+      <button onClick={sendVoice} disabled={uploadingVoice}
+        className="shrink-0 w-10 h-10 rounded-full bg-[#7C3AED] flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg">
+        {uploadingVoice ? <span className="text-xs text-white">⏳</span>
+          : <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>}
+      </button>
+    ) : (
+      <button onClick={e => { e.stopPropagation(); setShowEmoji(p => !p); }}
+        className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition text-xl">
+        🙂
+      </button>
+    )}
+  </div>
+)}
         </div>
       </div>
 
