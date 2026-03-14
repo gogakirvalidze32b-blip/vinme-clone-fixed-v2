@@ -663,8 +663,7 @@ const [keyboardHeight, setKeyboardHeight] = useState(0);
   const effectiveAnonId = myAnonId ?? myAnonIdRef.current;
 
 return (
-  <div className="fixed inset-0 bg-[#111] flex justify-center overflow-hidden"
-    style={{ height: "100svh" }}>
+   <div className="fixed inset-0 bg-[#111] flex justify-center overflow-hidden">
     <div className="w-full max-w-lg flex flex-col bg-[#111] text-white overflow-hidden"
       style={{ height: "100svh" }}>
         {/* HEADER - FIXED */}
@@ -782,8 +781,9 @@ ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
             <div ref={bottomRef} />
           </div>
         </div>
-{/* INPUT BAR - FIXED */}
-<div className="shrink-0 bg-zinc-950 border-t border-white/8">
+{/* INPUT BAR - FIXED ჩატის ზედა პანელი*/}
+<div className="shrink-0 bg-zinc-950 border-t border-white/8"
+  style={{ paddingBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : undefined }}>
 
   {showEmoji && (
     <QuickEmojiPicker onPick={e => setText(p => p + e)} onClose={() => setShowEmoji(false)} />
@@ -847,6 +847,7 @@ ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
 
               {text.trim() ? (
                 <button onClick={send} disabled={sending}
+                  onMouseDown={e => e.preventDefault()}
                   className="shrink-0 w-10 h-10 rounded-full bg-[#7C3AED] flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
                 </button>
