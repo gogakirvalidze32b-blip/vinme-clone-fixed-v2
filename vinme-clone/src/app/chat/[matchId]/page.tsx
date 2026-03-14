@@ -117,7 +117,6 @@ function UnmatchModal({ onClose, onConfirm, ka }: {
   const [selected, setSelected] = useState<string|null>(null);
   const [feedback, setFeedback] = useState("");
 
-
   function isRealText(text: string): boolean {
     if (text.length < 10) return false;
     const unique = new Set(text.toLowerCase().replace(/\s/g, "")).size;
@@ -275,7 +274,7 @@ function QuickEmojiPicker({ onPick, onClose }: { onPick: (e: string) => void; on
   return (
     <div className="bg-zinc-900 border-t border-white/8 rounded-t-2xl" onClick={e => e.stopPropagation()}>
       <div className="flex items-center gap-2 px-3 pt-3 pb-2">
-        <button onClick={onClose} 
+        <button onClick={onClose}
           className="shrink-0 w-8 h-8 flex items-center justify-center text-white/60 hover:text-white transition">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M15 18l-6-6 6-6"/>
@@ -309,7 +308,10 @@ export default function ChatThreadPage() {
   const lang = getLang();
   const ka = lang !== "en";
   const { anonId: ctxAnonId } = useUser();
-const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [headerTop, setHeaderTop] = useState(0);
+  const headerRef = useRef<HTMLDivElement>(null);
 
   const [msgs, setMsgs] = useState<MsgRow[]>([]);
   const [reactions, setReactions] = useState<Reaction[]>([]);
@@ -324,14 +326,11 @@ const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [showMenu, setShowMenu] = useState(false);
   const [showUnmatchModal, setShowUnmatchModal] = useState(false);
   const [showAttachSheet, setShowAttachSheet] = useState(false);
-
   const [reactionMsgId, setReactionMsgId] = useState<string|null>(null);
   const [selectedMsgId, setSelectedMsgId] = useState<string|null>(null);
   const longPressTimer = useRef<NodeJS.Timeout|null>(null);
-
   const [replyTo, setReplyTo] = useState<MsgRow|null>(null);
   const [hoveredMsgId, setHoveredMsgId] = useState<string|null>(null);
-
   const scrollRef = useRef<HTMLDivElement>(null);
   const [recording, setRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob|null>(null);
@@ -342,16 +341,13 @@ const [keyboardHeight, setKeyboardHeight] = useState(0);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout|null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-
   const myAnonIdRef = useRef<string|null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const sendingRef = useRef(false);
-
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [uploadingImg, setUploadingImg] = useState(false);
   const [imagePreview, setImagePreview] = useState<{file: File, url: string} | null>(null);
-
 
   useEffect(() => { if (ctxAnonId && !myAnonId) setMyAnonId(ctxAnonId); }, [ctxAnonId]);
 
@@ -361,21 +357,64 @@ const [keyboardHeight, setKeyboardHeight] = useState(0);
       setSelectedMsgId(null);
     };
   }, []);
+
+  useEffect(() => {
+    if (headerRef.current) {
+      setHeaderTop(headerRef.current.getBoundingClientRect().top);
+    }
+  }, [isLoaded]);
+
+
 useEffect(() => {
-  const vv = window.visualViewport;
-  if (!vv) return;
-  
-  function onResize() {
-    const kbHeight = Math.max(0, window.innerHeight - vv!.height);
-    setKeyboardHeight(kbHeight);
-    if (kbHeight > 0) {
-      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "instant" }), 50);
+  function onFocus() {
+    if (headerRef.current) {
+      const rect = headerRef.current.getBoundingClientRect();
+      headerRef.current.style.position = "fixed";
+      headerRef.current.style.top = rect.top + "px";
+      headerRef.current.style.left = rect.left + "px";
+      headerRef.current.style.right = "0";
+      headerRef.current.style.zIndex = "50";
+      headerRef.current.style.width = rect.width + "px";
     }
   }
-  
-  vv.addEventListener("resize", onResize);
-  return () => vv.removeEventListener("resize", onResize);
+  function onBlur() {
+    if (headerRef.current) {
+      headerRef.current.style.position = "";
+      headerRef.current.style.top = "";
+      headerRef.current.style.left = "";
+      headerRef.current.style.right = "";
+      headerRef.current.style.width = "";
+    }
+  }
+  window.addEventListener("focusin", onFocus);
+  window.addEventListener("focusout", onBlur);
+  return () => {
+    window.removeEventListener("focusin", onFocus);
+    window.removeEventListener("focusout", onBlur);
+  };
 }, []);
+
+
+
+
+
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    function onResize() {
+      const isChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
+      const isFirefox = /Firefox/.test(navigator.userAgent);
+      if (isChrome || isFirefox) return;
+      const kbHeight = Math.max(0, window.innerHeight - vv!.height);
+      setKeyboardHeight(kbHeight);
+      if (kbHeight > 0) {
+        bottomRef.current?.scrollIntoView({ behavior: "instant" });
+      }
+    }
+    vv.addEventListener("resize", onResize);
+    return () => vv.removeEventListener("resize", onResize);
+  }, []);
 
   const isOnline = useMemo(() => {
     if (!otherProfile?.last_seen) return false;
@@ -474,10 +513,10 @@ useEffect(() => {
   }, [msgs.length, isLoaded]);
 
   useEffect(() => {
-  if (keyboardHeight > 0) {
-    bottomRef.current?.scrollIntoView({ behavior: "instant" });
-  }
-}, [keyboardHeight]);
+    if (keyboardHeight > 0) {
+      bottomRef.current?.scrollIntoView({ behavior: "instant" });
+    }
+  }, [keyboardHeight]);
 
   async function handleReact(msgId: string, emoji: string) {
     if (!myAnonId) return;
@@ -531,26 +570,20 @@ useEffect(() => {
     setUploadingImg(false);
   }
 
- async function send() {
-  const t2 = text.trim();
-  if (!t2 || !myAnonId || sendingRef.current) return;
-  sendingRef.current = true;
-  setSending(true);
-  setText("");
-  // დანარჩენი კოდი...
-    
+  async function send() {
+    const t2 = text.trim();
+    if (!t2 || !myAnonId || sendingRef.current) return;
+    sendingRef.current = true;
+    setSending(true);
+    setText("");
     const tempId = `temp-${Date.now()}-${Math.random()}`;
     const replyPreview = replyTo ? (replyTo.type==="voice"?"🎤 Voice":replyTo.type==="image"?"📷 Photo":replyTo.content.slice(0,60)) : null;
     const replyId = replyTo?.id ?? null;
     setReplyTo(null);
-    
     setMsgs(prev => [...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: t2, created_at: new Date().toISOString(), read_at: null, delivered_at: null, type: "text", reply_to_id: replyId, reply_preview: replyPreview }]);
-    
     try {
       const { data } = await supabase.from("messages").insert({ match_id: matchId, sender_anon: myAnonId, content: t2, type: "text", reply_to_id: replyId, reply_preview: replyPreview }).select().single();
-      if (data) {
-        setMsgs(prev => prev.map(m => m.id === tempId ? (data as MsgRow) : m));
-      }
+      if (data) setMsgs(prev => prev.map(m => m.id === tempId ? (data as MsgRow) : m));
       await supabase.from("matches").update({ has_unread: true }).eq("id", matchId);
       if (myUserId) await supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("user_id", myUserId);
     } catch (err) {
@@ -602,26 +635,12 @@ useEffect(() => {
     setShowUnmatchModal(false);
     const isReport = reason === "შეურაცხმყოფელი ქცევა" || reason === "სპამი ან ყალბი პროფილი" ||
                      reason === "Offensive behavior" || reason === "Spam or fake profile";
-
-    try {
-      await supabase.from("unmatch_feedback").insert({ from_user: myUserId, to_user: otherUserId, match_id: matchId, reason });
-    } catch {}
-
+    try { await supabase.from("unmatch_feedback").insert({ from_user: myUserId, to_user: otherUserId, match_id: matchId, reason }); } catch {}
     if (isReport) {
-      try {
-        await supabase.from("reports").insert({ from_user: myUserId, to_user: otherUserId, match_id: matchId, reason });
-      } catch {}
+      try { await supabase.from("reports").insert({ from_user: myUserId, to_user: otherUserId, match_id: matchId, reason }); } catch {}
     } else {
-      try {
-        await supabase.from("notifications").insert({
-          user_id: otherUserId,
-          type: "unmatch",
-          message: reason,
-          from_user: myUserId
-        });
-      } catch {}
+      try { await supabase.from("notifications").insert({ user_id: otherUserId, type: "unmatch", message: reason, from_user: myUserId }); } catch {}
     }
-
     try { await supabase.from("messages").delete().eq("match_id", matchId); } catch {}
     try { await supabase.from("matches").delete().eq("id", matchId); } catch {}
     window.location.href = "/chat";
@@ -661,13 +680,12 @@ useEffect(() => {
 
   const effectiveAnonId = myAnonId ?? myAnonIdRef.current;
 
-
-return (
- <div className="fixed inset-0 bg-[#111] flex justify-center overflow-hidden">
-  <div className="w-full max-w-lg flex flex-col bg-[#111] text-white overflow-hidden"
-    style={{ height: "100dvh", paddingBottom: "env(keyboard-inset-height, 0px)" }}>
-        {/* HEADER - FIXED */}
-        <div className="flex items-center gap-3 px-4 py-3 bg-zinc-950 border-b border-white/8 shrink-0">
+  return (
+    <div className="fixed inset-0 bg-[#111] flex justify-center">
+      <div className="w-full max-w-lg flex flex-col bg-[#111]">
+        {/* HEADER */}
+        <div ref={headerRef} className="flex items-center gap-3 px-4 py-3 bg-zinc-950 border-b border-white/8 shrink-0"
+          style={{ position: "sticky", top: headerTop, zIndex: 50 }}>
           <button onClick={() => { setReactionMsgId(null); setSelectedMsgId(null); router.push("/chat"); }}
             className="rounded-full bg-white/8 w-9 h-9 flex items-center justify-center text-white shrink-0 hover:bg-white/12 transition">←</button>
           <div className="flex items-center gap-3 flex-1 cursor-pointer"
@@ -686,14 +704,13 @@ return (
             className="w-9 h-9 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/8 transition shrink-0 text-lg font-bold tracking-widest">···</button>
         </div>
 
-        {/* MESSAGES - SCROLLABLE */}
-<div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3"
-  style={{ overscrollBehavior: "none" }}>
-  <div className="flex flex-col justify-end min-h-full space-y-0.5">
-
+        {/* MESSAGES */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 scrollbar-hide"
+          style={{ overscrollBehavior: "none" }}>
+          <div className="flex flex-col justify-end min-h-full space-y-0.5 pb-2">
             {msgs.map((m, i) => {
-              if (!myAnonId) return null;                
-              const mine = myAnonId ? m.sender_anon === myAnonId : false;
+              if (!myAnonId) return null;
+              const mine = m.sender_anon === myAnonId;
               const isTemp = m.id.startsWith("temp");
               const isRead = !!m.read_at;
               const isDelivered = !!m.delivered_at;
@@ -739,9 +756,7 @@ return (
                       )}
 
                       {m.type === "voice" ? (
-                        <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl max-w-[270px]
-                          ${mine?"bg-[#7C3AED] rounded-tr-sm":"bg-zinc-800 rounded-tl-sm"}
-                          ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
+                        <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl max-w-[270px] ${mine?"bg-[#7C3AED] rounded-tr-sm":"bg-zinc-800 rounded-tl-sm"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
                           <span className="text-lg shrink-0">🎤</span>
                           <audio controls src={m.content} className="h-8 max-w-[160px]" preload="metadata" />
                           <div className="flex items-center gap-0.5 shrink-0">
@@ -760,9 +775,7 @@ return (
                           )}
                         </div>
                       ) : (
-                        <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words select-none
-${mine?"bg-[#7C3AED] rounded-2xl rounded-tr-sm ml-8":"bg-zinc-800 rounded-2xl rounded-tl-sm mr-8"}
-${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
+                        <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words select-none ${mine?"bg-[#7C3AED] rounded-2xl rounded-tr-sm ml-8":"bg-zinc-800 rounded-2xl rounded-tl-sm mr-8"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
                           <span>{m.content}</span>
                           <span className="inline-flex items-center gap-0.5 ml-2">
                             <span className={`text-[10px] ${mine?"text-purple-200/50":"text-white/25"}`}>{fmtTime(m.created_at)}</span>
@@ -772,7 +785,6 @@ ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
                       )}
                     </div>
                   </div>
-
                   <ReactionsDisplay msgId={m.id} reactions={reactions} myAnonId={effectiveAnonId ?? ""} mine={mine} onReact={handleReact} />
                 </div>
               );
@@ -780,25 +792,26 @@ ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
             <div ref={bottomRef} />
           </div>
         </div>
-{/* INPUT BAR - FIXED */}
-{/* INPUT BAR - FIXED */}
-<div className="shrink-0 bg-zinc-950 border-t border-white/8"
-  style={{ paddingBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : undefined }}>
 
-  {showEmoji && (
-    <QuickEmojiPicker onPick={e => setText(p => p + e)} onClose={() => setShowEmoji(false)} />
-  )}
-  {replyTo && (
-    <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2 rounded-2xl bg-zinc-800 border-l-2 border-[#7C3AED]">
-      <div className="flex-1 min-w-0">
-        <div className="text-xs text-[#A78BFA] font-semibold mb-0.5">↩ {ka?"პასუხი":"Reply"}</div>
-        <div className="text-xs text-white/60 truncate">
-          {replyTo.type==="voice"?"🎤 Voice":replyTo.type==="image"?"📷 Photo":replyTo.content.slice(0,60)}
-        </div>
-      </div>
-      <button onClick={() => setReplyTo(null)} className="text-white/40 hover:text-white text-lg shrink-0">✕</button>
-    </div>
-  )}
+        {/* INPUT BAR */}
+        <div className="shrink-0 bg-zinc-950 border-t border-white/8"
+          style={{ paddingBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : undefined }}>
+
+          {showEmoji && (
+            <QuickEmojiPicker onPick={e => setText(p => p + e)} onClose={() => setShowEmoji(false)} />
+          )}
+
+          {replyTo && (
+            <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2 rounded-2xl bg-zinc-800 border-l-2 border-[#7C3AED]">
+              <div className="flex-1 min-w-0">
+                <div className="text-xs text-[#A78BFA] font-semibold mb-0.5">↩ {ka?"პასუხი":"Reply"}</div>
+                <div className="text-xs text-white/60 truncate">
+                  {replyTo.type==="voice"?"🎤 Voice":replyTo.type==="image"?"📷 Photo":replyTo.content.slice(0,60)}
+                </div>
+              </div>
+              <button onClick={() => setReplyTo(null)} className="text-white/40 hover:text-white text-lg shrink-0">✕</button>
+            </div>
+          )}
 
           {recording && (
             <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2.5 rounded-2xl bg-red-500/10 border border-red-500/20">
@@ -828,26 +841,23 @@ ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
             onChange={e => { const f = e.target.files?.[0]; if (f) setImagePreview({ file: f, url: URL.createObjectURL(f) }); e.target.value=""; }} />
 
           {!recording && (
-            <div className="flex items-center gap-1.5 px-3 py-2" style={{ paddingBottom: "env(safe-area-inset-bottom, 8px)" }}>
-              {!hasFocusOrText ? (
+            <div className="flex items-center gap-1.5 px-3 py-2" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)" }}>
+              {!hasFocusOrText && (
                 <button onClick={() => setShowAttachSheet(true)}
                   className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90 text-xl">
                   +
                 </button>
-              ) : null}
-
-              <div className="flex-1 flex items-center bg-zinc-800 rounded-full px-4 py-2.5 gap-2 min-w-0 border-0 outline-none ring-0">
+              )}
+              <div className="flex-1 flex items-center bg-zinc-800 rounded-full px-4 py-1.5 gap-2 min-w-0">
                 <input ref={inputRef} value={text}
                   onChange={e => setText(e.target.value)}
-                  onFocus={() => { setShowEmoji(false); }}
+                  onFocus={() => setShowEmoji(false)}
                   autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
                   onKeyDown={e => { if (e.key==="Enter" && !e.shiftKey && !sending) { e.preventDefault(); send(); } }}
                   placeholder={ka?"მესიჯი...":"Message..."} />
               </div>
-
               {text.trim() ? (
-                <button onClick={send} disabled={sending}
-                  onMouseDown={e => e.preventDefault()}
+                <button onClick={send} disabled={sending} onMouseDown={e => e.preventDefault()}
                   className="shrink-0 w-10 h-10 rounded-full bg-[#7C3AED] flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
                 </button>
@@ -899,4 +909,3 @@ ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
     </div>
   );
 }
-    

@@ -13,44 +13,13 @@ html, body {
   background: var(--background);
   color: var(--foreground);
   overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior-x: none;
-  overscroll-behavior-y: contain;
-  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
   scrollbar-width: none;
 }
 
 html::-webkit-scrollbar,
 body::-webkit-scrollbar {
   display: none;
-}
-
-@media (max-width: 768px) {
-  html, body {
-    position: static;
-    width: 100%;
-    overflow-y: auto;
-  }
-}
-
-/* scrollbar — მხოლოდ chat-ში, მარჯვნივ პატარა */
-#chat-root *::-webkit-scrollbar {
-  width: 3px;
-  height: 0px;
-}
-
-#chat-root *::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.08);
-  border-radius: 999px;
-}
-
-#chat-root *::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-#chat-root * {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.08) transparent;
 }
 
 .scrollbar-hide::-webkit-scrollbar { display: none; }
@@ -86,13 +55,8 @@ input:focus {
   border: none !important;
 }
 
-/* body {
-  overflow: hidden;
-  position: fixed;
-  width: 100%;
-} */
-
-
-html {
-  overscroll-behavior: none;
+@supports (height: 100svh) {
+  .chat-container {
+    height: 100svh;
+  }
 }
