@@ -93,22 +93,19 @@ function ReactionsDisplay({ msgId, reactions, myAnonId, mine, onReact }: {
   const grouped: Record<string, number> = {};
   msgReactions.forEach(r => { grouped[r.emoji] = (grouped[r.emoji] ?? 0) + 1; });
   return (
-    <div className="flex w-full justify-end pr-2 -mt-2 relative z-10">
-      <div className="flex items-center gap-0.5 bg-zinc-700 rounded-full px-2 py-0.5 shadow-lg">
-        {Object.entries(grouped).map(([emoji, count]) => {
-          const isMine = msgReactions.some(r => r.emoji === emoji && r.sender_anon === myAnonId);
-          return (
-            <button key={emoji} onClick={() => onReact(msgId, emoji)}
-              className={`flex items-center gap-0.5 text-xs transition active:scale-90 ${isMine ? "opacity-100" : "opacity-70"}`}>
-              <span style={{ fontSize: 14 }}>{emoji}</span>
-              {count > 1 && <span className="text-white/70 font-medium">{count}</span>}
-            </button>
-          );
-        })}
+    <div className={`flex w-full ${mine ? "justify-end pr-4" : "justify-start pl-4"}`}>
+      <div className="flex items-center gap-0.5 bg-zinc-700 rounded-full px-2 py-0.5 shadow-lg -mt-4 relative z-10">
+        {Object.entries(grouped).map(([emoji]) => (
+          <button key={emoji} onClick={() => onReact(msgId, emoji)}
+            className="text-xs transition active:scale-90">
+            <span style={{ fontSize: 13 }}>{emoji}</span>
+          </button>
+        ))}
       </div>
     </div>
   );
 }
+    
 
 function UnmatchModal({ onClose, onConfirm, ka }: {
   onClose: () => void; onConfirm: (reason: string) => void; ka: boolean;
@@ -538,14 +535,15 @@ async function handleReact(msgId: string, emoji: string) {
       await supabase.from("message_reactions").update({ emoji }).eq("id", existing.id);
     }
 } else {
-  const tempId = `r-${Date.now()}`;
-  setReactions(prev => [...prev, { id: tempId, message_id: msgId, sender_anon: myAnonId, emoji }]);
-  const { data } = await supabase.from("message_reactions")
+  await supabase.from("message_reactions")
     .upsert({ message_id: msgId, sender_anon: myAnonId, emoji }, 
-      { onConflict: "message_id,sender_anon" })
-    .select().single();
-  if (data) setReactions(prev => prev.map(r => r.id === tempId ? data as Reaction : r));
-}
+      { onConflict: "message_id,sender_anon" });
+  const { data: allReactions } = await supabase
+    .from("message_reactions").select("*").eq("message_id", msgId);
+  setReactions(prev => [
+    ...prev.filter(r => r.message_id !== msgId),
+    ...(allReactions ?? [])
+  ]);
 }
 
   function onMsgPointerDown(msgId: string, mine: boolean) {
@@ -918,4 +916,5 @@ async function handleReact(msgId: string, emoji: string) {
       )}
     </div>
   );
+}
 }
