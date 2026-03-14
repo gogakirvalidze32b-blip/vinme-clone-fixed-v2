@@ -688,8 +688,11 @@ return (
         </div>
 
         {/* MESSAGES - SCROLLABLE */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3"
-  style={{ overscrollBehavior: "none" }}>
+<div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3"
+  style={{ 
+    overscrollBehavior: "none",
+    paddingBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : undefined 
+  }}>
   <div className="flex flex-col justify-end min-h-full space-y-0.5">
 
             {msgs.map((m, i) => {
