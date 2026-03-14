@@ -362,21 +362,20 @@ const [keyboardHeight, setKeyboardHeight] = useState(0);
     };
   }, []);
 
-  useEffect(() => {
+ useEffect(() => {
   const vv = window.visualViewport;
   if (!vv) return;
   
   function onResize() {
-    const kbHeight = window.innerHeight - vv!.height - vv!.offsetTop;
-    setKeyboardHeight(Math.max(0, kbHeight));
+    const kbHeight = Math.max(0, window.innerHeight - vv!.height);
+    setKeyboardHeight(kbHeight);
+    if (kbHeight > 0) {
+      bottomRef.current?.scrollIntoView({ behavior: "instant" });
+    }
   }
   
   vv.addEventListener("resize", onResize);
-  vv.addEventListener("scroll", onResize);
-  return () => {
-    vv.removeEventListener("resize", onResize);
-    vv.removeEventListener("scroll", onResize);
-  };
+  return () => vv.removeEventListener("resize", onResize);
 }, []);
 
   const isOnline = useMemo(() => {
@@ -690,9 +689,10 @@ return (
         </div>
 
         {/* MESSAGES - SCROLLABLE */}
-       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3"
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3"
   style={{ overscrollBehavior: "none" }}>
-  <div className="space-y-0.5">
+  <div className="flex flex-col justify-end min-h-full space-y-0.5">
+
             {msgs.map((m, i) => {
               if (!myAnonId) return null;                
               const mine = myAnonId ? m.sender_anon === myAnonId : false;
