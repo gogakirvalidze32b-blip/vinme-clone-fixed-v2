@@ -415,7 +415,15 @@ useEffect(() => {
     vv.addEventListener("resize", onResize);
     return () => vv.removeEventListener("resize", onResize);
   }, []);
-
+useEffect(() => {
+  function onFocus() {
+    setTimeout(() => {
+      bottomRef.current?.scrollIntoView({ behavior: "instant" });
+    }, 300);
+  }
+  window.addEventListener("focusin", onFocus);
+  return () => window.removeEventListener("focusin", onFocus);
+}, []);
   const isOnline = useMemo(() => {
     if (!otherProfile?.last_seen) return false;
     return Date.now() - new Date(otherProfile.last_seen).getTime() < 3*60*1000;
