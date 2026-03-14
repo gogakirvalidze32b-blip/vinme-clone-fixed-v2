@@ -537,14 +537,15 @@ async function handleReact(msgId: string, emoji: string) {
       setReactions(prev => prev.map(r => r.id === existing.id ? { ...r, emoji } : r));
       await supabase.from("message_reactions").update({ emoji }).eq("id", existing.id);
     }
-  } else {
-    const tempId = `r-${Date.now()}`;
-    setReactions(prev => [...prev, { id: tempId, message_id: msgId, sender_anon: myAnonId, emoji }]);
-    const { data } = await supabase.from("message_reactions")
-      .upsert({ message_id: msgId, sender_anon: myAnonId, emoji }, { onConflict: "message_id,sender_anon" })
-      .select().single();
-    if (data) setReactions(prev => prev.map(r => r.id === tempId ? data as Reaction : r));
-  }
+} else {
+  const tempId = `r-${Date.now()}`;
+  setReactions(prev => [...prev, { id: tempId, message_id: msgId, sender_anon: myAnonId, emoji }]);
+  const { data } = await supabase.from("message_reactions")
+    .upsert({ message_id: msgId, sender_anon: myAnonId, emoji }, 
+      { onConflict: "message_id,sender_anon" })
+    .select().single();
+  if (data) setReactions(prev => prev.map(r => r.id === tempId ? data as Reaction : r));
+}
 }
 
   function onMsgPointerDown(msgId: string, mine: boolean) {
