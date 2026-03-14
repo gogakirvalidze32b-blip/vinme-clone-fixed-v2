@@ -781,8 +781,9 @@ ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
             <div ref={bottomRef} />
           </div>
         </div>
-{/* INPUT BAR - FIXED ჩატის ზედა პანელი*/}
-<div className="shrink-0 bg-zinc-950 border-t border-white/8">
+{/* INPUT BAR - FIXED */}
+<div className="shrink-0 bg-zinc-950 border-t border-white/8"
+  style={{ paddingBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : undefined }}>
 
   {showEmoji && (
     <QuickEmojiPicker onPick={e => setText(p => p + e)} onClose={() => setShowEmoji(false)} />
