@@ -117,6 +117,7 @@ function UnmatchModal({ onClose, onConfirm, ka }: {
   const [selected, setSelected] = useState<string|null>(null);
   const [feedback, setFeedback] = useState("");
 
+
   function isRealText(text: string): boolean {
     if (text.length < 10) return false;
     const unique = new Set(text.toLowerCase().replace(/\s/g, "")).size;
@@ -308,6 +309,7 @@ export default function ChatThreadPage() {
   const lang = getLang();
   const ka = lang !== "en";
   const { anonId: ctxAnonId } = useUser();
+const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const [msgs, setMsgs] = useState<MsgRow[]>([]);
   const [reactions, setReactions] = useState<Reaction[]>([]);
@@ -359,6 +361,23 @@ export default function ChatThreadPage() {
       setSelectedMsgId(null);
     };
   }, []);
+
+  useEffect(() => {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  
+  function onResize() {
+    const kbHeight = window.innerHeight - vv!.height - vv!.offsetTop;
+    setKeyboardHeight(Math.max(0, kbHeight));
+  }
+  
+  vv.addEventListener("resize", onResize);
+  vv.addEventListener("scroll", onResize);
+  return () => {
+    vv.removeEventListener("resize", onResize);
+    vv.removeEventListener("scroll", onResize);
+  };
+}, []);
 
   const isOnline = useMemo(() => {
     if (!otherProfile?.last_seen) return false;
@@ -645,7 +664,7 @@ return (
       style={{ height: "100svh" }}>
         {/* HEADER - FIXED */}
 <div className="flex items-center gap-3 px-4 py-3 bg-zinc-950 border-b border-white/8 shrink-0"
-  style={{ position: "sticky", top: 0, zIndex: 10 }}>
+    style={{ position: "sticky", top: 0, zIndex: 10, transform: "translateZ(0)" }}>
   <button onClick={() => { setReactionMsgId(null); setSelectedMsgId(null); router.push("/chat"); }}
     className="rounded-full bg-white/8 w-9 h-9 flex items-center justify-center text-white shrink-0 hover:bg-white/12 transition">←</button>
   <div className="flex items-center gap-3 flex-1 cursor-pointer"
@@ -758,13 +777,13 @@ ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
           </div>
         </div>
 
-        {/* INPUT BAR - FIXED */}
-        <div className="shrink-0 bg-zinc-950 border-t border-white/8">
+   {/* INPUT BAR - FIXED */}
+<div className="shrink-0 bg-zinc-950 border-t border-white/8"
+  style={{ paddingBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : undefined }}>
 
-          {showEmoji && (
-            <QuickEmojiPicker onPick={e => setText(p => p + e)} onClose={() => setShowEmoji(false)} />
-          )}
-
+  {showEmoji && (
+    <QuickEmojiPicker onPick={e => setText(p => p + e)} onClose={() => setShowEmoji(false)} />
+  )}
           {replyTo && (
             <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2 rounded-2xl bg-zinc-800 border-l-2 border-[#7C3AED]">
               <div className="flex-1 min-w-0">
