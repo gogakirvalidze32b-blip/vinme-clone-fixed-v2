@@ -662,22 +662,18 @@ const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const effectiveAnonId = myAnonId ?? myAnonIdRef.current;
 
+
 return (
-  <div className="fixed inset-0 bg-[#111] flex justify-center overflow-hidden">
-    <div className="w-full max-w-lg flex flex-col bg-[#111] text-white overflow-hidden"
-      style={{ 
-        height: "100svh",
-        transform: `translateY(-${keyboardHeight}px)`,
-        transition: "transform 0ms"
-      }}>
+ <div className="fixed inset-0 bg-[#111] flex justify-center overflow-hidden">
+  <div className="w-full max-w-lg flex flex-col bg-[#111] text-white overflow-hidden"
+    style={{ height: "100dvh", paddingBottom: "env(keyboard-inset-height, 0px)" }}>
         {/* HEADER - FIXED */}
-<div className="flex items-center gap-3 px-4 py-3 bg-zinc-950 border-b border-white/8 shrink-0"
-    style={{ position: "sticky", top: 0, zIndex: 10, transform: "translateZ(0)" }}>
-  <button onClick={() => { setReactionMsgId(null); setSelectedMsgId(null); router.push("/chat"); }}
-    className="rounded-full bg-white/8 w-9 h-9 flex items-center justify-center text-white shrink-0 hover:bg-white/12 transition">←</button>
-  <div className="flex items-center gap-3 flex-1 cursor-pointer"
-    onClick={() => otherUserId && router.push(`/profile/${otherUserId}`)}>
-    <div className="relative shrink-0">
+        <div className="flex items-center gap-3 px-4 py-3 bg-zinc-950 border-b border-white/8 shrink-0">
+          <button onClick={() => { setReactionMsgId(null); setSelectedMsgId(null); router.push("/chat"); }}
+            className="rounded-full bg-white/8 w-9 h-9 flex items-center justify-center text-white shrink-0 hover:bg-white/12 transition">←</button>
+          <div className="flex items-center gap-3 flex-1 cursor-pointer"
+            onClick={() => otherUserId && router.push(`/profile/${otherUserId}`)}>
+            <div className="relative shrink-0">
               <SafeImg src={avatar} className="w-10 h-10 rounded-full object-cover ring-2 ring-white/10"
                 fallback={<div className="w-10 h-10 rounded-full bg-zinc-700 flex items-center justify-center text-sm">👤</div>} />
               {isOnline && <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-400 border-2 border-zinc-950" />}
@@ -786,8 +782,7 @@ ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
           </div>
         </div>
 {/* INPUT BAR - FIXED ჩატის ზედა პანელი*/}
-<div className="shrink-0 bg-zinc-950 border-t border-white/8"
-  style={{ paddingBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : undefined }}>
+<div className="shrink-0 bg-zinc-950 border-t border-white/8">
 
   {showEmoji && (
     <QuickEmojiPicker onPick={e => setText(p => p + e)} onClose={() => setShowEmoji(false)} />
