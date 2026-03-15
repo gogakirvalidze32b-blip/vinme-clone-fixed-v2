@@ -163,7 +163,20 @@ export default function SettingsPage() {
           <Card>
             <Row label={L("ტელეფონის ნომერი", "Phone Number")} sub={L("დამატება / შეცვლა", "Add / Change")} />
             <Row label={L("ელ.ფოსტა", "Email")} sub={L("დამატება / შეცვლა", "Add / Change")} />
+            <Row label={L("ენა", "Language")} sub={ka ? "ქართული" : "English"} onClick={() => {
+  const newLang = ka ? "en" : "ka";
+  localStorage.setItem("lang", newLang);
+  window.dispatchEvent(new Event("app:lang"));
+  window.location.reload();
+}} right={
+  <div className="flex items-center gap-2">
+    <span className={`text-xs font-bold ${ka ? "text-rose-400" : "text-white/30"}`}>KA</span>
+    <span className="text-white/20">/</span>
+    <span className={`text-xs font-bold ${!ka ? "text-rose-400" : "text-white/30"}`}>EN</span>
+  </div>
+} />
             <Row label={L("პროფილის რედაქტირება", "Edit Profile")} onClick={() => router.push("/profile/edit")} />
+              
           </Card>
 
           {/* PAUSE */}
