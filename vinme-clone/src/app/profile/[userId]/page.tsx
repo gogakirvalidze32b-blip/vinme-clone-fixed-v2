@@ -15,6 +15,7 @@ function calcAge(birthdate: string | null): number | null {
   if (now.getMonth() < bd.getMonth() || (now.getMonth() === bd.getMonth() && now.getDate() < bd.getDate())) age--;
   return age;
 }
+
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -49,7 +50,7 @@ export default function UserProfilePage() {
     (async () => {
       const { data: sess } = await supabase.auth.getSession();
       const uid = sess.session?.user?.id;
-      const [{ data: other }, { data: me }] = await Promise.all([
+      const[{ data: other }, { data: me }] = await Promise.all([
         supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
         uid ? supabase.from("profiles").select("*").eq("user_id", uid).maybeSingle() : Promise.resolve({ data: null }),
       ]);
@@ -59,13 +60,24 @@ export default function UserProfilePage() {
 
   const photos = useMemo(() => {
     if (!profile) return [];
-    return [1,2,3,4,5,6,7,8,9].map(i => profile[`photo${i}_url`]).filter(Boolean).map((p:string) => photoSrc(p));
+    return[1,2,3,4,5,6,7,8,9].map(i => profile[`photo${i}_url`]).filter(Boolean).map((p:string) => photoSrc(p));
   }, [profile]);
 
   const age = useMemo(() => profile?.age ?? calcAge(profile?.birthdate ?? null), [profile]);
+  
   const distanceKm = useMemo(() => {
     if (!profile?.latitude || !profile?.longitude || !myProfile?.latitude || !myProfile?.longitude) return null;
-    return haversineKm(myProfile.latitude, myProfile.longitude, profile.latitude, profile.longitude);
+    
+    // დამცავი 1: თუ რომელიმეს კოორდინატები ზუსტად 0,0 არის (ანუ ბაზის ცარიელი მონაცემი)
+    if (profile.latitude === 0 && profile.longitude === 0) return null;
+    if (myProfile.latitude === 0 && myProfile.longitude === 0) return null;
+
+    const dist = haversineKm(myProfile.latitude, myProfile.longitude, profile.latitude, profile.longitude);
+    
+    // დამცავი 2: თუ მანძილი 5000 კმ-ზე მეტია (ემულატორის ან VPN-ის ბაგი) - დავმალოთ
+    if (dist > 5000) return null;
+
+    return dist;
   }, [profile, myProfile]);
 
   async function goToChat() {
@@ -142,12 +154,20 @@ export default function UserProfilePage() {
                   <span className="text-3xl font-black drop-shadow">{name}</span>
                   {age && <span className="text-3xl font-light text-white/85 drop-shadow">{age}</span>}
                 </div>
-              {(distanceKm != null || profile.city) && (
-  <div className="flex items-center gap-1 text-sm text-white/70 mt-0.5">
-    📍 {profile.city}{distanceKm != null ? ` · ${distanceKm} ${ka ? "კმ" : "km"}` : ""}
-  </div>
-)}
+                
+                {/* 📍 ლოკაცია და მანძილი ახალი დიზაინით და დაცვით */}
+                {(profile.city || distanceKm != null) && (
+                  <div className="flex items-center gap-1 text-sm text-white/80 mt-1 font-medium drop-shadow-md">
+                    <span>📍</span>
+                    <span>
+                      {profile.city ? profile.city : ""}
+                      {profile.city && distanceKm != null ? " · " : ""}
+                      {distanceKm != null ? `${distanceKm} ${ka ? "კმ" : "km"}` : ""}
+                    </span>
+                  </div>
+                )}
               </div>
+              
               {/* ↑ arrow — Tinder style */}
               <button
                 onClick={() => { setShowDetails(v => !v); setTimeout(() => detailsRef.current?.scrollIntoView({ behavior: "smooth" }), 60); }}
@@ -239,6 +259,7 @@ function InfoRow({ icon, label, value }: { icon: string; label: string; value: s
     </div>
   );
 }
+
 function Chip({ icon, label }: { icon: string; label: string }) {
   return (
     <div className="flex items-center gap-1.5 rounded-full bg-zinc-800 px-3 py-1.5">

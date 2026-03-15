@@ -33,20 +33,24 @@ const saveLocation = useCallback(async (uid: string) => {
     const lon = pos.coords.longitude;
     let city = "";
     try {
+      // ⬇️ აქ ბოლოში დამატებულია email პარამეტრი (შეცვალე შენი მეილით!)
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=10&addressdetails=1`,
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=10&addressdetails=1&email=შენი_მეილი@gmail.com`,
         { headers: { "Accept-Language": "ka" }, signal: AbortSignal.timeout(5000) }
       );
       if (res.ok) {
         const json = await res.json();
-        // ჯერ city, მერე village, მერე town, მერე county
         city = json.address?.city || json.address?.town || json.address?.village || json.address?.county || "";
       }
     } catch (err) {
       console.log("Geocoding failed, using defaults");
     }
+    
+    // ვინახავთ ლოკაციას ბაზაში
     await supabase.from("profiles").update({ latitude: lat, longitude: lon, city }).eq("user_id", uid);
+    // ვაახლებთ current user-ის state-ს
     setMe((prev: any) => prev ? { ...prev, latitude: lat, longitude: lon, city } : prev);
+    
   }, (err) => {
     console.error("Geolocation error:", err);
   }, {
