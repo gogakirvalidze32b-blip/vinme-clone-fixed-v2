@@ -455,14 +455,16 @@ export default function ChatThreadPage() {
       setOtherUserId(otherId);
       const[profileRes, msgsRes] = await Promise.all([
         supabase.from("profiles").select("user_id,nickname,first_name,photo1_url,last_seen").eq("user_id", otherId).maybeSingle(),
-        supabase.from("messages").select("*").eq("match_id", matchId).order("created_at", { ascending: true }),
-      ]);
-      const msgIds = (msgsRes.data ??[]).map((m: any) => m.id);
+       supabase.from("messages").select("*").eq("match_id", matchId)
+  .order("created_at", { ascending: false })
+  .limit(20),
+]);
+const msgIds = (msgsRes.data ?? []).map((m: any) => m.id);
       const reactionsRes = msgIds.length
         ? await supabase.from("message_reactions").select("*").in("message_id", msgIds)
         : { data:[] };
       setOtherProfile(profileRes.data ?? null);
-      setMsgs(msgsRes.data ?? []);
+setMsgs((msgsRes.data ?? []).reverse());
       setReactions(reactionsRes.data ??[]);
       setIsLoaded(true);
       await markRead(anonId, user.id);
