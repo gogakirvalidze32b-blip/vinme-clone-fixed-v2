@@ -25,7 +25,6 @@ export default function ProfileClient() {
   const L = (k: string, e: string) => ka ? k : e;
 
   const [me, setMe] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -37,7 +36,6 @@ export default function ProfileClient() {
       if (!data) { router.replace("/onboarding"); return; }
       if (!data.onboarding_completed) { router.replace("/onboarding"); return; }
       setMe(data);
-      setLoading(false);
       
       // ✅ Auto-update city from GPS on every visit
       if (navigator.geolocation) {
