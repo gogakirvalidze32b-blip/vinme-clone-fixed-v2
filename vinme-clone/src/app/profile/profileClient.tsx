@@ -24,8 +24,17 @@ export default function ProfileClient() {
   const ka = lang !== "en";
   const L = (k: string, e: string) => ka ? k : e;
 
-  const [me, setMe] = useState<any>({});
-
+const [me, setMe] = useState<any>(() => {
+  try {
+    if (typeof window !== "undefined") {
+      const cached = sessionStorage.getItem("profile_cache");
+      return cached ? JSON.parse(cached) : {};
+    }
+  } catch (e) {
+    console.error("Cache error:", e);
+  }
+  return {};
+});
   useEffect(() => {
     (async () => {
       try {
