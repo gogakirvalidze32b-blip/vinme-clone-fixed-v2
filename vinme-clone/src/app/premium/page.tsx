@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { getLang } from "@/lib/i18n";
+import { supabase } from "@/lib/supabase";
 
 export default function PremiumPage() {
   const router = useRouter();
@@ -11,24 +12,25 @@ export default function PremiumPage() {
 
   const [selectedPlan, setSelectedPlan] = useState<"week" | "month" | "year">("week");
   const [showCheckout, setShowCheckout] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const plans = {
     week: {
       name: ka ? "1 კვირა" : "1 Week",
       price: "47.50",
-      pricePerWeek: "47.50",
+      days: 7,
       popular: true,
     },
     month: {
       name: ka ? "1 თვე" : "1 Month",
       price: "95.00",
-      pricePerWeek: "23.74",
+      days: 30,
       popular: false,
     },
     year: {
       name: ka ? "1 წელი" : "1 Year",
       price: "570.00",
-      pricePerWeek: "10.96",
+      days: 365,
       popular: false,
     },
   };
@@ -36,262 +38,144 @@ export default function PremiumPage() {
   const features = [
     ka ? "უსაზღვრო მოწონებები" : "Unlimited Likes",
     ka ? "ნახე ვინ მოგწონა" : "See Who Likes You",
-    ka ? "უსაზღვრო გადატრიალება" : "Unlimited Rewinds",
-    ka ? "1 უფასო ბუსტი თვეში" : "1 Free Boost per month",
+    ka ? "გადატრიალება" : "Unlimited Rewinds",
+    ka ? "ბუსტი თვეში" : "Free Boost",
   ];
 
-  return (
-    <div className="fixed inset-0 bg-black flex justify-center">
-      <div className="w-full max-w-lg flex flex-col bg-black text-white h-screen overflow-y-auto">
-        {/* GRADIENT HEADER */}
-        <div className="relative bg-gradient-to-b from-pink-500/30 via-purple-500/20 to-black pt-8 pb-12 px-4">
-          <button
-            onClick={() => router.back()}
-            className="absolute top-4 left-4 text-white text-2xl hover:opacity-70 transition"
-          >
-            ✕
-          </button>
+  // რეალური გადახდის და გააქტიურების ლოგიკა
+  const handlePayment = async () => {
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        alert(ka ? "გთხოვთ გაიაროთ ავტორიზაცია" : "Please login first");
+        return;
+      }
 
-          <div className="text-center">
-            <div className="text-5xl font-black mb-2">✨</div>
-            <h1 className="text-4xl font-black mb-1">
-              {ka ? "Shekhvdi" : "Shekhvdi"}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-purple-400">
-                {" Plus"}
-              </span>
-            </h1>
-            <p className="text-white/70 text-sm mt-3">
-              {ka
-                ? "ნახე ვინ მოგწონა და დაიწყე მათთან"
-                : "See who likes you and connect instantly"}
-            </p>
-          </div>
+      const expireDate = new Date();
+      expireDate.setDate(expireDate.getDate() + plans[selectedPlan].days);
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          is_premium: true,
+          premium_until: expireDate.toISOString(),
+        })
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+
+      alert(ka ? "✅ პრემიუმი წარმატებით გააქტიურდა!" : "✅ Premium activated!");
+      setShowCheckout(false);
+      router.push("/likes"); // გადავიყვანოთ იქ, სადაც ნახავს ვინ მოიწონა
+
+    } catch (err) {
+      console.error(err);
+      alert("Error activating premium");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black flex justify-center overflow-hidden">
+      <div className="w-full max-w-lg flex flex-col bg-black text-white h-[100dvh]">
+        
+        {/* COMPACT HEADER */}
+        <div className="relative bg-gradient-to-b from-pink-500/20 via-purple-500/10 to-black pt-6 pb-4 px-4 shrink-0 text-center">
+          <button onClick={() => router.back()} className="absolute top-4 left-4 text-white/50 text-xl">✕</button>
+          <div className="text-3xl mb-1">✨</div>
+          <h1 className="text-2xl font-black">
+            Shekhvdi <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-purple-400">Plus</span>
+          </h1>
+          <p className="text-white/60 text-xs mt-1">
+            {ka ? "გახსენი ყველა შესაძლებლობა" : "Unlock all premium features"}
+          </p>
         </div>
 
-        {/* CONTENT */}
-        <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
-          {/* PLANS */}
-          <div>
-            <h2 className="text-white font-bold text-lg mb-4">
-              {ka ? "აირჩიე გეგმა" : "Choose Your Plan"}
-            </h2>
-
-            <div className="space-y-3">
-              {/* 1 WEEK */}
+        {/* PLANS AREA - COMPACT */}
+        <div className="flex-1 px-4 space-y-3 overflow-y-auto scrollbar-hide">
+          <div className="grid grid-cols-1 gap-2">
+            {(["week", "month", "year"] as const).map((key) => (
               <button
-                onClick={() => setSelectedPlan("week")}
-                className={`w-full p-4 rounded-2xl border-2 transition ${
-                  selectedPlan === "week"
-                    ? "border-pink-400 bg-pink-400/10"
-                    : "border-white/20 bg-white/5 hover:border-white/30"
+                key={key}
+                onClick={() => setSelectedPlan(key)}
+                className={`relative flex items-center justify-between p-3 rounded-xl border-2 transition ${
+                  selectedPlan === key ? "border-pink-500 bg-pink-500/10" : "border-white/10 bg-white/5"
                 }`}
               >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="text-left">
-                    {plans.week.popular && (
-                      <div className="text-pink-400 text-xs font-bold mb-1">
-                        🔥 {ka ? "პოპულარული" : "POPULAR"}
-                      </div>
-                    )}
-                    <div className="text-white font-bold text-lg">
-                      {plans.week.name}
-                    </div>
-                  </div>
-                  {selectedPlan === "week" && (
-                    <span className="text-pink-400 text-2xl">✓</span>
-                  )}
+                <div className="text-left">
+                  {plans[key].popular && <div className="text-[9px] font-bold text-pink-400 mb-0.5 uppercase">🔥 Popular</div>}
+                  <div className="text-sm font-bold">{plans[key].name}</div>
+                  <div className="text-xs text-white/40">{ka ? "ჯამში" : "Total"}: {plans[key].price}₾</div>
                 </div>
-                <div className="text-pink-400 font-bold text-2xl">
-                  {plans.week.price}₾
+                <div className="text-right">
+                  <div className="text-pink-400 font-black text-lg">{plans[key].price}₾</div>
+                  {selectedPlan === key && <div className="text-[10px] text-pink-500 font-bold">✓ Selected</div>}
                 </div>
               </button>
-
-              {/* 1 MONTH */}
-              <button
-                onClick={() => setSelectedPlan("month")}
-                className={`w-full p-4 rounded-2xl border-2 transition ${
-                  selectedPlan === "month"
-                    ? "border-pink-400 bg-pink-400/10"
-                    : "border-white/20 bg-white/5 hover:border-white/30"
-                }`}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="text-left">
-                    <div className="text-white font-bold text-lg">
-                      {plans.month.name}
-                    </div>
-                  </div>
-                  {selectedPlan === "month" && (
-                    <span className="text-pink-400 text-2xl">✓</span>
-                  )}
-                </div>
-                <div className="text-pink-400 font-bold text-2xl">
-                  {plans.month.price}₾
-                </div>
-                <div className="text-white/50 text-xs mt-1">
-                  {ka ? "ფასი კვირაში: " : "Price per week: "}{plans.month.pricePerWeek}₾
-                </div>
-              </button>
-
-              {/* 1 YEAR */}
-              <button
-                onClick={() => setSelectedPlan("year")}
-                className={`w-full p-4 rounded-2xl border-2 transition ${
-                  selectedPlan === "year"
-                    ? "border-pink-400 bg-pink-400/10"
-                    : "border-white/20 bg-white/5 hover:border-white/30"
-                }`}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="text-left">
-                    <div className="text-white font-bold text-lg">
-                      {plans.year.name}
-                    </div>
-                  </div>
-                  {selectedPlan === "year" && (
-                    <span className="text-pink-400 text-2xl">✓</span>
-                  )}
-                </div>
-                <div className="text-pink-400 font-bold text-2xl">
-                  {plans.year.price}₾
-                </div>
-                <div className="text-white/50 text-xs mt-1">
-                  {ka ? "ფასი კვირაში: " : "Price per week: "}{plans.year.pricePerWeek}₾
-                </div>
-              </button>
-            </div>
+            ))}
           </div>
 
-          {/* FEATURES */}
-          <div className="border border-pink-500/20 rounded-2xl p-4 bg-pink-500/5">
-            <div className="text-white/60 text-xs font-bold mb-4 block text-center">
-              {ka ? "Shekhvdi Plus-ში შედის" : "Included with Shekhvdi Plus"}
-            </div>
-            <div className="space-y-3">
-              {features.map((feature, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <span className="text-pink-400 text-lg">✓</span>
-                  <span className="text-white/90 text-sm font-medium">{feature}</span>
+          {/* FEATURES GRID - 2x2 for space saving */}
+          <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <div className="grid grid-cols-2 gap-y-2 gap-x-1">
+              {features.map((f, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  <span className="text-pink-500 text-xs">✓</span>
+                  <span className="text-white/80 text-[10px] font-medium truncate">{f}</span>
                 </div>
               ))}
             </div>
           </div>
-
-          {/* TERMS */}
-          <div className="text-white/40 text-xs leading-relaxed">
-            {ka
-              ? "გადახდით გაგრძელება, გადახდილი იქნება, გამოწერა თავს განაახლებს იმავე ფასით სანამ არ გაუქმებთ."
-              : "By tapping Continue, you will be charged and your subscription will auto-renew at the same price until you cancel."}
-          </div>
         </div>
 
-        {/* BUTTON */}
-        <div className="px-4 py-6 border-t border-white/10 shrink-0 bg-black space-y-3">
+        {/* STICKY FOOTER */}
+        <div className="p-4 bg-black/80 backdrop-blur-md border-t border-white/10 shrink-0">
           <button
             onClick={() => setShowCheckout(true)}
-            className="w-full bg-gradient-to-r from-pink-500 to-purple-500 text-white font-bold py-4 rounded-full hover:shadow-lg hover:shadow-pink-500/50 transition active:scale-95 text-lg"
+            className="w-full bg-gradient-to-r from-pink-500 to-purple-500 text-white font-bold py-3.5 rounded-full shadow-lg shadow-pink-500/20 active:scale-95 transition text-md"
           >
-            {ka ? `გადახდა - ${plans[selectedPlan].price}₾` : `Continue - ${plans[selectedPlan].price}₾`}
+            {ka ? `გააქტიურება - ${plans[selectedPlan].price}₾` : `Continue - ${plans[selectedPlan].price}₾`}
           </button>
-          <button
-            onClick={() => router.back()}
-            className="w-full bg-white/5 text-white font-semibold py-3 rounded-full hover:bg-white/10 transition active:scale-95"
-          >
-            {ka ? "უკან" : "Back"}
+          <button onClick={() => router.back()} className="w-full text-white/40 text-xs font-semibold py-2 mt-2">
+            {ka ? "არა, გმადლობთ" : "No, thanks"}
           </button>
         </div>
 
         {/* CHECKOUT MODAL */}
         {showCheckout && (
-          <div className="fixed inset-0 z-50 bg-black/70 flex items-end justify-center">
-            <div className="w-full max-w-lg bg-zinc-900 rounded-t-3xl overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-4 border-b border-white/10">
-                <h2 className="text-white font-bold text-lg">
-                  {ka ? "გადახდის მეთოდი" : "Payment Method"}
-                </h2>
-                <button
-                  onClick={() => setShowCheckout(false)}
-                  className="text-white/40 text-2xl"
-                >
-                  ✕
-                </button>
+          <div className="fixed inset-0 z-50 bg-black/80 flex items-end justify-center p-0">
+            <div className="w-full max-w-lg bg-zinc-900 rounded-t-3xl overflow-hidden animate-in slide-in-from-bottom duration-300">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
+                <h2 className="text-white font-bold">{ka ? "გადახდა" : "Payment"}</h2>
+                <button onClick={() => setShowCheckout(false)} className="text-white/40 text-xl">✕</button>
               </div>
 
-              <div className="p-4 space-y-3">
-                {/* VISA/MASTERCARD */}
-                <button className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/10 hover:bg-white/20 transition">
-                  <div className="w-10 h-6 bg-gradient-to-r from-blue-600 to-red-600 rounded flex items-center justify-center">
-                    <span className="text-white text-xs font-bold">💳</span>
-                  </div>
-                  <div className="text-left flex-1">
-                    <div className="text-white font-semibold text-sm">
-                      Visa / Mastercard
+              <div className="p-4 space-y-2">
+                {[
+                  { id: 'card', name: "Visa / Mastercard", icon: "💳", sub: ka ? "საბანკო ბარათი" : "Bank Card" },
+                  { id: 'apple', name: "Apple Pay", icon: "🍎", sub: "Fast Pay" },
+                  { id: 'tbc', name: "TBC Pay", icon: "💎", sub: "Instant" }
+                ].map((m) => (
+                  <button key={m.id} className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 transition">
+                    <span className="text-2xl">{m.icon}</span>
+                    <div className="text-left flex-1">
+                      <div className="text-white font-bold text-sm">{m.name}</div>
+                      <div className="text-white/40 text-[10px]">{m.sub}</div>
                     </div>
-                    <div className="text-white/60 text-xs">
-                      {ka ? "საბანკო ბარათი" : "Bank Card"}
-                    </div>
-                  </div>
-                  <span className="text-white/40">›</span>
-                </button>
-
-                {/* GOOGLE PAY */}
-                <button className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/10 hover:bg-white/20 transition">
-                  <div className="w-10 h-6 bg-white rounded flex items-center justify-center">
-                    <span className="text-2xl">🅖</span>
-                  </div>
-                  <div className="text-left flex-1">
-                    <div className="text-white font-semibold text-sm">
-                      Google Pay
-                    </div>
-                    <div className="text-white/60 text-xs">
-                      {ka ? "სწრაფი გადახდა" : "Fast Payment"}
-                    </div>
-                  </div>
-                  <span className="text-white/40">›</span>
-                </button>
-
-                {/* APPLE PAY */}
-                <button className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/10 hover:bg-white/20 transition">
-                  <div className="w-10 h-6 bg-black rounded flex items-center justify-center">
-                    <span className="text-2xl">🍎</span>
-                  </div>
-                  <div className="text-left flex-1">
-                    <div className="text-white font-semibold text-sm">
-                      Apple Pay
-                    </div>
-                    <div className="text-white/60 text-xs">
-                      {ka ? "სწრაფი გადახდა" : "Fast Payment"}
-                    </div>
-                  </div>
-                  <span className="text-white/40">›</span>
-                </button>
-
-                {/* TBC PAY */}
-                <button className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/10 hover:bg-white/20 transition border border-pink-400/30">
-                  <div className="w-10 h-6 bg-gradient-to-r from-orange-500 to-red-600 rounded flex items-center justify-center">
-                    <span className="text-white text-xs font-bold">TBC</span>
-                  </div>
-                  <div className="text-left flex-1">
-                    <div className="text-white font-semibold text-sm">
-                      TBC Pay
-                    </div>
-                    <div className="text-white/60 text-xs">
-                      {ka ? "საქართველოს ბანკი" : "Georgian Bank"}
-                    </div>
-                  </div>
-                  <span className="text-white/40">›</span>
-                </button>
+                    <span className="text-white/20">›</span>
+                  </button>
+                ))}
               </div>
 
-              <div className="px-4 pb-6 pt-2">
+              <div className="p-4 pb-8">
                 <button
-                  onClick={() => {
-                    alert(ka ? "✅ გადახდა დასრულდა!" : "✅ Payment completed!");
-                    setShowCheckout(false);
-                  }}
-                  className="w-full bg-gradient-to-r from-pink-500 to-purple-500 text-white font-bold py-3 rounded-full hover:shadow-lg transition"
+                  onClick={handlePayment}
+                  disabled={loading}
+                  className="w-full bg-pink-500 text-white font-black py-3.5 rounded-full active:scale-95 transition disabled:opacity-50 shadow-xl"
                 >
-                  {ka ? "გადახდა" : "Pay"}
+                  {loading ? (ka ? "მუშავდება..." : "Processing...") : (ka ? "დადასტურება" : "Confirm & Pay")}
                 </button>
               </div>
             </div>
