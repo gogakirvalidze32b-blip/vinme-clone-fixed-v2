@@ -67,11 +67,11 @@ export default function ProfileClient() {
   const avatarUrl = me?.photo1_url ? photoSrc(me.photo1_url) : null;
   const pct = calcProgress(me);
 
-  if (loading) return <div className="h-screen bg-black flex items-center justify-center text-white">Loading…</div>;
   if (!me) return null;
 
   return (
-    <main className="min-h-[100dvh] bg-zinc-950 text-white" style={{ paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))" }}>
+    <main className="min-h-[100dvh] bg-zinc-950 text-white" style={{ paddingBottom: "calc(100px + env(safe-area-inset-bottom, 0px))" }}>
+
       <div className="mx-auto w-full max-w-lg px-4 pt-5">
 
         {/* TOP ROW */}
