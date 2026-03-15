@@ -675,7 +675,7 @@ export default function ChatThreadPage() {
   if (!isLoaded) return (
     <div className="fixed inset-0 bg-[#111] flex justify-center">
       <div className="w-full max-w-lg flex flex-col bg-[#111]">
-        <div className="flex items-center gap-3 px-4 py-3 bg-zinc-950 border-b border-white/8 shrink-0">
+        <div className="flex items-center gap-3 px-4 py-3 bg-zinc-900 border-b border-white/10 shrink-0">
           <div className="w-9 h-9 rounded-full bg-white/10 animate-pulse" />
           <div className="flex items-center gap-3 flex-1">
             <div className="w-10 h-10 rounded-full bg-white/10 animate-pulse" />
@@ -699,7 +699,7 @@ export default function ChatThreadPage() {
       <div className="w-full max-w-lg flex flex-col bg-[#111]">
 
         {/* HEADER */}
-        <div ref={headerRef} className="flex items-center gap-3 px-4 py-3 bg-zinc-950 border-b border-white/8 shrink-0"
+        <div ref={headerRef} className="flex items-center gap-3 px-4 py-3 bg-slate-900 border-b border-white/8 shrink-0"
           style={{ position: "sticky", top: headerTop, zIndex: 50 }}>
           <button onClick={() => { setReactionMsgId(null); setSelectedMsgId(null); router.push("/chat"); }}
             className="rounded-full bg-white/8 w-9 h-9 flex items-center justify-center text-white shrink-0 hover:bg-white/12 transition">←</button>
@@ -799,7 +799,7 @@ export default function ChatThreadPage() {
                         )}
 
                         {m.type === "voice" ? (
-                          <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl max-w-[270px] ${mine?"bg-[#7C3AED] rounded-tr-sm":"bg-zinc-800 rounded-tl-sm"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
+                          <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl max-w-[270px] ${mine?"bg-[#7C3AED] rounded-tr-sm":"bg-slate-800 rounded-tl-sm"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
                             <span className="text-lg shrink-0">🎤</span>
                             <audio controls src={m.content} className="h-8 max-w-[160px]" preload="metadata" />
                             <div className="flex items-center gap-0.5 shrink-0">
@@ -818,7 +818,7 @@ export default function ChatThreadPage() {
                             )}
                           </div>
                         ) : (
-                          <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words select-none ${mine?"bg-[#7C3AED] rounded-2xl rounded-tr-sm":"bg-zinc-800 rounded-2xl rounded-tl-sm"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
+                          <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words select-none ${mine?"bg-[#7C3AED] rounded-2xl rounded-tr-sm":"bg-slate-800 rounded-2xl rounded-tl-sm"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
                             <span>{m.content}</span>
                             <span className="inline-flex items-center gap-0.5 ml-2">
                               <span className={`text-[10px] ${mine?"text-purple-200/50":"text-white/25"}`}>{fmtTime(m.created_at)}</span>
@@ -844,7 +844,7 @@ export default function ChatThreadPage() {
         </div>
 
         {/* INPUT BAR */}
-        <div className="shrink-0 bg-zinc-950 border-t border-white/8"
+        <div className="shrink-0 bg-slate-900 border-t border-white/8"
           style={{ paddingBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : undefined }}>
 
           {showEmoji && (
