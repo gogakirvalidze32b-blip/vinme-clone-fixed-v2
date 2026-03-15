@@ -24,17 +24,18 @@ export default function ProfileClient() {
   const ka = lang !== "en";
   const L = (k: string, e: string) => ka ? k : e;
 
-const [me, setMe] = useState<any>(() => {
-  try {
-    if (typeof window !== "undefined") {
-      const cached = sessionStorage.getItem("profile_cache");
-      return cached ? JSON.parse(cached) : {};
+  const [me, setMe] = useState<any>(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const cached = sessionStorage.getItem("profile_cache");
+        return cached ? JSON.parse(cached) : {};
+      }
+    } catch (e) {
+      console.error("Cache error:", e);
     }
-  } catch (e) {
-    console.error("Cache error:", e);
-  }
-  return {};
-});
+    return {};
+  });
+
   useEffect(() => {
     (async () => {
       try {
@@ -47,8 +48,11 @@ const [me, setMe] = useState<any>(() => {
         if (!data.onboarding_completed) { router.replace("/onboarding"); return; }
         
         setMe(data);
-        
-        // ✅ Auto-update city from GPS in background (non-blocking)
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem("profile_cache", JSON.stringify(data));
+        }
+
+        // ✅ Auto-update location + age in background
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(async (pos) => {
             try {
@@ -61,13 +65,25 @@ const [me, setMe] = useState<any>(() => {
               const geo = await res.json();
               const cityName = geo.address?.city || geo.address?.town || geo.address?.village || geo.address?.suburb || geo.address?.county;
               
-              if (cityName || (pos.coords.latitude && pos.coords.longitude)) {
-                await supabase.from("profiles").update({
-                  latitude: pos.coords.latitude,
-                  longitude: pos.coords.longitude,
-                  ...(cityName ? { city: cityName } : {}),
-                }).eq("user_id", uid);
-              }
+              // Calculate age from birth_date
+              const birthDate = data?.birth_date ? new Date(data.birth_date) : null;
+              const age = birthDate ? Math.floor((new Date().getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : null;
+              
+              const updateData: any = {
+                latitude: pos.coords.latitude,
+                longitude: pos.coords.longitude,
+              };
+              
+              if (cityName) updateData.city = cityName;
+              if (age) updateData.age = age;
+              
+              await supabase.from("profiles").update(updateData).eq("user_id", uid);
+              
+              // Update local state
+             setMe((prev: any) => ({
+  ...prev,
+  ...updateData
+}));
             } catch (e) {
               console.error("Geolocation error:", e);
             }
@@ -102,37 +118,39 @@ const [me, setMe] = useState<any>(() => {
             </button>
           </div>
         </div>
-{/* AVATAR + NAME */}
-<div className="flex items-center gap-4 mb-6">
-  {/* Progress ring */}
-  <div className="relative h-20 w-20 shrink-0">
-    <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 80 80">
-      <circle cx="40" cy="40" r="36" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="5" />
-      <circle cx="40" cy="40" r="36" fill="none" stroke="#ec4899" strokeWidth="5"
-        strokeDasharray={`${2 * Math.PI * 36}`}
-        strokeDashoffset={`${2 * Math.PI * 36 * (1 - pct / 100)}`}
-        strokeLinecap="round" />
-    </svg>
-    <div className="absolute inset-[5px] rounded-full overflow-hidden bg-zinc-800">
-      {avatarUrl
-        ? <img 
-            src={avatarUrl} 
-            alt="" 
-            className="w-full h-full object-cover" 
-            loading="eager"
-            decoding="async"
-          />
-        : <div className="w-full h-full flex items-center justify-center text-3xl">👤</div>}
-    </div>
-    <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-zinc-950 rounded-full px-2 py-0.5 text-[10px] font-bold ring-2 ring-pink-500 whitespace-nowrap">
-      {pct}%
-    </div>
-  </div>
+
+        {/* AVATAR + NAME */}
+        <div className="flex items-center gap-4 mb-6">
+          {/* Progress ring */}
+          <div className="relative h-20 w-20 shrink-0">
+            <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 80 80">
+              <circle cx="40" cy="40" r="36" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="5" />
+              <circle cx="40" cy="40" r="36" fill="none" stroke="#ec4899" strokeWidth="5"
+                strokeDasharray={`${2 * Math.PI * 36}`}
+                strokeDashoffset={`${2 * Math.PI * 36 * (1 - pct / 100)}`}
+                strokeLinecap="round" />
+            </svg>
+            <div className="absolute inset-[5px] rounded-full overflow-hidden bg-zinc-800">
+              {avatarUrl
+                ? <img 
+                    src={avatarUrl} 
+                    alt="" 
+                    className="w-full h-full object-cover" 
+                    loading="eager"
+                    decoding="async"
+                  />
+                : <div className="w-full h-full flex items-center justify-center text-3xl">👤</div>}
+            </div>
+            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-zinc-950 rounded-full px-2 py-0.5 text-[10px] font-bold ring-2 ring-pink-500 whitespace-nowrap">
+              {pct}%
+            </div>
+          </div>
+
           <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-<h1 className="text-2xl font-extrabold">
-  {name ? `${name}${age ? `, ${age}` : ""}` : null}
-</h1>
+              <h1 className="text-2xl font-extrabold">
+                {name ? `${name}${age ? `, ${age}` : ""}` : null}
+              </h1>
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 text-xs border border-blue-400/40">✓</span>
             </div>
             <button onClick={() => router.push("/profile/edit")}
