@@ -70,7 +70,7 @@ export default function ProfileClient() {
     })();
   }, [router]);
 
-  const name = me?.nickname ?? me?.first_name ?? "User";
+  const name = me?.nickname ?? me?.first_name ?? "";
   const age = me?.age ?? null;
   const avatarUrl = me?.photo1_url ? photoSrc(me.photo1_url) : null;
   const pct = calcProgress(me);
@@ -117,7 +117,9 @@ export default function ProfileClient() {
 
           <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl font-extrabold">{name}{age ? `, ${age}` : ""}</h1>
+<h1 className="text-2xl font-extrabold">
+  {name ? `${name}${age ? `, ${age}` : ""}` : "..."}
+</h1>
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 text-xs border border-blue-400/40">✓</span>
             </div>
             <button onClick={() => router.push("/profile/edit")}
