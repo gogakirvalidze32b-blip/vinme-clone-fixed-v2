@@ -288,7 +288,7 @@ export default function SettingsPage() {
           {/* CONTACT */}
           <SectionLabel>{L("კონტაქტი", "Contact Us")}</SectionLabel>
           <Card>
-            <Row label={L("დახმარება", "Help & Support")} onClick={() => {}} />
+<Row label={L("დახმარება", "Help & Support")} onClick={() => router.push("/help")} />
             <Row label={L("პრობლემის შეტყობინება", "Report a problem")} onClick={() => {}} />
           </Card>
 
