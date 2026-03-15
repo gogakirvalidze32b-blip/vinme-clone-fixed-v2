@@ -30,6 +30,8 @@ export default function ChatThreadPage() {
 
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  
+
   // ✅ mark ALL incoming messages as read for this thread
   async function markThreadRead(inMatchId: number, meAnon: string) {
     const { error } = await supabase
@@ -49,6 +51,7 @@ export default function ChatThreadPage() {
     }
   }
 
+  
   // ===== load initial =====
   useEffect(() => {
     let alive = true;
@@ -80,6 +83,8 @@ export default function ChatThreadPage() {
 
         const anon = meRes.data?.anon_id ?? null;
         const otherId = mRes.data.user_a === uid ? mRes.data.user_b : mRes.data.user_a;
+
+        
 
         if (!alive) return;
         setMyAnonId(anon);
