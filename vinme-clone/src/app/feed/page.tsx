@@ -28,63 +28,66 @@ export default function FeedPage() {
   
   const loadingTopRef = useRef(false);
   const meRef = useRef<any>(null);
-  const lastCoordsRef = useRef<{lat: number, lon: number} | null>(null);
+  const lastUpdateCoordsRef = useRef<{lat: number, lon: number} | null>(null);
 
-  const saveLocation = useCallback(async (uid: string) => {
-    if (!navigator.geolocation) return;
+const saveLocation = useCallback(async (uid: string) => {
+  if (!navigator.geolocation) return;
 
-    // ვუსმენთ მომხმარებლის გადაადგილებას
-    const watchId = navigator.geolocation.watchPosition(async (pos) => {
-      const lat = pos.coords.latitude;
-      const lon = pos.coords.longitude;
+  const watchId = navigator.geolocation.watchPosition(async (pos) => {
+    const lat = pos.coords.latitude;
+    const lon = pos.coords.longitude;
 
-      // თუ 1 კმ-ზე ნაკლებია გავილი არ დავტვირთოთ nominatim-ი API რექვესთით
-      let shouldUpdateCity = false;
-      if (!lastCoordsRef.current || haversineKm(lastCoordsRef.current.lat, lastCoordsRef.current.lon, lat, lon) >= 1) {
-        shouldUpdateCity = true;
+    // 1. შემოწმება: განახლდეს მხოლოდ თუ გაიარა 2 კმ-ზე მეტი
+    if (lastUpdateCoordsRef.current) {
+      const distanceMoved = haversineKm(
+        lastUpdateCoordsRef.current.lat, 
+        lastUpdateCoordsRef.current.lon, 
+        lat, lon
+      );
+      
+      // თუ 2 კმ-ზე ნაკლებია, ვაჩერებთ ფუნქციას
+      if (distanceMoved < 2) return; 
+    }
+
+    // 2. ქალაქის განახლება (რადგან 2 კმ უკვე გავიარეთ, ქალაქიც გადავამოწმოთ)
+    let city = meRef.current?.city || "";
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=10&addressdetails=1&email=შენი_მეილი@gmail.com`,
+        { headers: { "Accept-Language": "ka" }, signal: AbortSignal.timeout(5000) }
+      );
+      if (res.ok) {
+        const json = await res.json();
+        city = json.address?.city || json.address?.town || json.address?.village || json.address?.county || "";
       }
+    } catch (err) {
+      console.log("Geocoding failed");
+    }
 
-      let city = meRef.current?.city || "";
+    // 3. ბაზაში გაგზავნა
+    await supabase.from("profiles").update({ 
+      latitude: lat, 
+      longitude: lon, 
+      city,
+      last_seen: new Date().toISOString()
+    }).eq("user_id", uid);
 
-      if (shouldUpdateCity) {
-        try {
-          // ჩაწერე შენი მეილი აქ!
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=10&addressdetails=1&email=შენი_მეილი@gmail.com`,
-            { headers: { "Accept-Language": "ka" }, signal: AbortSignal.timeout(5000) }
-          );
-          if (res.ok) {
-            const json = await res.json();
-            city = json.address?.city || json.address?.town || json.address?.village || json.address?.county || "";
-          }
-        } catch (err) {
-          console.log("Geocoding failed");
-        }
-        lastCoordsRef.current = { lat, lon };
-      }
+    console.log("📍 მნიშვნელოვანი გადაადგილება (2კმ+)! ბაზა განახლდა.");
 
-      // ვანახლებთ ბაზას
-      await supabase.from("profiles").update({ 
-        latitude: lat, 
-        longitude: lon, 
-        city,
-        last_seen: new Date().toISOString()
-      }).eq("user_id", uid);
-
-      console.log("📍 მდებარეობა განახლდა:", { lat, lon, city });
-
+    // მნიშვნელოვანია: ბოლო წერტილის დამახსოვრება
+    lastUpdateCoordsRef.current = { lat, lon };
     
-      // ვაახლებთ სტეიტს
-      setMe((prev: any) => prev ? { ...prev, latitude: lat, longitude: lon, city } : prev);
+    // სტეიტის განახლება, რომ ეკრანზეც შეიცვალოს მანძილი
+    setMe((prev: any) => prev ? { ...prev, latitude: lat, longitude: lon, city } : prev);
 
-    }, (err) => console.error(err), {
-      enableHighAccuracy: true,
-      maximumAge: 10000,
-      timeout: 10000
-    });
+  }, (err) => console.error(err), {
+    enableHighAccuracy: true,
+    maximumAge: 60000, // 1 წუთიანი ქეშირება (ელემენტის დასაზოგად)
+    timeout: 15000
+  });
 
-    return watchId;
-  }, []);
+  return watchId;
+}, []);
 
   const loadMe = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
