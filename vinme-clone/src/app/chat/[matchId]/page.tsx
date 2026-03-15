@@ -66,7 +66,7 @@ function ReactionBar({ msgId, myAnonId, reactions, onReact, onClose, mine }: {
   msgId: string; myAnonId: string; reactions: Reaction[];
   onReact: (msgId: string, emoji: string) => void; onClose: () => void; mine: boolean;
 }) {
-  const emojis = ["❤️", "😂", "😮", "😢", "😡", "👍"];
+  const emojis =["❤️", "😂", "😮", "😢", "😡", "👍"];
   return (
     <div
       className={`absolute bottom-full mb-2 z-50 flex items-center gap-1 bg-zinc-800 rounded-full px-3 py-2 shadow-2xl ring-1 ring-white/10 ${mine ? "right-0" : "left-0"}`}
@@ -85,25 +85,34 @@ function ReactionBar({ msgId, myAnonId, reactions, onReact, onClose, mine }: {
   );
 }
 
-function ReactionsDisplay({ msgId, reactions, myAnonId, mine, onReact }: {
-  msgId: string; reactions: Reaction[]; myAnonId: string; mine: boolean;
+// შეცვლილი: რეაქციები დაჯგუფებულია უნიკალურად თითო იუზერზე, რათა "2" არ დაიწეროს ტყუილად
+function ReactionsDisplay({ msgId, reactions, myAnonId, onReact }: {
+  msgId: string; reactions: Reaction[]; myAnonId: string;
   onReact: (msgId: string, emoji: string) => void;
 }) {
   const msgReactions = reactions.filter(r => r.message_id === msgId);
   if (!msgReactions.length) return null;
+
+  // ვიტოვებთ მხოლოდ 1 რეაქციას 1 იუზერზე (რომ დუბლირება არ მოხდეს)
+  const latestReactions = new Map<string, Reaction>();
+  msgReactions.forEach(r => { latestReactions.set(r.sender_anon, r); });
+  const activeReactions = Array.from(latestReactions.values());
+  if (!activeReactions.length) return null;
+
   const grouped: Record<string, number> = {};
-  msgReactions.forEach(r => { grouped[r.emoji] = (grouped[r.emoji] ?? 0) + 1; });
+  activeReactions.forEach(r => { grouped[r.emoji] = (grouped[r.emoji] ?? 0) + 1; });
+
   return (
-    <div className={`flex w-full ${mine ? "justify-end" : "justify-start"}`}>
+    <div className="flex items-center gap-1">
       {Object.entries(grouped).map(([emoji, count]) => {
-        const isMine = msgReactions.some(r => r.emoji === emoji && r.sender_anon === myAnonId);
+        const isMine = activeReactions.some(r => r.emoji === emoji && r.sender_anon === myAnonId);
         return (
           <button key={emoji} onClick={() => onReact(msgId, emoji)}
-            className={`flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs transition active:scale-90 ${
-              isMine ? "bg-[#7C3AED]/40 ring-1 ring-[#7C3AED]" : "bg-zinc-700/80 ring-1 ring-white/10"
+            className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[11px] transition active:scale-90 shadow-md ${
+              isMine ? "bg-[#7C3AED] text-white border border-[#7C3AED]" : "bg-zinc-800 text-white border border-white/10"
             }`}>
-            <span style={{ fontSize: 14 }}>{emoji}</span>
-            {count > 1 && <span className="text-white/70 font-medium">{count}</span>}
+            <span style={{ fontSize: 13, lineHeight: 1 }}>{emoji}</span>
+            {count > 1 && <span className="font-medium ml-0.5">{count}</span>}
           </button>
         );
       })}
@@ -134,7 +143,7 @@ function UnmatchModal({ onClose, onConfirm, ka }: {
     onConfirm(selected ?? feedback);
   }
 
-  const reasons = [
+  const reasons =[
     ka ? "არ ვართ თავსებადი" : "Not compatible",
     ka ? "შეურაცხმყოფელი ქცევა" : "Offensive behavior",
     ka ? "სპამი ან ყალბი პროფილი" : "Spam or fake profile",
@@ -210,6 +219,7 @@ function ChatMenu({ onClose, onViewProfile, onUnmatch, onBlock, lang }: {
   );
 }
 
+// შეცვლილი: ატვირთვის მენიუს ზომები დაპატარავდა
 function AttachSheet({ onClose, onGallery, onCamera, lang }: {
   onClose: () => void; onGallery: () => void; onCamera: () => void; lang: string;
 }) {
@@ -218,82 +228,66 @@ function AttachSheet({ onClose, onGallery, onCamera, lang }: {
     <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div className="relative w-full max-w-lg bg-zinc-900 rounded-t-3xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex justify-between items-center px-5 pt-5 pb-3 border-b border-white/8">
-          <h3 className="text-white font-bold">{ka?"დამატება":"Attach"}</h3>
-          <button onClick={onClose} className="text-white/40 text-2xl">✕</button>
+        <div className="flex justify-between items-center px-5 pt-4 pb-3 border-b border-white/5">
+          <h3 className="text-white font-semibold text-sm">{ka?"ატვირთვა":"Attach"}</h3>
+          <button onClick={onClose} className="text-white/40 text-xl hover:text-white">✕</button>
         </div>
         <div className="grid grid-cols-2 gap-3 p-4">
           <button onClick={() => { onCamera(); onClose(); }}
-            className="flex flex-col items-center gap-3 py-6 rounded-2xl bg-white/5 hover:bg-white/10 transition active:scale-95">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            className="flex flex-col items-center justify-center gap-2 py-4 rounded-xl bg-white/5 hover:bg-white/10 transition active:scale-95">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
               <circle cx="12" cy="13" r="4"/>
             </svg>
-            <span className="text-white/80 text-sm font-medium">{ka?"კამერა":"Camera"}</span>
+            <span className="text-white/80 text-xs font-medium">{ka?"კამერა":"Camera"}</span>
           </button>
           <button onClick={() => { onGallery(); onClose(); }}
-            className="flex flex-col items-center gap-3 py-6 rounded-2xl bg-white/5 hover:bg-white/10 transition active:scale-95">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            className="flex flex-col items-center justify-center gap-2 py-4 rounded-xl bg-white/5 hover:bg-white/10 transition active:scale-95">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="2"/>
               <circle cx="8.5" cy="8.5" r="1.5"/>
               <path d="m21 15-5-5L5 21"/>
             </svg>
-            <span className="text-white/80 text-sm font-medium">{ka?"გალერეა":"Gallery"}</span>
+            <span className="text-white/80 text-xs font-medium">{ka?"გალერეა":"Gallery"}</span>
           </button>
         </div>
-        <div className="h-6" />
+        <div className="h-4" />
       </div>
     </div>
   );
 }
 
-const EMOJI_ROWS = [
-  ["😀","😃","😄","😁","😆","😅","🤣","😂","🙂","😊","😇","🥰","😍","🤩","😘","😗"],
-  ["😙","😚","😋","😛","😜","🤪","😝","🤑","🤗","🤭","🤫","🤔","🤐","🤨","😐","😑"],
-  ["😶","😏","😒","🙄","😬","🤥","😌","😔","😪","🤤","😴","😷","🤒","🤕","🤢","🤧"],
-  ["🥵","🥶","🥴","😵","🤯","🤠","🥳","😎","🤓","🧐","😕","😟","🙁","☹️","😮","😯"],
-  ["😲","😳","🥺","😦","😧","😨","😰","😥","😢","😭","😱","😖","😣","😞","😓","😩"],
-  ["😫","🥱","😤","😡","😠","🤬","😈","👿","💀","☠️","💩","🤡","👹","👺","👻","👽"],
-  ["❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎","💔","❣️","💕","💞","💓","💗","💖"],
-  ["💘","💝","💟","☮️","✝️","☪️","🕉","✡️","🔯","🕎","☯️","☦️","🛐","⛎","♈","♉"],
-  ["👍","👎","👌","🤌","🤏","✌️","🤞","🤟","🤘","🤙","👈","👉","👆","🖕","👇","☝️"],
-  ["👋","🤚","🖐","✋","🖖","👏","🙌","🤲","🤝","🙏","✍️","💅","🤳","💪","🦾","🦿"],
-  ["🎉","🎊","🎈","🎁","🎀","🎗","🎟","🎫","🏆","🥇","🥈","🥉","⚽","🏀","🏈","⚾"],
-  ["🔥","💥","✨","⭐","🌟","💫","⚡","☄️","🌈","☀️","🌤","⛅","🌥","☁️","🌦","🌧"],
-  ["😻","😺","😸","😹","😼","😽","🙀","😿","😾","🐶","🐱","🐭","🐹","🐰","🦊","🐻"],
+const EMOJI_ROWS =[["😀","😃","😄","😁","😆","😅","🤣","😂","🙂","😊","😇","🥰","😍","🤩","😘","😗"],["😙","😚","😋","😛","😜","🤪","😝","🤑","🤗","🤭","🤫","🤔","🤐","🤨","😐","😑"],["😶","😏","😒","🙄","😬","🤥","😌","😔","😪","🤤","😴","😷","🤒","🤕","🤢","🤧"],["🥵","🥶","🥴","😵","🤯","🤠","🥳","😎","🤓","🧐","😕","😟","🙁","☹️","😮","😯"],["😲","😳","🥺","😦","😧","😨","😰","😥","😢","😭","😱","😖","😣","😞","😓","😩"],["😫","🥱","😤","😡","😠","🤬","😈","👿","💀","☠️","💩","🤡","👹","👺","👻","👽"],["❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎","💔","❣️","💕","💞","💓","💗","💖"],["💘","💝","💟","☮️","✝️","☪️","🕉","✡️","🔯","🕎","☯️","☦️","🛐","⛎","♈","♉"],["👍","👎","👌","🤌","🤏","✌️","🤞","🤟","🤘","🤙","👈","👉","👆","🖕","👇","☝️"],["👋","🤚","🖐","✋","🖖","👏","🙌","🤲","🤝","🙏","✍️","💅","🤳","💪","🦾","🦿"],["🎉","🎊","🎈","🎁","🎀","🎗","🎟","🎫","🏆","🥇","🥈","🥉","⚽","🏀","🏈","⚾"],["🔥","💥","✨","⭐","🌟","💫","⚡","☄️","🌈","☀️","🌤","⛅","🌥","☁️","🌦","🌧"],["😻","😺","😸","😹","😼","😽","🙀","😿","😾","🐶","🐱","🐭","🐹","🐰","🦊","🐻"],
 ];
 
+// შეცვლილი: Emoji Picker გახდა კომპაქტური Grid, Messenger-ის მსგავსი
 function QuickEmojiPicker({ onPick, onClose }: { onPick: (e: string) => void; onClose: () => void }) {
   const [search, setSearch] = useState("");
-  const allEmojis = EMOJI_ROWS.flat();
-  const filtered = search ? allEmojis.filter(e => e.includes(search)) : null;
-  const rows = filtered ? [filtered] : EMOJI_ROWS;
+  const allEmojis = useMemo(() => EMOJI_ROWS.flat(),[]);
+  const filtered = search ? allEmojis.filter(e => e.includes(search)) : allEmojis;
 
   return (
-    <div className="bg-zinc-900 border-t border-white/8 rounded-t-2xl" onClick={e => e.stopPropagation()}>
-      <div className="flex items-center gap-2 px-3 pt-3 pb-2">
-        <button onClick={onClose}
-          className="shrink-0 w-8 h-8 flex items-center justify-center text-white/60 hover:text-white transition">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <div className="bg-zinc-900 border-t border-white/8 rounded-t-2xl shadow-xl" onClick={e => e.stopPropagation()}>
+      <div className="flex items-center gap-2 px-3 pt-3 pb-2 border-b border-white/5">
+        <button type="button" onClick={onClose}
+          className="shrink-0 w-8 h-8 flex items-center justify-center text-white/60 hover:text-white transition bg-white/5 rounded-full">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M15 18l-6-6 6-6"/>
           </svg>
         </button>
         <input value={search} onChange={e => setSearch(e.target.value)}
           placeholder="🔍 Search emojis..."
-          className="flex-1 bg-zinc-800 rounded-full px-3 py-2 text-sm text-white placeholder-white/30 outline-none" />
+          className="flex-1 bg-zinc-800 rounded-full px-4 py-2 text-sm text-white placeholder-white/30 outline-none" />
       </div>
-      <div className="overflow-y-auto px-2 pb-3" style={{ maxHeight: 240 }}>
-        {rows.map((row, ri) => (
-          <div key={ri} className="flex flex-wrap">
-            {row.map((e, ei) => (
-              <button key={ei} onClick={() => { onPick(e); if (search) setSearch(""); }}
-                className="w-10 h-10 flex items-center justify-center text-2xl hover:bg-white/10 rounded-xl transition active:scale-90"
-                style={{ lineHeight: 1 }}>
-                {e}
-              </button>
-            ))}
-          </div>
-        ))}
+      <div className="overflow-y-auto p-2 scrollbar-hide" style={{ height: 220 }}>
+        <div className="grid grid-cols-7 gap-1">
+          {filtered.map((e, i) => (
+            <button key={i} type="button" onClick={() => { onPick(e); if (search) setSearch(""); }}
+              className="aspect-square flex items-center justify-center text-2xl hover:bg-white/10 rounded-xl transition active:scale-90">
+              {e}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -319,23 +313,23 @@ export default function ChatThreadPage() {
   const [myAnonId, setMyAnonId] = useState<string|null>(null);
   const [myUserId, setMyUserId] = useState<string|null>(null);
   const [otherProfile, setOtherProfile] = useState<any>(null);
-  const [otherUserId, setOtherUserId] = useState<string|null>(null);
+  const[otherUserId, setOtherUserId] = useState<string|null>(null);
   const [sending, setSending] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const[isLoaded, setIsLoaded] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showUnmatchModal, setShowUnmatchModal] = useState(false);
-  const [showAttachSheet, setShowAttachSheet] = useState(false);
+  const[showAttachSheet, setShowAttachSheet] = useState(false);
   const [reactionMsgId, setReactionMsgId] = useState<string|null>(null);
   const [selectedMsgId, setSelectedMsgId] = useState<string|null>(null);
   const longPressTimer = useRef<NodeJS.Timeout|null>(null);
   const [replyTo, setReplyTo] = useState<MsgRow|null>(null);
-  const [hoveredMsgId, setHoveredMsgId] = useState<string|null>(null);
+  const[hoveredMsgId, setHoveredMsgId] = useState<string|null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [recording, setRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob|null>(null);
-  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string|null>(null);
-  const [recordTime, setRecordTime] = useState(0);
+  const[audioPreviewUrl, setAudioPreviewUrl] = useState<string|null>(null);
+  const[recordTime, setRecordTime] = useState(0);
   const [uploadingVoice, setUploadingVoice] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder|null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -356,7 +350,7 @@ export default function ChatThreadPage() {
       setReactionMsgId(null);
       setSelectedMsgId(null);
     };
-  }, []);
+  },[]);
 
   useEffect(() => {
     if (headerRef.current) {
@@ -377,7 +371,7 @@ export default function ChatThreadPage() {
     }
     vv.addEventListener("resize", onResize);
     return () => vv.removeEventListener("resize", onResize);
-  }, []);
+  },[]);
 
   useEffect(() => {
     if (keyboardHeight > 0) bottomRef.current?.scrollIntoView({ behavior: "instant" });
@@ -410,7 +404,7 @@ export default function ChatThreadPage() {
       window.removeEventListener("focusin", onFocus);
       window.removeEventListener("focusout", onBlur);
     };
-  }, []);
+  },[]);
 
   const isOnline = useMemo(() => {
     if (!otherProfile?.last_seen) return false;
@@ -451,23 +445,23 @@ export default function ChatThreadPage() {
       if (!matchRow) return;
       const otherId = matchRow.user_a === user.id ? matchRow.user_b : matchRow.user_a;
       setOtherUserId(otherId);
-      const [profileRes, msgsRes] = await Promise.all([
+      const[profileRes, msgsRes] = await Promise.all([
         supabase.from("profiles").select("user_id,nickname,first_name,photo1_url,last_seen").eq("user_id", otherId).maybeSingle(),
         supabase.from("messages").select("*").eq("match_id", matchId).order("created_at", { ascending: true }),
       ]);
-      const msgIds = (msgsRes.data ?? []).map((m: any) => m.id);
+      const msgIds = (msgsRes.data ??[]).map((m: any) => m.id);
       const reactionsRes = msgIds.length
         ? await supabase.from("message_reactions").select("*").in("message_id", msgIds)
-        : { data: [] };
+        : { data:[] };
       setOtherProfile(profileRes.data ?? null);
       setMsgs(msgsRes.data ?? []);
-      setReactions(reactionsRes.data ?? []);
+      setReactions(reactionsRes.data ??[]);
       setIsLoaded(true);
       await markRead(anonId, user.id);
       await markDelivered(anonId);
       await supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("user_id", user.id);
     })();
-  }, [matchId, router, markRead, markDelivered]);
+  },[matchId, router, markRead, markDelivered]);
 
   useEffect(() => {
     if (!matchId) return;
@@ -488,7 +482,11 @@ export default function ChatThreadPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, (payload) => {
         if (payload.eventType === "INSERT") {
           const r = payload.new as Reaction;
-          setReactions(prev => prev.some(x => x.id === r.id) ? prev : [...prev, r]);
+          setReactions(prev => {
+            const cleaned = prev.filter(x => !(x.id.startsWith("temp-") && x.message_id === r.message_id && x.sender_anon === r.sender_anon));
+            if (cleaned.some(x => x.id === r.id)) return cleaned;
+            return [...cleaned, r];
+          });
         }
         if (payload.eventType === "DELETE") {
           const r = payload.old as Reaction;
@@ -506,7 +504,7 @@ export default function ChatThreadPage() {
   useEffect(() => {
     if (!isLoaded) return;
     bottomRef.current?.scrollIntoView({ behavior: "instant" });
-  }, [msgs.length, isLoaded]);
+  },[msgs.length, isLoaded]);
 
   async function handleReact(msgId: string, emoji: string) {
     if (!myAnonId) return;
@@ -521,10 +519,16 @@ export default function ChatThreadPage() {
         await supabase.from("message_reactions").update({ emoji }).eq("id", existing.id);
       }
     } else {
-      const tempId = `r-${Date.now()}`;
-      setReactions(prev => [...prev, { id: tempId, message_id: msgId, sender_anon: myAnonId, emoji }]);
+      const tempId = `temp-r-${Date.now()}`;
+      setReactions(prev =>[...prev, { id: tempId, message_id: msgId, sender_anon: myAnonId, emoji }]);
       const { data } = await supabase.from("message_reactions").insert({ message_id: msgId, sender_anon: myAnonId, emoji }).select().single();
-      if (data) setReactions(prev => prev.map(r => r.id === tempId ? data as Reaction : r));
+      if (data) {
+        setReactions(prev => {
+           const hasReal = prev.some(r => r.id === data.id);
+           if (hasReal) return prev.filter(r => r.id !== tempId);
+           return prev.map(r => r.id === tempId ? data : r);
+        });
+      }
     }
   }
 
@@ -552,9 +556,16 @@ export default function ChatThreadPage() {
       if (upErr) throw upErr;
       const { data: urlData } = supabase.storage.from("photos").getPublicUrl(path);
       const tempId = `tempi-${Date.now()}`;
-      setMsgs(prev => [...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: urlData.publicUrl, created_at: new Date().toISOString(), read_at: null, type: "image" }]);
+      setMsgs(prev =>[...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: urlData.publicUrl, created_at: new Date().toISOString(), read_at: null, type: "image" }]);
+      
       const { data } = await supabase.from("messages").insert({ match_id: matchId, sender_anon: myAnonId, content: urlData.publicUrl, type: "image" }).select().single();
-      if (data) setMsgs(prev => prev.map(m => m.id === tempId ? (data as MsgRow) : m));
+      if (data) {
+        setMsgs(prev => {
+          const withoutTemp = prev.filter(m => m.id !== tempId);
+          if (withoutTemp.some(m => m.id === data.id)) return withoutTemp;
+          return [...withoutTemp, data as MsgRow];
+        });
+      }
       await supabase.from("matches").update({ has_unread: true }).eq("id", matchId);
     } catch (e) { console.error(e); }
     setUploadingImg(false);
@@ -570,10 +581,17 @@ export default function ChatThreadPage() {
     const replyPreview = replyTo ? (replyTo.type==="voice"?"🎤 Voice":replyTo.type==="image"?"📷 Photo":replyTo.content.slice(0,60)) : null;
     const replyId = replyTo?.id ?? null;
     setReplyTo(null);
-    setMsgs(prev => [...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: t2, created_at: new Date().toISOString(), read_at: null, delivered_at: null, type: "text", reply_to_id: replyId, reply_preview: replyPreview }]);
+    setMsgs(prev =>[...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: t2, created_at: new Date().toISOString(), read_at: null, delivered_at: null, type: "text", reply_to_id: replyId, reply_preview: replyPreview }]);
     try {
       const { data } = await supabase.from("messages").insert({ match_id: matchId, sender_anon: myAnonId, content: t2, type: "text", reply_to_id: replyId, reply_preview: replyPreview }).select().single();
-      if (data) setMsgs(prev => prev.map(m => m.id === tempId ? (data as MsgRow) : m));
+      // მოგვარდა Double გაგზავნის პრობლემა
+      if (data) {
+        setMsgs(prev => {
+          const withoutTemp = prev.filter(m => m.id !== tempId);
+          if (withoutTemp.some(m => m.id === data.id)) return withoutTemp;
+          return [...withoutTemp, data as MsgRow];
+        });
+      }
       await supabase.from("matches").update({ has_unread: true }).eq("id", matchId);
       if (myUserId) await supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("user_id", myUserId);
     } catch (err) {
@@ -590,7 +608,7 @@ export default function ChatThreadPage() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder; chunksRef.current = [];
+      mediaRecorderRef.current = recorder; chunksRef.current =[];
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       recorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
@@ -603,7 +621,7 @@ export default function ChatThreadPage() {
     } catch { alert(ka ? "მიკროფონი მიუწვდომელია" : "Microphone unavailable"); }
   }
   function stopRecording() { mediaRecorderRef.current?.stop(); setRecording(false); if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } }
-  function cancelRecording() { stopRecording(); setAudioBlob(null); if (audioPreviewUrl) { URL.revokeObjectURL(audioPreviewUrl); setAudioPreviewUrl(null); } setRecordTime(0); chunksRef.current = []; }
+  function cancelRecording() { stopRecording(); setAudioBlob(null); if (audioPreviewUrl) { URL.revokeObjectURL(audioPreviewUrl); setAudioPreviewUrl(null); } setRecordTime(0); chunksRef.current =[]; }
 
   async function sendVoice() {
     if (!audioBlob || !myAnonId || uploadingVoice) return;
@@ -613,9 +631,16 @@ export default function ChatThreadPage() {
     if (error) { console.error(error); setUploadingVoice(false); return; }
     const { data: urlData } = supabase.storage.from("voices").getPublicUrl(fileName);
     const tempId = `tempv-${Date.now()}`;
-    setMsgs(prev => [...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: urlData.publicUrl, created_at: new Date().toISOString(), read_at: null, type: "voice" }]);
+    setMsgs(prev =>[...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: urlData.publicUrl, created_at: new Date().toISOString(), read_at: null, type: "voice" }]);
     const { data } = await supabase.from("messages").insert({ match_id: matchId, sender_anon: myAnonId, content: urlData.publicUrl, type: "voice" }).select().single();
-    if (data) setMsgs(prev => prev.map(m => m.id === tempId ? (data as MsgRow) : m));
+    
+    if (data) {
+      setMsgs(prev => {
+        const withoutTemp = prev.filter(m => m.id !== tempId);
+        if (withoutTemp.some(m => m.id === data.id)) return withoutTemp;
+        return[...withoutTemp, data as MsgRow];
+      });
+    }
     await supabase.from("matches").update({ has_unread: true }).eq("id", matchId);
     if (audioPreviewUrl) { URL.revokeObjectURL(audioPreviewUrl); setAudioPreviewUrl(null); }
     setAudioBlob(null); setUploadingVoice(false);
@@ -642,7 +667,7 @@ export default function ChatThreadPage() {
     router.replace("/chat");
   }
 
-  const avatar = useMemo(() => { const src = photoSrc(otherProfile?.photo1_url ?? null); return src || null; }, [otherProfile]);
+  const avatar = useMemo(() => { const src = photoSrc(otherProfile?.photo1_url ?? null); return src || null; },[otherProfile]);
   const effectiveAnonId = myAnonId ?? myAnonIdRef.current;
   const otherName = otherProfile?.nickname ?? otherProfile?.first_name ?? "...";
   const hasFocusOrText = text.trim().length > 0;
@@ -724,11 +749,23 @@ export default function ChatThreadPage() {
                       onMsgPointerUp();
                       const dx = e.clientX - swipeStartX.current;
                       const dy = Math.abs(e.clientY - swipeStartY.current);
-                      const isSwipe = Math.abs(dx) > 50 && dy < 30;
-                      const correctDir = mine ? dx < 0 : dx > 0;
-                      if (isSwipe && correctDir) {
+                      // Swipe მარჯვნივ ან მარცხნივ (>40px) დასარეფლაიებლად
+                      if (Math.abs(dx) > 40 && dy < 40) {
                         setReplyTo(m);
-                        inputRef.current?.focus();
+                        setTimeout(() => inputRef.current?.focus(), 50);
+                      }
+                    }}
+                    onTouchStart={e => {
+                      swipeStartX.current = e.touches[0].clientX;
+                      swipeStartY.current = e.touches[0].clientY;
+                    }}
+                    onTouchEnd={e => {
+                      const dx = e.changedTouches[0].clientX - swipeStartX.current;
+                      const dy = Math.abs(e.changedTouches[0].clientY - swipeStartY.current);
+                      // მობილურზეც Swipe > 40px რომ იყოს რეფლაი
+                      if (Math.abs(dx) > 40 && dy < 40) {
+                        setReplyTo(m);
+                        setTimeout(() => inputRef.current?.focus(), 50);
                       }
                     }}
                     onPointerLeave={onMsgPointerUp}
@@ -736,7 +773,7 @@ export default function ChatThreadPage() {
 
                     {isHovered && !showReactionBar && (
                       <div className={`absolute top-1/2 -translate-y-1/2 flex items-center gap-1 z-20 ${mine ? "right-full pr-2" : "left-full pl-2"}`}>
-                        <button onClick={e => { e.stopPropagation(); setReplyTo(m); inputRef.current?.focus(); }}
+                        <button onClick={e => { e.stopPropagation(); setReplyTo(m); setTimeout(()=>inputRef.current?.focus(), 50); }}
                           className="w-7 h-7 rounded-full bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center text-white/70 hover:text-white transition text-sm">↩</button>
                         <button onClick={e => { e.stopPropagation(); setReactionMsgId(m.id); }}
                           className="w-7 h-7 rounded-full bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center transition text-sm">😊</button>
@@ -752,44 +789,53 @@ export default function ChatThreadPage() {
                         onReact={handleReact} onClose={() => setReactionMsgId(null)} />
                     )}
 
-                    <div>
-                      {m.reply_preview && (
-                        <div className={`mb-1 px-3 py-1.5 rounded-xl text-xs border-l-2 border-[#7C3AED] bg-white/8 max-w-[240px] truncate text-white/60 ${mine?"ml-auto":""}`}>
-                          ↩ {m.reply_preview}
-                        </div>
-                      )}
-
-                      {m.type === "voice" ? (
-                        <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl max-w-[270px] ${mine?"bg-[#7C3AED] rounded-tr-sm":"bg-zinc-800 rounded-tl-sm"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
-                          <span className="text-lg shrink-0">🎤</span>
-                          <audio controls src={m.content} className="h-8 max-w-[160px]" preload="metadata" />
-                          <div className="flex items-center gap-0.5 shrink-0">
-                            <span className="text-[10px] text-white/40">{fmtTime(m.created_at)}</span>
-                            <Ticks isTemp={isTemp} delivered={isDelivered} read={isRead} mine={mine} />
+                    {/* შეცვლილი: მესიჯის ბუშტი და მისი რეაქციები დაჯგუფდა, რეაქცია ქვედა მარჯვენა კუთხეში */}
+                    <div className="relative flex flex-col" style={{ maxWidth: "78%" }}>
+                      <div>
+                        {m.reply_preview && (
+                          <div className={`mb-1 px-3 py-1.5 rounded-xl text-xs border-l-2 border-[#7C3AED] bg-white/8 max-w-[240px] truncate text-white/60 ${mine?"ml-auto":""}`}>
+                            ↩ {m.reply_preview}
                           </div>
-                        </div>
-                      ) : m.type === "image" ? (
-                        <div className={`rounded-2xl overflow-hidden max-w-[260px] ${mine?"rounded-tr-sm":"rounded-tl-sm"} ${isTemp?"opacity-60":""}`}>
-                          <img src={m.content} className="max-w-full max-h-[280px] object-cover block" alt=""
-                            onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
-                          {mine && (
-                            <div className="flex justify-end px-2 py-1 bg-black/20">
+                        )}
+
+                        {m.type === "voice" ? (
+                          <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl max-w-[270px] ${mine?"bg-[#7C3AED] rounded-tr-sm":"bg-zinc-800 rounded-tl-sm"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
+                            <span className="text-lg shrink-0">🎤</span>
+                            <audio controls src={m.content} className="h-8 max-w-[160px]" preload="metadata" />
+                            <div className="flex items-center gap-0.5 shrink-0">
+                              <span className="text-[10px] text-white/40">{fmtTime(m.created_at)}</span>
                               <Ticks isTemp={isTemp} delivered={isDelivered} read={isRead} mine={mine} />
                             </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words select-none ${mine?"bg-[#7C3AED] rounded-2xl rounded-tr-sm ml-8":"bg-zinc-800 rounded-2xl rounded-tl-sm mr-8"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
-                          <span>{m.content}</span>
-                          <span className="inline-flex items-center gap-0.5 ml-2">
-                            <span className={`text-[10px] ${mine?"text-purple-200/50":"text-white/25"}`}>{fmtTime(m.created_at)}</span>
-                            <Ticks isTemp={isTemp} delivered={isDelivered} read={isRead} mine={mine} />
-                          </span>
+                          </div>
+                        ) : m.type === "image" ? (
+                          <div className={`rounded-2xl overflow-hidden max-w-[260px] ${mine?"rounded-tr-sm":"rounded-tl-sm"} ${isTemp?"opacity-60":""}`}>
+                            <img src={m.content} className="max-w-full max-h-[280px] object-cover block" alt=""
+                              onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
+                            {mine && (
+                              <div className="flex justify-end px-2 py-1 bg-black/20">
+                                <Ticks isTemp={isTemp} delivered={isDelivered} read={isRead} mine={mine} />
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words select-none ${mine?"bg-[#7C3AED] rounded-2xl rounded-tr-sm":"bg-zinc-800 rounded-2xl rounded-tl-sm"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
+                            <span>{m.content}</span>
+                            <span className="inline-flex items-center gap-0.5 ml-2">
+                              <span className={`text-[10px] ${mine?"text-purple-200/50":"text-white/25"}`}>{fmtTime(m.created_at)}</span>
+                              <Ticks isTemp={isTemp} delivered={isDelivered} read={isRead} mine={mine} />
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* რეაქციების ბლოკი მესიჯის ქვეშ/გვერდზე */}
+                      {reactions.some(r => r.message_id === m.id) && (
+                        <div className={`flex mt-[-10px] z-10 ${mine ? "mr-1 justify-end" : "ml-auto mr-[-10px]"}`}>
+                           <ReactionsDisplay msgId={m.id} reactions={reactions} myAnonId={effectiveAnonId ?? ""} onReact={handleReact} />
                         </div>
                       )}
                     </div>
                   </div>
-                  <ReactionsDisplay msgId={m.id} reactions={reactions} myAnonId={effectiveAnonId ?? ""} mine={mine} onReact={handleReact} />
                 </div>
               );
             })}
@@ -865,7 +911,12 @@ export default function ChatThreadPage() {
               <div className="flex-1 flex items-center bg-zinc-800 rounded-full px-4 py-1.5 gap-2 min-w-0">
                 <input ref={inputRef} value={text}
                   onChange={e => setText(e.target.value)}
-                  onFocus={() => setShowEmoji(false)}
+                  onFocus={() => {
+                    // კლავიატურის გახსნისას და სქროლის ავტომატური აწევა
+                    setShowEmoji(false);
+                    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+                    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 300);
+                  }}
                   autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
                   onKeyDown={e => { if (e.key==="Enter" && !e.shiftKey && !sending) { e.preventDefault(); send(); } }}
                   placeholder={ka?"მესიჯი...":"Message..."} />
