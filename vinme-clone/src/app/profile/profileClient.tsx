@@ -24,38 +24,48 @@ export default function ProfileClient() {
   const ka = lang !== "en";
   const L = (k: string, e: string) => ka ? k : e;
 
-  const [me, setMe] = useState<any>(null);
+  const [me, setMe] = useState<any>({});
 
   useEffect(() => {
     (async () => {
-      const { data: sess } = await supabase.auth.getSession();
-      const uid = sess.session?.user?.id;
-      if (!uid) { router.replace("/login"); return; }
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        const uid = sess.session?.user?.id;
+        if (!uid) { router.replace("/login"); return; }
 
-      const { data } = await supabase.from("profiles").select("*").eq("user_id", uid).maybeSingle();
-      if (!data) { router.replace("/onboarding"); return; }
-      if (!data.onboarding_completed) { router.replace("/onboarding"); return; }
-      setMe(data);
-      
-      // ✅ Auto-update city from GPS on every visit
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(async (pos) => {
-          try {
-            const lang = typeof window !== "undefined" ? (localStorage.getItem("app_lang") ?? "ka") : "ka";
-            const acceptLang = lang === "en" ? "en" : "ka";
-           const res = await fetch(
-  `https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json&accept-language=${acceptLang}&email=შენი_მეილი@gmail.com`,
-  { headers: { "User-Agent": "Shekhvdi/1.0" } }
-);
-            const geo = await res.json();
-            const cityName = geo.address?.city || geo.address?.town || geo.address?.village || geo.address?.suburb || geo.address?.county;
-            await supabase.from("profiles").update({
-              latitude: pos.coords.latitude,
-              longitude: pos.coords.longitude,
-              ...(cityName ? { city: cityName } : {}),
-            }).eq("user_id", uid);
-          } catch {}
-        }, () => {});
+        const { data } = await supabase.from("profiles").select("*").eq("user_id", uid).maybeSingle();
+        if (!data) { router.replace("/onboarding"); return; }
+        if (!data.onboarding_completed) { router.replace("/onboarding"); return; }
+        
+        setMe(data);
+        
+        // ✅ Auto-update city from GPS in background (non-blocking)
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(async (pos) => {
+            try {
+              const lang = typeof window !== "undefined" ? (localStorage.getItem("app_lang") ?? "ka") : "ka";
+              const acceptLang = lang === "en" ? "en" : "ka";
+              const res = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json&accept-language=${acceptLang}`,
+                { headers: { "User-Agent": "Shekhvdi/1.0" } }
+              );
+              const geo = await res.json();
+              const cityName = geo.address?.city || geo.address?.town || geo.address?.village || geo.address?.suburb || geo.address?.county;
+              
+              if (cityName || (pos.coords.latitude && pos.coords.longitude)) {
+                await supabase.from("profiles").update({
+                  latitude: pos.coords.latitude,
+                  longitude: pos.coords.longitude,
+                  ...(cityName ? { city: cityName } : {}),
+                }).eq("user_id", uid);
+              }
+            } catch (e) {
+              console.error("Geolocation error:", e);
+            }
+          }, () => {});
+        }
+      } catch (e) {
+        console.error("Profile load error:", e);
       }
     })();
   }, [router]);
@@ -64,8 +74,6 @@ export default function ProfileClient() {
   const age = me?.age ?? null;
   const avatarUrl = me?.photo1_url ? photoSrc(me.photo1_url) : null;
   const pct = calcProgress(me);
-
-  if (!me) return null;
 
   return (
     <main className="min-h-[100dvh] bg-zinc-950 text-white" style={{ paddingBottom: "calc(100px + env(safe-area-inset-bottom, 0px))" }}>
@@ -79,7 +87,6 @@ export default function ProfileClient() {
             ← {L("სვაიპი", "Swipe")}
           </button>
           <div className="flex gap-2">
-
             <button onClick={() => router.push("/settings")}
               className="w-10 h-10 rounded-full bg-white/8 flex items-center justify-center hover:bg-white/12 transition">
               ⚙️
@@ -143,10 +150,10 @@ export default function ProfileClient() {
             <div className="font-extrabold">Premium</div>
             <div className="text-xs text-white/60 mt-0.5">{L("ნახე ვინ მოგწონს, საუკეთესო და სხვა.", "See who likes you, top picks, and more.")}</div>
           </div>
-         <button onClick={() => router.push("/premium")}
-  className="rounded-full bg-amber-300 px-5 py-2.5 font-bold text-zinc-900 text-sm shrink-0 hover:bg-amber-200 transition active:scale-95">
-  Upgrade
-</button>
+          <button onClick={() => router.push("/premium")}
+            className="rounded-full bg-amber-300 px-5 py-2.5 font-bold text-zinc-900 text-sm shrink-0 hover:bg-amber-200 transition active:scale-95">
+            Upgrade
+          </button>
         </div>
 
       </div>
