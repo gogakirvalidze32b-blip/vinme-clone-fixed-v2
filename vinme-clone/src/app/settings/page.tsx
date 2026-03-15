@@ -156,8 +156,7 @@ export default function SettingsPage() {
               <div className="font-extrabold">Shekhvdi+</div>
               <div className="text-xs text-white/50 mt-0.5">{L("პრიორიტეტული მოწონება, ნახე ვინ მოგწონს", "Priority Likes, See who Likes you")}</div>
             </div>
-            <button className="rounded-full bg-rose-500 px-4 py-2 text-sm font-bold text-white shrink-0">Upgrade</button>
-          </div>
+<button onClick={() => router.push("/premium")} className="rounded-full bg-rose-500 px-4 py-2 text-sm font-bold text-white shrink-0">Upgrade</button>          </div>
 
           {/* ACCOUNT */}
           <SectionLabel>{L("ანგარიშის პარამეტრები", "Account Settings")}</SectionLabel>
