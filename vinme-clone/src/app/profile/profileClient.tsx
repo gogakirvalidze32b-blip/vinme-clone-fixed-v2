@@ -74,6 +74,7 @@ export default function ProfileClient() {
   const age = me?.age ?? null;
   const avatarUrl = me?.photo1_url ? photoSrc(me.photo1_url) : null;
   const pct = calcProgress(me);
+const [imgLoaded, setImgLoaded] = useState(false);
 
   return (
     <main className="min-h-[100dvh] bg-zinc-950 text-white" style={{ paddingBottom: "calc(100px + env(safe-area-inset-bottom, 0px))" }}>
@@ -93,28 +94,32 @@ export default function ProfileClient() {
             </button>
           </div>
         </div>
-
-        {/* AVATAR + NAME */}
-        <div className="flex items-center gap-4 mb-6">
-          {/* Progress ring */}
-          <div className="relative h-20 w-20 shrink-0">
-            <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 80 80">
-              <circle cx="40" cy="40" r="36" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="5" />
-              <circle cx="40" cy="40" r="36" fill="none" stroke="#ec4899" strokeWidth="5"
-                strokeDasharray={`${2 * Math.PI * 36}`}
-                strokeDashoffset={`${2 * Math.PI * 36 * (1 - pct / 100)}`}
-                strokeLinecap="round" />
-            </svg>
-            <div className="absolute inset-[5px] rounded-full overflow-hidden bg-zinc-800">
-              {avatarUrl
-                ? <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
-                : <div className="w-full h-full flex items-center justify-center text-3xl">👤</div>}
-            </div>
-            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-zinc-950 rounded-full px-2 py-0.5 text-[10px] font-bold ring-2 ring-pink-500 whitespace-nowrap">
-              {pct}%
-            </div>
-          </div>
-
+{/* AVATAR + NAME */}
+<div className="flex items-center gap-4 mb-6">
+  {/* Progress ring */}
+  <div className="relative h-20 w-20 shrink-0">
+    <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 80 80">
+      <circle cx="40" cy="40" r="36" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="5" />
+      <circle cx="40" cy="40" r="36" fill="none" stroke="#ec4899" strokeWidth="5"
+        strokeDasharray={`${2 * Math.PI * 36}`}
+        strokeDashoffset={`${2 * Math.PI * 36 * (1 - pct / 100)}`}
+        strokeLinecap="round" />
+    </svg>
+    <div className="absolute inset-[5px] rounded-full overflow-hidden bg-zinc-800">
+      {avatarUrl
+        ? <img 
+            src={avatarUrl} 
+            alt="" 
+            className="w-full h-full object-cover" 
+            loading="eager"
+            decoding="async"
+          />
+        : <div className="w-full h-full flex items-center justify-center text-3xl">👤</div>}
+    </div>
+    <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-zinc-950 rounded-full px-2 py-0.5 text-[10px] font-bold ring-2 ring-pink-500 whitespace-nowrap">
+      {pct}%
+    </div>
+  </div>
           <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap">
 <h1 className="text-2xl font-extrabold">
