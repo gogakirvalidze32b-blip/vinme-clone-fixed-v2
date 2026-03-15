@@ -260,11 +260,14 @@ function AttachSheet({ onClose, onGallery, onCamera, lang }: {
 const EMOJI_ROWS =[["😀","😃","😄","😁","😆","😅","🤣","😂","🙂","😊","😇","🥰","😍","🤩","😘","😗"],["😙","😚","😋","😛","😜","🤪","😝","🤑","🤗","🤭","🤫","🤔","🤐","🤨","😐","😑"],["😶","😏","😒","🙄","😬","🤥","😌","😔","😪","🤤","😴","😷","🤒","🤕","🤢","🤧"],["🥵","🥶","🥴","😵","🤯","🤠","🥳","😎","🤓","🧐","😕","😟","🙁","☹️","😮","😯"],["😲","😳","🥺","😦","😧","😨","😰","😥","😢","😭","😱","😖","😣","😞","😓","😩"],["😫","🥱","😤","😡","😠","🤬","😈","👿","💀","☠️","💩","🤡","👹","👺","👻","👽"],["❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎","💔","❣️","💕","💞","💓","💗","💖"],["💘","💝","💟","☮️","✝️","☪️","🕉","✡️","🔯","🕎","☯️","☦️","🛐","⛎","♈","♉"],["👍","👎","👌","🤌","🤏","✌️","🤞","🤟","🤘","🤙","👈","👉","👆","🖕","👇","☝️"],["👋","🤚","🖐","✋","🖖","👏","🙌","🤲","🤝","🙏","✍️","💅","🤳","💪","🦾","🦿"],["🎉","🎊","🎈","🎁","🎀","🎗","🎟","🎫","🏆","🥇","🥈","🥉","⚽","🏀","🏈","⚾"],["🔥","💥","✨","⭐","🌟","💫","⚡","☄️","🌈","☀️","🌤","⛅","🌥","☁️","🌦","🌧"],["😻","😺","😸","😹","😼","😽","🙀","😿","😾","🐶","🐱","🐭","🐹","🐰","🦊","🐻"],
 ];
 
+const ALL_EMOJIS = EMOJI_ROWS.flat();
+
+
 // შეცვლილი: Emoji Picker გახდა კომპაქტური Grid, Messenger-ის მსგავსი
 function QuickEmojiPicker({ onPick, onClose }: { onPick: (e: string) => void; onClose: () => void }) {
   const [search, setSearch] = useState("");
-  const allEmojis = useMemo(() => EMOJI_ROWS.flat(),[]);
-  const filtered = search ? allEmojis.filter(e => e.includes(search)) : allEmojis;
+  const filtered = search ? ALL_EMOJIS.filter(e => e.includes(search)) : ALL_EMOJIS;
+  // useMemo ამოშალე
 
   return (
     <div className="bg-zinc-900 border-t border-white/8 rounded-t-2xl shadow-xl" onClick={e => e.stopPropagation()}>
@@ -300,6 +303,8 @@ export default function ChatThreadPage() {
   const lang = getLang();
   const ka = lang !== "en";
   const { anonId: ctxAnonId } = useUser();
+
+  
 
   const swipeStartX = useRef<number>(0);
   const swipeStartY = useRef<number>(0);
@@ -342,6 +347,9 @@ export default function ChatThreadPage() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [uploadingImg, setUploadingImg] = useState(false);
   const [imagePreview, setImagePreview] = useState<{file: File, url: string} | null>(null);
+  const msgReactionIds = useMemo(() => 
+  new Set(reactions.map(r => r.message_id)), 
+[reactions]);
 
   useEffect(() => { if (ctxAnonId && !myAnonId) setMyAnonId(ctxAnonId); }, [ctxAnonId]);
 
@@ -818,7 +826,7 @@ export default function ChatThreadPage() {
                             )}
                           </div>
                         ) : (
-                          <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words select-none ${mine?"bg-[#7C3AED] rounded-2xl rounded-tr-sm":"bg-slate-800 rounded-2xl rounded-tl-sm"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
+                          <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words select-none ${mine?"bg-[#7C3AED] rounded-2xl rounded-tr-sm":"bg-sinc-800 rounded-2xl rounded-tl-sm"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
                             <span>{m.content}</span>
                             <span className="inline-flex items-center gap-0.5 ml-2">
                               <span className={`text-[10px] ${mine?"text-purple-200/50":"text-white/25"}`}>{fmtTime(m.created_at)}</span>
@@ -829,8 +837,8 @@ export default function ChatThreadPage() {
                       </div>
 
                       {/* რეაქციების ბლოკი მესიჯის ქვეშ/გვერდზე */}
-                      {reactions.some(r => r.message_id === m.id) && (
-                        <div className={`flex mt-[-10px] z-10 ${mine ? "mr-1 justify-end" : "ml-auto mr-[-10px]"}`}>
+                          {msgReactionIds.has(m.id) && (
+                          <div className={`flex mt-[-10px] z-10 ${mine ? "mr-1 justify-end" : "ml-auto mr-[-10px]"}`}>
                            <ReactionsDisplay msgId={m.id} reactions={reactions} myAnonId={effectiveAnonId ?? ""} onReact={handleReact} />
                         </div>
                       )}
