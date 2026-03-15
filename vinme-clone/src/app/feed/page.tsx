@@ -9,10 +9,12 @@ import BottomNav from "@/components/BottomNav";
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
 export default function FeedPage() {
@@ -23,42 +25,67 @@ export default function FeedPage() {
   const [matchId, setMatchId] = useState<string | null>(null);
   const [showMatch, setShowMatch] = useState(false);
   const [matchedUser, setMatchedUser] = useState<any>(null);
+  
   const loadingTopRef = useRef(false);
   const meRef = useRef<any>(null);
-const saveLocation = useCallback(async (uid: string) => {
-  if (!navigator.geolocation) return;
+  const lastCoordsRef = useRef<{lat: number, lon: number} | null>(null);
 
-  navigator.geolocation.getCurrentPosition(async (pos) => {
-    const lat = pos.coords.latitude;
-    const lon = pos.coords.longitude;
-    let city = "";
-    try {
-      // ⬇️ აქ ბოლოში დამატებულია email პარამეტრი (შეცვალე შენი მეილით!)
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=10&addressdetails=1&email=შენი_მეილი@gmail.com`,
-        { headers: { "Accept-Language": "ka" }, signal: AbortSignal.timeout(5000) }
-      );
-      if (res.ok) {
-        const json = await res.json();
-        city = json.address?.city || json.address?.town || json.address?.village || json.address?.county || "";
+  const saveLocation = useCallback(async (uid: string) => {
+    if (!navigator.geolocation) return;
+
+    // ვუსმენთ მომხმარებლის გადაადგილებას
+    const watchId = navigator.geolocation.watchPosition(async (pos) => {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+
+      // თუ 1 კმ-ზე ნაკლებია გავილი არ დავტვირთოთ nominatim-ი API რექვესთით
+      let shouldUpdateCity = false;
+      if (!lastCoordsRef.current || haversineKm(lastCoordsRef.current.lat, lastCoordsRef.current.lon, lat, lon) >= 1) {
+        shouldUpdateCity = true;
       }
-    } catch (err) {
-      console.log("Geocoding failed, using defaults");
-    }
+
+      let city = meRef.current?.city || "";
+
+      if (shouldUpdateCity) {
+        try {
+          // ჩაწერე შენი მეილი აქ!
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=10&addressdetails=1&email=შენი_მეილი@gmail.com`,
+            { headers: { "Accept-Language": "ka" }, signal: AbortSignal.timeout(5000) }
+          );
+          if (res.ok) {
+            const json = await res.json();
+            city = json.address?.city || json.address?.town || json.address?.village || json.address?.county || "";
+          }
+        } catch (err) {
+          console.log("Geocoding failed");
+        }
+        lastCoordsRef.current = { lat, lon };
+      }
+
+      // ვანახლებთ ბაზას
+      await supabase.from("profiles").update({ 
+        latitude: lat, 
+        longitude: lon, 
+        city,
+        last_seen: new Date().toISOString()
+      }).eq("user_id", uid);
+
+      console.log("📍 მდებარეობა განახლდა:", { lat, lon, city });
+
     
-    // ვინახავთ ლოკაციას ბაზაში
-    await supabase.from("profiles").update({ latitude: lat, longitude: lon, city }).eq("user_id", uid);
-    // ვაახლებთ current user-ის state-ს
-    setMe((prev: any) => prev ? { ...prev, latitude: lat, longitude: lon, city } : prev);
-    
-  }, (err) => {
-    console.error("Geolocation error:", err);
-  }, {
-    enableHighAccuracy: true,
-    timeout: 5000,
-    maximumAge: 0
-  });
-}, []);
+      // ვაახლებთ სტეიტს
+      setMe((prev: any) => prev ? { ...prev, latitude: lat, longitude: lon, city } : prev);
+
+    }, (err) => console.error(err), {
+      enableHighAccuracy: true,
+      maximumAge: 10000,
+      timeout: 10000
+    });
+
+    return watchId;
+  }, []);
+
   const loadMe = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
     const user = data.session?.user;
@@ -68,11 +95,11 @@ const saveLocation = useCallback(async (uid: string) => {
       .select("user_id,anon_id,seeking,gender,age,first_name,nickname,photo1_url,last_seen,latitude,longitude,city,onboarding_completed")
       .eq("user_id", user.id)
       .maybeSingle();
+
     setMe(row);
     meRef.current = row;
-    if (row) saveLocation(user.id);
     return row;
-  }, [router, saveLocation]);
+  }, [router]);
 
   const loadTop = useCallback(async (myProfile: any) => {
     if (loadingTopRef.current) return;
@@ -82,31 +109,42 @@ const saveLocation = useCallback(async (uid: string) => {
     const myGender = myProfile.gender ?? null;
     const { data: swiped } = await supabase.from("swipes").select("to_id").eq("from_id", myId);
     const excludedIds = swiped?.map((s: any) => s.to_id) ?? [];
+    
     let query = supabase.from("profiles")
       .select("user_id,first_name,nickname,age,city,photo1_url,last_seen,latitude,longitude,seeking,gender,onboarding_completed")
       .eq("onboarding_completed", true)
       .neq("user_id", myId)
       .not("photo1_url", "is", null);
+      
     if (seeking !== "everyone") query = query.eq("gender", seeking);
     if (myGender) query = query.or(`seeking.eq.everyone,seeking.eq.${myGender}`);
     if (excludedIds.length > 0) query = query.not("user_id", "in", `(${excludedIds.join(",")})`);
+    
     const { data } = await query.order("created_at", { ascending: false }).limit(1).maybeSingle();
     setTop(data ?? null);
     loadingTopRef.current = false;
   }, []);
 
+  // იტვირთება პროფილი და იწყებს ლოკაციის თრექინგს
   useEffect(() => {
+    let watchId: number;
     let alive = true;
+
     (async () => {
       const my = await loadMe();
       if (!alive || !my) return;
+      
+      saveLocation(my.user_id).then(id => { if (id) watchId = id; });
       await loadTop(my);
       if (alive) setLoading(false);
     })();
-    return () => { alive = false; };
-  }, [loadMe, loadTop]);
 
-  // მეორე მხარისთვის realtime match
+    return () => { 
+      alive = false; 
+      if (watchId) navigator.geolocation.clearWatch(watchId);
+    };
+  }, [loadMe, loadTop, saveLocation]);
+
   useEffect(() => {
     if (!me) return;
     const ch = supabase.channel(`feed-matches-${me.user_id}`)
@@ -158,12 +196,11 @@ const saveLocation = useCallback(async (uid: string) => {
     await loadTop(me);
   };
 
-const distanceKm = useMemo(() => {
-  if (!me?.latitude || !me?.longitude) return undefined;
-  if (!top?.latitude || !top?.longitude) return undefined;
-  const d = haversineKm(me.latitude, me.longitude, top.latitude, top.longitude);
-  return d;
-}, [me, top]);
+  const distanceKm = useMemo(() => {
+    if (!me?.latitude || !me?.longitude) return undefined;
+    if (!top?.latitude || !top?.longitude) return undefined;
+    return haversineKm(me.latitude, me.longitude, top.latitude, top.longitude);
+  }, [me, top]);
 
   const cardUser = useMemo(() => {
     if (!top) return null;
