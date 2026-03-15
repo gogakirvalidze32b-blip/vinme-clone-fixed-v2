@@ -145,10 +145,10 @@ export default function ProfileClient() {
             <div className="font-extrabold">Premium</div>
             <div className="text-xs text-white/60 mt-0.5">{L("ნახე ვინ მოგწონს, საუკეთესო და სხვა.", "See who likes you, top picks, and more.")}</div>
           </div>
-          <button onClick={() => {}}
-            className="rounded-full bg-amber-300 px-5 py-2.5 font-bold text-zinc-900 text-sm shrink-0 hover:bg-amber-200 transition">
-            Upgrade
-          </button>
+         <button onClick={() => router.push("/premium")}
+  className="rounded-full bg-amber-300 px-5 py-2.5 font-bold text-zinc-900 text-sm shrink-0 hover:bg-amber-200 transition active:scale-95">
+  Upgrade
+</button>
         </div>
 
       </div>

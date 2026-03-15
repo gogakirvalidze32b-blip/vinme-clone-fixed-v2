@@ -68,9 +68,11 @@ export default function LikesPage() {
               <div className="text-xs text-white/50 mb-4">
                 {L("გააქტიურე Premium-ი ვინ მოგწონს სანახავად", "Upgrade to see everyone who already liked you")}
               </div>
-              <button className="w-full rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 py-3 font-bold text-black text-sm">
-                {L("Upgrade Premium", "Upgrade to Gold")} 👑
-              </button>
+              <button 
+  onClick={() => router.push("/premium")}
+  className="w-full rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 py-3 font-bold text-black text-sm hover:shadow-lg transition active:scale-95">
+  {L("Upgrade Premium", "Upgrade to Gold")} 👑
+</button>
             </div>
           </div>
         </div>
