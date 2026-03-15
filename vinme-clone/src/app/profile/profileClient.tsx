@@ -83,7 +83,6 @@ const [me, setMe] = useState<any>(() => {
   const age = me?.age ?? null;
   const avatarUrl = me?.photo1_url ? photoSrc(me.photo1_url) : null;
   const pct = calcProgress(me);
-const [imgLoaded, setImgLoaded] = useState(false);
 
   return (
     <main className="min-h-[100dvh] bg-zinc-950 text-white" style={{ paddingBottom: "calc(100px + env(safe-area-inset-bottom, 0px))" }}>
@@ -132,7 +131,7 @@ const [imgLoaded, setImgLoaded] = useState(false);
           <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap">
 <h1 className="text-2xl font-extrabold">
-  {name ? `${name}${age ? `, ${age}` : ""}` : "..."}
+  {name ? `${name}${age ? `, ${age}` : ""}` : null}
 </h1>
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 text-xs border border-blue-400/40">✓</span>
             </div>
