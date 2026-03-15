@@ -15,172 +15,155 @@ export default function PremiumPage() {
   const [loading, setLoading] = useState(false);
 
   const plans = {
-    week: {
-      name: ka ? "1 კვირა" : "1 Week",
-      price: "47.50",
-      days: 7,
-      popular: true,
-    },
-    month: {
-      name: ka ? "1 თვე" : "1 Month",
-      price: "95.00",
-      days: 30,
-      popular: false,
-    },
-    year: {
-      name: ka ? "1 წელი" : "1 Year",
-      price: "570.00",
-      days: 365,
-      popular: false,
-    },
+    week: { name: ka ? "1 კვირა" : "1 Week", price: "47.50", days: 7 },
+    month: { name: ka ? "1 თვე" : "1 Month", price: "95.00", days: 30 },
+    year: { name: ka ? "1 წელი" : "1 Year", price: "570.00", days: 365 },
   };
 
-  const features = [
-    ka ? "უსაზღვრო მოწონებები" : "Unlimited Likes",
-    ka ? "ნახე ვინ მოგწონა" : "See Who Likes You",
-    ka ? "გადატრიალება" : "Unlimited Rewinds",
-    ka ? "ბუსტი თვეში" : "Free Boost",
+  const featureList = [
+    {
+      title: ka ? "უსაზღვრო მოწონებები" : "Unlimited Likes",
+      desc: ka ? "მოიწონე რამდენიც გინდა" : "Like as many people as you want"
+    },
+    {
+      title: ka ? "ნახე ვინ მოგწონა" : "See Who Likes You",
+      desc: ka ? "გაიგე ვინ გამოხატა სიმპათია" : "Match instantly with people who already liked you"
+    },
+    {
+      title: ka ? "უსაზღვრო გადატრიალება" : "Unlimited Rewinds",
+      desc: ka ? "დააბრუნე უკან შემთხვევითი სვაიპი" : "Go back and change your last swipe"
+    },
+    {
+      title: ka ? "1 უფასო ბუსტი თვეში" : "1 Free Boost per month",
+      desc: ka ? "იყავი ხილვადი 30 წუთის განმავლობაში" : "Be the top profile in your area for 30 minutes"
+    },
+    {
+      title: ka ? "დამალე რეკლამები" : "Hide Ads",
+      desc: ka ? "გამოიყენე აპლიკაცია შეფერხების გარეშე" : "Enjoy an ad-free experience"
+    }
   ];
 
-  // რეალური გადახდის და გააქტიურების ლოგიკა
   const handlePayment = async () => {
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        alert(ka ? "გთხოვთ გაიაროთ ავტორიზაცია" : "Please login first");
-        return;
-      }
+      if (!user) { router.push("/login"); return; }
 
       const expireDate = new Date();
       expireDate.setDate(expireDate.getDate() + plans[selectedPlan].days);
 
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          is_premium: true,
-          premium_until: expireDate.toISOString(),
-        })
-        .eq("user_id", user.id);
+      const { error } = await supabase.from("profiles").update({
+        is_premium: true,
+        premium_until: expireDate.toISOString(),
+      }).eq("user_id", user.id);
 
       if (error) throw error;
-
-      alert(ka ? "✅ პრემიუმი წარმატებით გააქტიურდა!" : "✅ Premium activated!");
-      setShowCheckout(false);
-      router.push("/likes"); // გადავიყვანოთ იქ, სადაც ნახავს ვინ მოიწონა
-
+      alert(ka ? "✅ პრემიუმი გააქტიურდა!" : "✅ Premium Activated!");
+      router.push("/likes");
     } catch (err) {
-      console.error(err);
-      alert("Error activating premium");
+      alert("Error processing payment");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black flex justify-center overflow-hidden">
-      <div className="w-full max-w-lg flex flex-col bg-black text-white h-[100dvh]">
+    <div className="fixed inset-0 bg-[#111] flex justify-center overflow-hidden text-white">
+      <div className="w-full max-w-lg flex flex-col h-full bg-black relative">
         
-        {/* COMPACT HEADER */}
-        <div className="relative bg-gradient-to-b from-pink-500/20 via-purple-500/10 to-black pt-6 pb-4 px-4 shrink-0 text-center">
-          <button onClick={() => router.back()} className="absolute top-4 left-4 text-white/50 text-xl">✕</button>
-          <div className="text-3xl mb-1">✨</div>
-          <h1 className="text-2xl font-black">
-            Shekhvdi <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-purple-400">Plus</span>
-          </h1>
-          <p className="text-white/60 text-xs mt-1">
-            {ka ? "გახსენი ყველა შესაძლებლობა" : "Unlock all premium features"}
-          </p>
+        {/* HEADER */}
+        <div className="px-4 pt-6 pb-2 flex items-center justify-between shrink-0">
+          <button onClick={() => router.back()} className="text-2xl opacity-60">✕</button>
+          <div className="flex items-center gap-1">
+             <span className="text-yellow-500 text-xl font-black">🔥</span>
+             <span className="font-black text-lg tracking-tighter uppercase">Shekhvdi <span className="text-yellow-500">Gold</span></span>
+          </div>
+          <div className="w-8" /> 
         </div>
 
-        {/* PLANS AREA - COMPACT */}
-        <div className="flex-1 px-4 space-y-3 overflow-y-auto scrollbar-hide">
-          <div className="grid grid-cols-1 gap-2">
-            {(["week", "month", "year"] as const).map((key) => (
-              <button
-                key={key}
-                onClick={() => setSelectedPlan(key)}
-                className={`relative flex items-center justify-between p-3 rounded-xl border-2 transition ${
-                  selectedPlan === key ? "border-pink-500 bg-pink-500/10" : "border-white/10 bg-white/5"
-                }`}
-              >
-                <div className="text-left">
-                  {plans[key].popular && <div className="text-[9px] font-bold text-pink-400 mb-0.5 uppercase">🔥 Popular</div>}
-                  <div className="text-sm font-bold">{plans[key].name}</div>
-                  <div className="text-xs text-white/40">{ka ? "ჯამში" : "Total"}: {plans[key].price}₾</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-pink-400 font-black text-lg">{plans[key].price}₾</div>
-                  {selectedPlan === key && <div className="text-[10px] text-pink-500 font-bold">✓ Selected</div>}
-                </div>
-              </button>
-            ))}
-          </div>
-
-          {/* FEATURES GRID - 2x2 for space saving */}
-          <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-            <div className="grid grid-cols-2 gap-y-2 gap-x-1">
-              {features.map((f, i) => (
-                <div key={i} className="flex items-center gap-1.5">
-                  <span className="text-pink-500 text-xs">✓</span>
-                  <span className="text-white/80 text-[10px] font-medium truncate">{f}</span>
+        {/* FEATURES SCROLL AREA */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6 scrollbar-hide">
+          
+          {/* FEATURE BOX */}
+          <div className="border border-white/10 rounded-2xl bg-zinc-900/30 p-5 relative">
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-zinc-800 px-3 py-1 rounded-full text-[10px] text-white/60 font-bold uppercase tracking-widest border border-white/10">
+              Included with Gold
+            </div>
+            
+            <div className="space-y-5 mt-2">
+              {featureList.map((f, i) => (
+                <div key={i} className="flex items-start gap-4">
+                  <span className="text-white text-lg mt-0.5">✓</span>
+                  <div>
+                    <h3 className="font-bold text-[15px] leading-tight">{f.title}</h3>
+                    <p className="text-white/40 text-[12px] mt-0.5 leading-tight">{f.desc}</p>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
+
+          {/* PLAN SELECTION */}
+          <div className="grid grid-cols-3 gap-2 pb-8">
+            {(["week", "month", "year"] as const).map((p) => (
+              <button
+                key={p}
+                onClick={() => setSelectedPlan(p)}
+                className={`flex flex-col items-center p-3 rounded-xl border-2 transition ${
+                  selectedPlan === p ? "border-yellow-500 bg-yellow-500/10" : "border-white/10 bg-white/5"
+                }`}
+              >
+                <span className="text-[10px] font-bold opacity-60">{plans[p].name}</span>
+                <span className="text-sm font-black mt-1">{plans[p].price}₾</span>
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* STICKY FOOTER */}
-        <div className="p-4 bg-black/80 backdrop-blur-md border-t border-white/10 shrink-0">
+        {/* STICKY FOOTER (TINDER STYLE) */}
+        <div className="bg-black/90 backdrop-blur-xl border-t border-white/10 p-5 pb-8 flex items-center justify-between shrink-0">
+          <div className="flex flex-col">
+            <span className="text-white font-black text-lg leading-none">{plans[selectedPlan].name}</span>
+            <span className="text-white/60 text-sm font-bold mt-1">{plans[selectedPlan].price}₾ total</span>
+          </div>
+
           <button
             onClick={() => setShowCheckout(true)}
-            className="w-full bg-gradient-to-r from-pink-500 to-purple-500 text-white font-bold py-3.5 rounded-full shadow-lg shadow-pink-500/20 active:scale-95 transition text-md"
+            className="bg-gradient-to-r from-yellow-400 to-yellow-600 text-black font-black px-8 py-3.5 rounded-full text-md active:scale-95 transition shadow-lg shadow-yellow-500/20"
           >
-            {ka ? `გააქტიურება - ${plans[selectedPlan].price}₾` : `Continue - ${plans[selectedPlan].price}₾`}
-          </button>
-          <button onClick={() => router.back()} className="w-full text-white/40 text-xs font-semibold py-2 mt-2">
-            {ka ? "არა, გმადლობთ" : "No, thanks"}
+            {ka ? "გაგრძელება" : "Continue"}
           </button>
         </div>
 
-        {/* CHECKOUT MODAL */}
+        {/* PAYMENT SHEET */}
         {showCheckout && (
-          <div className="fixed inset-0 z-50 bg-black/80 flex items-end justify-center p-0">
-            <div className="w-full max-w-lg bg-zinc-900 rounded-t-3xl overflow-hidden animate-in slide-in-from-bottom duration-300">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
-                <h2 className="text-white font-bold">{ka ? "გადახდა" : "Payment"}</h2>
+          <div className="fixed inset-0 z-50 bg-black/80 flex items-end justify-center animate-in fade-in duration-200">
+            <div className="w-full max-w-lg bg-zinc-900 rounded-t-3xl p-6 animate-in slide-in-from-bottom-10">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="font-black text-lg">{ka ? "გადახდა" : "Payment"}</h3>
                 <button onClick={() => setShowCheckout(false)} className="text-white/40 text-xl">✕</button>
               </div>
 
-              <div className="p-4 space-y-2">
-                {[
-                  { id: 'card', name: "Visa / Mastercard", icon: "💳", sub: ka ? "საბანკო ბარათი" : "Bank Card" },
-                  { id: 'apple', name: "Apple Pay", icon: "🍎", sub: "Fast Pay" },
-                  { id: 'tbc', name: "TBC Pay", icon: "💎", sub: "Instant" }
-                ].map((m) => (
-                  <button key={m.id} className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 transition">
-                    <span className="text-2xl">{m.icon}</span>
-                    <div className="text-left flex-1">
-                      <div className="text-white font-bold text-sm">{m.name}</div>
-                      <div className="text-white/40 text-[10px]">{m.sub}</div>
-                    </div>
+              <div className="space-y-3 mb-8">
+                {["Visa / Mastercard", "Apple Pay", "TBC Pay"].map((m, i) => (
+                  <button key={i} className="w-full flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10">
+                    <span className="font-bold text-sm">{m}</span>
                     <span className="text-white/20">›</span>
                   </button>
                 ))}
               </div>
 
-              <div className="p-4 pb-8">
-                <button
-                  onClick={handlePayment}
-                  disabled={loading}
-                  className="w-full bg-pink-500 text-white font-black py-3.5 rounded-full active:scale-95 transition disabled:opacity-50 shadow-xl"
-                >
-                  {loading ? (ka ? "მუშავდება..." : "Processing...") : (ka ? "დადასტურება" : "Confirm & Pay")}
-                </button>
-              </div>
+              <button
+                onClick={handlePayment}
+                disabled={loading}
+                className="w-full bg-yellow-500 text-black font-black py-4 rounded-full shadow-xl disabled:opacity-50 transition"
+              >
+                {loading ? "..." : (ka ? "დადასტურება" : "Confirm Payment")}
+              </button>
             </div>
           </div>
         )}
+
       </div>
     </div>
   );
