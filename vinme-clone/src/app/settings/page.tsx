@@ -50,38 +50,79 @@ export default function SettingsPage() {
   const ka = lang !== "en";
   const L = (k: string, e: string) => ka ? k : e;
 
-  const [enableDiscovery, setEnableDiscovery] = useState(true);
+  const[enableDiscovery, setEnableDiscovery] = useState(true);
   const [readReceipts, setReadReceipts] = useState(true);
   const [photoVerifiedOnly, setPhotoVerifiedOnly] = useState(false);
+  
   const [distanceKm, setDistanceKm] = useState(50);
-  const [ageMin, setAgeMin] = useState(18);
+  const[ageMin, setAgeMin] = useState(18);
   const [ageMax, setAgeMax] = useState(45);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [pauseSaving, setPauseSaving] = useState(false);
+  const[pauseSaving, setPauseSaving] = useState(false);
   const [scheduledDeletion, setScheduledDeletion] = useState<string | null>(null);
 
+  // 🚀 ტრიუკი 1: ეკრანის გახსნისთანავე ლოკალური ქეშიდან მოგვაქვს პარამეტრები 
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem("settings_cache");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.distanceKm) setDistanceKm(parsed.distanceKm);
+        if (parsed.ageMin) setAgeMin(parsed.ageMin);
+        if (parsed.ageMax) setAgeMax(parsed.ageMax);
+        if (parsed.isPaused !== undefined) setIsPaused(parsed.isPaused);
+        if (parsed.scheduledDeletion !== undefined) setScheduledDeletion(parsed.scheduledDeletion);
+      }
+    } catch (e) { console.error("Cache load error", e); }
+  },[]);
+
+  // 🔄 ტრიუკი 2: უკანა ფონზე ვამოწმებთ ბაზაში რა წერია (იქნებ სხვა ტელეფონიდან შეცვალა)
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data } = await supabase.from("profiles")
-        .select("max_distance_km,min_age,max_age,is_paused").eq("user_id", user.id).maybeSingle();
-      if (!data) return;
-      if (data.max_distance_km) setDistanceKm(data.max_distance_km);
-      if (data.min_age) setAgeMin(data.min_age);
-      if (data.max_age) setAgeMax(data.max_age);
-      setIsPaused(data.is_paused ?? false);
-      const { data: del } = await supabase.from("scheduled_deletions")
-        .select("scheduled_for").eq("user_id", user.id).maybeSingle();
-      if (del) setScheduledDeletion(del.scheduled_for);
+      
+      // პარალელურად წამოვიღოთ პროფილის და წაშლის მონაცემები
+      const[{ data: profile }, { data: del }] = await Promise.all([
+        supabase.from("profiles").select("max_distance_km,min_age,max_age,is_paused").eq("user_id", user.id).maybeSingle(),
+        supabase.from("scheduled_deletions").select("scheduled_for").eq("user_id", user.id).maybeSingle()
+      ]);
+
+      const newCache: any = {};
+
+      if (profile) {
+        if (profile.max_distance_km) { setDistanceKm(profile.max_distance_km); newCache.distanceKm = profile.max_distance_km; }
+        if (profile.min_age) { setAgeMin(profile.min_age); newCache.ageMin = profile.min_age; }
+        if (profile.max_age) { setAgeMax(profile.max_age); newCache.ageMax = profile.max_age; }
+        setIsPaused(profile.is_paused ?? false); newCache.isPaused = profile.is_paused ?? false;
+      }
+
+      if (del) {
+        setScheduledDeletion(del.scheduled_for); newCache.scheduledDeletion = del.scheduled_for;
+      } else {
+        setScheduledDeletion(null); newCache.scheduledDeletion = null;
+      }
+
+      // 💾 ტრიუკი 3: ვაახლებთ ლოკალურ ქეშს ახალი მონაცემებით
+      try {
+        const oldCache = JSON.parse(localStorage.getItem("settings_cache") || "{}");
+        localStorage.setItem("settings_cache", JSON.stringify({ ...oldCache, ...newCache }));
+      } catch (e) {}
     })();
-  }, []);
+  },[]);
 
   async function handleSave() {
     setSaving(true);
     await saveProfilePatch({ max_distance_km: distanceKm, min_age: ageMin, max_age: ageMax });
+    
+    // ქეშის განახლება შენახვისას
+    try {
+      const oldCache = JSON.parse(localStorage.getItem("settings_cache") || "{}");
+      localStorage.setItem("settings_cache", JSON.stringify({ ...oldCache, distanceKm, ageMin, ageMax }));
+    } catch(e) {}
+
     setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2000);
   }
 
@@ -89,11 +130,19 @@ export default function SettingsPage() {
     setPauseSaving(true);
     await saveProfilePatch({ is_paused: val });
     setIsPaused(val);
+    
+    // ქეშის განახლება
+    try {
+      const oldCache = JSON.parse(localStorage.getItem("settings_cache") || "{}");
+      localStorage.setItem("settings_cache", JSON.stringify({ ...oldCache, isPaused: val }));
+    } catch(e) {}
+    
     setPauseSaving(false);
   }
 
   async function handleLogout() {
     await supabase.auth.signOut();
+    localStorage.clear(); // ლოგაუტის დროს ვშლით ქეშებს!
     router.replace("/login");
   }
 
@@ -103,6 +152,10 @@ export default function SettingsPage() {
     await supabase.from("scheduled_deletions").delete().eq("user_id", user.id);
     await supabase.from("profiles").update({ deleted_at: null }).eq("user_id", user.id);
     setScheduledDeletion(null);
+    try {
+      const oldCache = JSON.parse(localStorage.getItem("settings_cache") || "{}");
+      localStorage.setItem("settings_cache", JSON.stringify({ ...oldCache, scheduledDeletion: null }));
+    } catch(e) {}
   }
 
   async function handleDelete() {
@@ -116,6 +169,7 @@ export default function SettingsPage() {
     await supabase.from("profiles").update({ deleted_at: new Date().toISOString(), is_paused: true }).eq("user_id", user.id);
     await supabase.from("scheduled_deletions").upsert({ user_id: user.id, scheduled_for: scheduledFor }, { onConflict: "user_id" });
     await supabase.auth.signOut();
+    localStorage.clear(); // წაშლის დროსაც ვასუფთავებთ
     router.replace("/login");
   }
 
@@ -156,7 +210,8 @@ export default function SettingsPage() {
               <div className="font-extrabold">Shekhvdi+</div>
               <div className="text-xs text-white/50 mt-0.5">{L("პრიორიტეტული მოწონება, ნახე ვინ მოგწონს", "Priority Likes, See who Likes you")}</div>
             </div>
-<button onClick={() => router.push("/premium")} className="rounded-full bg-rose-500 px-4 py-2 text-sm font-bold text-white shrink-0">Upgrade</button>          </div>
+            <button onClick={() => router.push("/premium")} className="rounded-full bg-rose-500 px-4 py-2 text-sm font-bold text-white shrink-0">Upgrade</button>
+          </div>
 
           {/* ACCOUNT */}
           <SectionLabel>{L("ანგარიშის პარამეტრები", "Account Settings")}</SectionLabel>
@@ -164,17 +219,17 @@ export default function SettingsPage() {
             <Row label={L("ტელეფონის ნომერი", "Phone Number")} sub={L("დამატება / შეცვლა", "Add / Change")} />
             <Row label={L("ელ.ფოსტა", "Email")} sub={L("დამატება / შეცვლა", "Add / Change")} />
             <Row label={L("ენა", "Language")} sub={ka ? "ქართული" : "English"} onClick={() => {
-  const newLang = ka ? "en" : "ka";
-  localStorage.setItem("lang", newLang);
-  window.dispatchEvent(new Event("app:lang"));
-  window.location.reload();
-}} right={
-  <div className="flex items-center gap-2">
-    <span className={`text-xs font-bold ${ka ? "text-rose-400" : "text-white/30"}`}>KA</span>
-    <span className="text-white/20">/</span>
-    <span className={`text-xs font-bold ${!ka ? "text-rose-400" : "text-white/30"}`}>EN</span>
-  </div>
-} />
+              const newLang = ka ? "en" : "ka";
+              localStorage.setItem("lang", newLang);
+              window.dispatchEvent(new Event("app:lang"));
+              window.location.reload();
+            }} right={
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-bold ${ka ? "text-rose-400" : "text-white/30"}`}>KA</span>
+                <span className="text-white/20">/</span>
+                <span className={`text-xs font-bold ${!ka ? "text-rose-400" : "text-white/30"}`}>EN</span>
+              </div>
+            } />
             <Row label={L("პროფილის რედაქტირება", "Edit Profile")} onClick={() => router.push("/profile/edit")} />
               
           </Card>
@@ -249,18 +304,18 @@ export default function SettingsPage() {
                 onChange={e => setAgeMin(Math.min(+e.target.value, ageMax - 1))}
                 className="w-full h-1.5 rounded-full appearance-none cursor-pointer mb-3"
                style={{
-  background: `linear-gradient(to right, #f43f5e ${((ageMin - 18) / 62) * 100}%, rgba(255,255,255,0.1) ${((ageMin - 18) / 62) * 100}%)`,
-  accentColor: "#f43f5e"
-}}
+                  background: `linear-gradient(to right, #f43f5e ${((ageMin - 18) / 62) * 100}%, rgba(255,255,255,0.1) ${((ageMin - 18) / 62) * 100}%)`,
+                  accentColor: "#f43f5e"
+                }}
               />
               <input
                 type="range" min={18} max={80} value={ageMax}
                 onChange={e => setAgeMax(Math.max(+e.target.value, ageMin + 1))}
                 className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
               style={{
-  background: `linear-gradient(to right, #f43f5e ${((ageMax - 18) / 62) * 100}%, rgba(255,255,255,0.1) ${((ageMax - 18) / 62) * 100}%)`,
-  accentColor: "#f43f5e"
-}}
+                  background: `linear-gradient(to right, #f43f5e ${((ageMax - 18) / 62) * 100}%, rgba(255,255,255,0.1) ${((ageMax - 18) / 62) * 100}%)`,
+                  accentColor: "#f43f5e"
+                }}
               />
               <div className="flex justify-between text-xs text-white/30 mt-1.5">
                 <span>18</span>
@@ -300,7 +355,7 @@ export default function SettingsPage() {
           {/* CONTACT */}
           <SectionLabel>{L("კონტაქტი", "Contact Us")}</SectionLabel>
           <Card>
-<Row label={L("დახმარება", "Help & Support")} onClick={() => router.push("/help")} />
+            <Row label={L("დახმარება", "Help & Support")} onClick={() => router.push("/help")} />
             <Row label={L("პრობლემის შეტყობინება", "Report a problem")} onClick={() => {}} />
           </Card>
 

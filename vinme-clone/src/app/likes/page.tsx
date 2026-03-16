@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { photoSrc } from "@/lib/photos";
 import { getLang } from "@/lib/i18n";
 import BottomNav from "@/components/BottomNav";
 
@@ -15,14 +14,32 @@ export default function LikesPage() {
   const [likeCount, setLikeCount] = useState(0);
 
   useEffect(() => {
+    // 🚀 ტრიუკი 1: ეგრევე ვკითხულობთ დამახსოვრებულ ლაიქების რაოდენობას ტელეფონის ქეშიდან
+    try {
+      const cachedCount = localStorage.getItem("likes_count_cache");
+      if (cachedCount !== null) {
+        setLikeCount(Number(cachedCount));
+      }
+    } catch (e) {
+      console.error("Cache error", e);
+    }
+
+    // 🔄 ტრიუკი 2: უკანა ფონზე ვამოწმებთ, ხომ არ მოგვემატა ახალი ლაიქები
     (async () => {
       const { data: sess } = await supabase.auth.getSession();
       const uid = sess.session?.user?.id;
       if (!uid) return;
-      const { count } = await supabase.from("swipes")
+
+      const { count, error } = await supabase.from("swipes")
         .select("id", { count: "exact", head: true })
-        .eq("to_id", uid).eq("action", "like");
-      setLikeCount(count ?? 0);
+        .eq("to_id", uid)
+        .eq("action", "like");
+
+      if (!error && count !== null) {
+        setLikeCount(count);
+        // 💾 ტრიუკი 3: ვინახავთ ახალ ციფრს შემდეგი შემოსვლისთვის
+        localStorage.setItem("likes_count_cache", String(count));
+      }
     })();
   }, []);
 
@@ -69,10 +86,10 @@ export default function LikesPage() {
                 {L("გააქტიურე Premium-ი ვინ მოგწონს სანახავად", "Upgrade to see everyone who already liked you")}
               </div>
               <button 
-  onClick={() => router.push("/premium")}
-  className="w-full rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 py-3 font-bold text-black text-sm hover:shadow-lg transition active:scale-95">
-  {L("Upgrade Premium", "Upgrade to Gold")} 👑
-</button>
+                onClick={() => router.push("/premium")}
+                className="w-full rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 py-3 font-bold text-black text-sm hover:shadow-lg transition active:scale-95">
+                {L("Upgrade Premium", "Upgrade to Gold")} 👑
+              </button>
             </div>
           </div>
         </div>
