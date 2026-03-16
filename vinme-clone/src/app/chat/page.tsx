@@ -43,13 +43,13 @@ export default function ChatPage() {
   const L = (k: string, e: string) => ka ? k : e;
 
   const[notifications, setNotifications] = useState<any[]>([]);
-  const [showNotifications, setShowNotifications] = useState(false);
+  const[showNotifications, setShowNotifications] = useState(false);
   const { anonId: ctxAnonId } = useUser();
   const[ctxReady, setCtxReady] = useState(false);
-  const [matches, setMatches] = useState<Match[]>([]);
+  const[matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [myId, setMyId] = useState<string | null>(null);
-  const [myAnonId, setMyAnonId] = useState<string | null>(null);
+  const[myAnonId, setMyAnonId] = useState<string | null>(null);
   const loadingRef = useRef(false);
   const[selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const longPressRef = useRef<NodeJS.Timeout | null>(null);
@@ -103,7 +103,7 @@ export default function ChatPage() {
 
     const matchIds = rows.map((r: any) => r.id);
 
-    const [profilesRes, msgsRes] = await Promise.all([
+    const[profilesRes, msgsRes] = await Promise.all([
       supabase.from("profiles").select("user_id,nickname,first_name,photo1_url,last_seen").in("user_id", otherIds),
       supabase.from("messages")
         .select("id,match_id,content,created_at,type,sender_anon,read_at")
@@ -199,7 +199,7 @@ export default function ChatPage() {
         from_photo: fromProfileMap[n.from_user]?.photo ?? null
       })));
     })();
-  }, [ctxReady]);
+  },[ctxReady]);
   
   useEffect(() => {
     if (!myId || !myAnonId) return;
