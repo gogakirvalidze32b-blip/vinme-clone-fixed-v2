@@ -4,14 +4,14 @@ import { Providers } from "@/components/Providers";
 import MessageToast from "@/components/MessageToast";
 import type { Metadata, Viewport } from 'next';
 
-// ფონტის კონფიგურაცია
+// 1. ფონტის კონფიგურაცია
 const notoGeo = Noto_Sans_Georgian({
   subsets: ["georgian"],
   weight: ["400", "600", "700", "900"],
   variable: "--font-brand",
 });
 
-// მეტამონაცემები (სათაური, აღწერა, მანიფესტი)
+// 2. მეტამონაცემები (მანიფესტი აქ ჩაიწერა, ცალკე ლინკი აღარ გინდა)
 export const metadata: Metadata = {
   title: "შეხვდი",
   description: "Dating app",
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
 };
 
-// ვიუპორტის კონფიგურაცია (კლავიატურის ჯადოქრობა აქაა)
+// 3. ვიუპორტის კონფიგურაცია
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
@@ -30,10 +30,12 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ka">
-      <body>
+    <html lang="ka" className={notoGeo.variable}>
+      <body className="min-h-screen bg-black text-white antialiased">
         <Providers>
-          <MessageToast /> {/* აი ეს უნდა იჯდეს აქ */}
+          {/* შეტყობინებების კომპონენტი */}
+          <MessageToast /> 
+          
           {children}
         </Providers>
       </body>
