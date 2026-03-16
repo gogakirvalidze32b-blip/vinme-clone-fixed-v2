@@ -62,59 +62,110 @@ function Ticks({ isTemp, delivered, read, mine }: { isTemp: boolean; delivered: 
   );
 }
 
-function ThemeModal({ current, onClose, onSelect }: {
- current: string; onClose: () => void; 
+function ThemeModal({ current, currentBg, onClose, onSelect }: {
+  current: string; currentBg: string; onClose: () => void; 
   onSelect: (color: string, bg: string) => void;
 }) {
   const [custom, setCustom] = useState(current);
- const themes = [
-  { color: "#7C3AED", label: "Purple", bg: "" },
-  { color: "#EC4899", label: "Pink", bg: "" },
-  { color: "#3B82F6", label: "Blue", bg: "linear-gradient(135deg, #0f0c29, #302b63, #24243e)" },
-  { color: "#10B981", label: "Forest", bg: "linear-gradient(135deg, #0a0a0a, #0d2b1a)" },
-  { color: "#F59E0B", label: "Sunset", bg: "linear-gradient(135deg, #1a0a00, #2d1000)" },
-  { color: "#EF4444", label: "Dark Red", bg: "linear-gradient(135deg, #0a0000, #1a0000)" },
-  { color: "#6366F1", label: "Indigo", bg: "linear-gradient(135deg, #0a0014, #1a0033)" },
-  { color: "#14B8A6", label: "Teal", bg: "linear-gradient(135deg, #001a18, #002d29)" },
-  { color: "#F97316", label: "Amber", bg: "" },
-  { color: "#8B5CF6", label: "Violet", bg: "" },
-  { color: "#06B6D4", label: "Cyan", bg: "" },
-  { color: "#84CC16", label: "Lime", bg: "" },
-];
+  const [tab, setTab] = useState<"color" | "bg">("color");
+
+  const themes = [
+    { color: "#7C3AED", label: "Purple" },
+    { color: "#EC4899", label: "Pink" },
+    { color: "#3B82F6", label: "Blue" },
+    { color: "#10B981", label: "Green" },
+    { color: "#F59E0B", label: "Orange" },
+    { color: "#EF4444", label: "Red" },
+    { color: "#6366F1", label: "Indigo" },
+    { color: "#14B8A6", label: "Teal" },
+    { color: "#F97316", label: "Amber" },
+    { color: "#8B5CF6", label: "Violet" },
+    { color: "#06B6D4", label: "Cyan" },
+    { color: "#84CC16", label: "Lime" },
+  ];
+
+  const backgrounds = [
+    { label: "შავი", bg: "" },
+    { label: "ღამე", bg: "linear-gradient(160deg, #0a0a0a 0%, #1a1a2e 100%)" },
+    { label: "ოკეანე", bg: "linear-gradient(160deg, #0f0c29, #302b63, #24243e)" },
+    { label: "ტყე", bg: "linear-gradient(160deg, #0a0a0a, #0d2b1a, #1a3a0a)" },
+    { label: "მზის ჩასვლა", bg: "linear-gradient(160deg, #1a0a00, #3d1a00, #2d0a20)" },
+    { label: "ვარდისფერი", bg: "linear-gradient(160deg, #1a0010, #2d0030, #1a001a)" },
+    { label: "ანიმე 🌸", bg: "linear-gradient(160deg, #1a0015, #2d0030, #0d001a, #1a0020)" },
+    { label: "სამყარო 🌌", bg: "radial-gradient(ellipse at top, #0d0d2b 0%, #000000 60%), radial-gradient(ellipse at bottom, #1a0030 0%, #000000 60%)" },
+    { label: "Aurora 🌈", bg: "linear-gradient(160deg, #001a1a 0%, #0a2d1a 30%, #1a0030 70%, #0a001a 100%)" },
+    { label: "Synthwave 🌆", bg: "linear-gradient(160deg, #0d001a 0%, #1a0030 40%, #2d0015 100%)" },
+    { label: "ზღვა 🌊", bg: "linear-gradient(160deg, #000d1a 0%, #001a2d 50%, #001a1a 100%)" },
+    { label: "ვულკანი 🌋", bg: "linear-gradient(160deg, #0a0000 0%, #1a0000 40%, #2d0500 100%)" },
+  ];
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div className="relative w-full max-w-lg bg-zinc-900 rounded-t-3xl p-5" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-white text-base">🎨 ჩათის თემა</h3>
+          <h3 className="font-bold text-white text-base">🎨 ჩათის სტილი</h3>
           <button onClick={onClose} className="text-white/40 hover:text-white text-xl">✕</button>
         </div>
-        <div className="grid grid-cols-6 gap-3 mb-5">
-          {themes.map(t => (
-            <button key={t.color} onClick={() => { onSelect(t.color, t.bg); onClose(); }}
 
-              className="flex flex-col items-center gap-1.5">
-              <div className="w-11 h-11 rounded-full transition-transform active:scale-90"
-                style={{ background: t.color, outline: current === t.color ? "3px solid white" : "3px solid transparent", outlineOffset: "2px" }} />
-              <span className="text-[10px] text-white/50">{t.label}</span>
-            </button>
-          ))}
+        {/* TABS */}
+        <div className="flex rounded-full bg-white/8 p-0.5 mb-4">
+          <button onClick={() => setTab("color")}
+            className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${tab === "color" ? "bg-white text-black" : "text-white/50"}`}>
+            🎨 ფერი
+          </button>
+          <button onClick={() => setTab("bg")}
+            className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${tab === "bg" ? "bg-white text-black" : "text-white/50"}`}>
+            🖼 ფონი
+          </button>
         </div>
-        <div className="border-t border-white/8 pt-4">
-          <div className="text-xs text-white/40 mb-2">ხელით შეყვანა</div>
-          <div className="flex items-center gap-3">
-            <input type="color" value={custom} onChange={e => setCustom(e.target.value)}
-              className="w-10 h-10 rounded-xl cursor-pointer bg-transparent border-0 p-0" />
-            <input value={custom} onChange={e => setCustom(e.target.value)}
-              className="flex-1 bg-zinc-800 rounded-xl px-3 py-2 text-sm text-white outline-none font-mono"
-              placeholder="#7C3AED" />
-           <button onClick={() => { onSelect(custom, ""); onClose(); }}
-  className="rounded-xl px-4 py-2 text-sm font-bold text-white"
-  style={{ background: custom }}>
-  OK
-</button>
+
+        {tab === "color" && (
+          <>
+            <div className="grid grid-cols-6 gap-3 mb-5">
+              {themes.map(t => (
+                <button key={t.color} onClick={() => { onSelect(t.color, currentBg); onClose(); }}
+                  className="flex flex-col items-center gap-1.5">
+                  <div className="w-11 h-11 rounded-full transition-transform active:scale-90"
+                    style={{ background: t.color, outline: current === t.color ? "3px solid white" : "3px solid transparent", outlineOffset: "2px" }} />
+                  <span className="text-[10px] text-white/50">{t.label}</span>
+                </button>
+              ))}
+            </div>
+            <div className="border-t border-white/8 pt-4">
+              <div className="text-xs text-white/40 mb-2">ხელით შეყვანა</div>
+              <div className="flex items-center gap-3">
+                <input type="color" value={custom} onChange={e => setCustom(e.target.value)}
+                  className="w-10 h-10 rounded-xl cursor-pointer bg-transparent border-0 p-0" />
+                <input value={custom} onChange={e => setCustom(e.target.value)}
+                  className="flex-1 bg-zinc-800 rounded-xl px-3 py-2 text-sm text-white outline-none font-mono"
+                  placeholder="#7C3AED" />
+                <button onClick={() => { onSelect(custom, currentBg); onClose(); }}
+                  className="rounded-xl px-4 py-2 text-sm font-bold text-white"
+                  style={{ background: custom }}>
+                  OK
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {tab === "bg" && (
+          <div className="grid grid-cols-3 gap-3">
+            {backgrounds.map(b => (
+              <button key={b.label} onClick={() => { onSelect(current, b.bg); onClose(); }}
+                className="flex flex-col items-center gap-1.5">
+                <div className="w-full h-16 rounded-2xl border-2 transition-transform active:scale-95"
+                  style={{
+                    background: b.bg || "#111111",
+                    borderColor: currentBg === b.bg ? "white" : "transparent"
+                  }} />
+                <span className="text-[10px] text-white/50">{b.label}</span>
+              </button>
+            ))}
           </div>
-        </div>
+        )}
+
         <div className="h-4" />
       </div>
     </div>
@@ -738,8 +789,7 @@ function applyTheme(color: string, bg: string) {
 
   return (
     <div className="fixed inset-0 bg-[#111] flex justify-center">
-      <div className="w-full max-w-lg flex flex-col bg-[#111]">
-
+<div className="w-full max-w-lg flex flex-col" style={{ background: "transparent" }}>
         {/* HEADER */}
         <div ref={headerRef} className="flex items-center gap-3 px-4 py-3 bg-slate-900 border-b border-white/8 shrink-0"
           style={{ position: "sticky", top: headerTop, zIndex: 50 }}>
@@ -1022,7 +1072,7 @@ onTouchMove={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer
       {showAttachSheet && <AttachSheet lang={lang} onClose={() => setShowAttachSheet(false)}
         onGallery={() => galleryInputRef.current?.click()} onCamera={() => cameraInputRef.current?.click()} />}
 {showThemeModal && (
-  <ThemeModal current={chatTheme} onClose={() => setShowThemeModal(false)}
+  <ThemeModal current={chatTheme} currentBg={chatBg} onClose={() => setShowThemeModal(false)}
     onSelect={(color, bg) => applyTheme(color, bg)} />
 )}
 
