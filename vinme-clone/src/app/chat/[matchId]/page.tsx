@@ -406,11 +406,11 @@ const [chatBg, setChatBg] = useState("");
 }, [matchId]);
 
 
-function applyTheme(color: string, bg: string) {
+const applyTheme = useCallback((color: string, bg: string) => {
   setChatTheme(color);
   setChatBg(bg);
   localStorage.setItem(`chat-theme-${matchId}`, JSON.stringify({ color, bg }));
-}
+}, [matchId]);
 
   const swipeStartX = useRef<number>(0);
   const swipeStartY = useRef<number>(0);
