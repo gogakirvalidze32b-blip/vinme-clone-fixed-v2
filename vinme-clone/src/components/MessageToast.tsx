@@ -27,7 +27,7 @@ export default function MessageToast() {
         // 1. ვუსმენთ მესიჯებს
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async (payload) => {
           const msg = payload.new;
-          if (myAnonId && msg.sender_anon !== myAnonId && !pathname?.includes(`/chat/${msg.match_id}`)) {
+          if (myAnonId && msg.sender_anon !== myAnonId && (pathname === "/chat" || !pathname?.startsWith("/chat/"))) {
             const { data: sender } = await supabase.from("profiles")
               .select("first_name, nickname, photo1_url").eq("anon_id", msg.sender_anon).single();
 
