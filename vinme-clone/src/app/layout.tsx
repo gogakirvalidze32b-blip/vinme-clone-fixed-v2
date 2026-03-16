@@ -1,39 +1,42 @@
 import { Noto_Sans_Georgian } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
-<link rel="manifest" href="/manifest.json" />
+import MessageToast from "@/components/MessageToast";
+import type { Metadata, Viewport } from 'next';
 
+// ფონტის კონფიგურაცია
 const notoGeo = Noto_Sans_Georgian({
   subsets: ["georgian"],
   weight: ["400", "600", "700", "900"],
   variable: "--font-brand",
 });
 
-export const metadata = {
+// მეტამონაცემები (სათაური, აღწერა, მანიფესტი)
+export const metadata: Metadata = {
   title: "შეხვდი",
   description: "Dating app",
   icons: { icon: "/favicon.ico" },
+  manifest: "/manifest.json",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="ka" className={notoGeo.variable}>
-     <head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-</head>
-      <body className="min-h-screen bg-black text-white antialiased">
-        <Providers>{children}</Providers>
-      </body>
-    </html>
-  );
-}
-
-import type { Viewport } from 'next'
-
+// ვიუპორტის კონფიგურაცია (კლავიატურის ჯადოქრობა აქაა)
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  interactiveWidget: 'resizes-content', // <-- ეს არის ჯადოქრობა
+  interactiveWidget: 'resizes-content', 
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="ka">
+      <body>
+        <Providers>
+          <MessageToast /> {/* აი ეს უნდა იჯდეს აქ */}
+          {children}
+        </Providers>
+      </body>
+    </html>
+  );
 }
