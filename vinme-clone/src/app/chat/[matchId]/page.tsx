@@ -525,15 +525,29 @@ const applyTheme = useCallback((color: string, bg: string) => {
 
 useEffect(() => {
     if (!matchId) return;
-    
+
+    // 🚀 ტრიუკი 1: მყისიერი ჩატვირთვა ტელეფონის მეხსიერებიდან (WhatsApp-ის სტილი)
+    const cachedData = localStorage.getItem(`chat_cache_${matchId}`);
+    if (cachedData) {
+      try {
+        const { cachedMsgs, cachedProfile, cachedAnonId, cachedUserId } = JSON.parse(cachedData);
+        setMsgs(cachedMsgs);
+        setOtherProfile(cachedProfile);
+        setMyAnonId(cachedAnonId);
+        setMyUserId(cachedUserId);
+        setIsLoaded(true); // ეკრანი წამიერად იხსნება, ლოუდერის გარეშე!
+      } catch(e) { 
+        // თუ ქეში გაფუჭებულია, ვაიგნორებთ
+      }
+    }
+
+    // 🔄 ტრიუკი 2: უკანა ფონზე ახალი მონაცემების წამოღება (ჩუმად)
     (async () => {
-      // 1. ვიგებთ ვინ შემოდის (ეს ლოკალურია და მომენტალურია)
       const { data: session } = await supabase.auth.getSession();
       const user = session?.session?.user;
       if (!user) { router.replace("/login"); return; }
       setMyUserId(user.id);
 
-      // 2. PARALLEL FETCH 1: ერთდროულად მოგვაქვს 3 რამ (შენი ინფო, მატჩი და მესიჯები!)
       const[meRes, matchRes, msgsRes] = await Promise.all([
         supabase.from("profiles").select("anon_id").eq("user_id", user.id).maybeSingle(),
         supabase.from("matches").select("user_a,user_b,created_at").eq("id", matchId).maybeSingle(),
@@ -547,14 +561,13 @@ useEffect(() => {
       const matchRow = matchRes.data;
       if (!matchRow) return;
       setMatchCreatedAt(matchRow.created_at ?? null);
-      
+
       const otherId = matchRow.user_a === user.id ? matchRow.user_b : matchRow.user_a;
       setOtherUserId(otherId);
 
       const msgsData = msgsRes.data ??[];
       const msgIds = msgsData.map((m: any) => m.id);
 
-      // 3. PARALLEL FETCH 2: ერთდროულად მოგვაქვს სხვა იუზერის პროფილი და რეაქციები!
       const [profileRes, reactionsRes] = await Promise.all([
         supabase.from("profiles").select("user_id,nickname,first_name,photo1_url,last_seen").eq("user_id", otherId).maybeSingle(),
         msgIds.length > 0
@@ -562,24 +575,32 @@ useEffect(() => {
           : Promise.resolve({ data: [] }),
       ]);
 
-      // ვინახავთ ყველაფერს სთეითში ერთიანად
-      setOtherProfile(profileRes.data ?? null);
-      setMsgs(msgsData.reverse());
+      const finalMsgs = msgsData.reverse();
+      const finalProfile = profileRes.data ?? null;
+
+      // ეკრანის განახლება ახალი (ფრეშ) მონაცემებით (თუ რამე ახალი მოვიდა)
+      setOtherProfile(finalProfile);
+      setMsgs(finalMsgs);
       setReactions(reactionsRes.data ??[]);
-      
-      // 🚀 ვაქრობთ ლოუდერს მომენტალურად!
       setIsLoaded(true);
 
-      // 4. ბექგრაუნდ ამოცანები (არ აფერხებს ეკრანის გახსნას)
-      // წაკითხულად მონიშვნა და ონლაინის განახლება უკანა ფონზე გაეშვება თავისთვის
+      // 💾 ტრიუკი 3: ვინახავთ ახალ მონაცემებს ქეშში შემდეგი შემოსვლისთვის
+      localStorage.setItem(`chat_cache_${matchId}`, JSON.stringify({
+        cachedMsgs: finalMsgs,
+        cachedProfile: finalProfile,
+        cachedAnonId: anonId,
+        cachedUserId: user.id
+      }));
+
+      // წაკითხულად მონიშვნა
       Promise.all([
         markRead(anonId, user.id),
         markDelivered(anonId),
         supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("user_id", user.id)
       ]).catch(console.error);
-      
+
     })();
-  }, [matchId, router, markRead, markDelivered, ctxAnonId]);
+  },[matchId, router, markRead, markDelivered, ctxAnonId]);
 
   useEffect(() => {
     if (!matchId) return;
