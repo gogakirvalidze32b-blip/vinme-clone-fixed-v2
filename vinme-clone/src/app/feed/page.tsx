@@ -1,114 +1,243 @@
-"use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import TinderCard from "@/components/TinderCard";
 import { supabase } from "@/lib/supabase";
 import { photoSrc } from "@/lib/photos";
-import { useRouter, usePathname } from "next/navigation";
+import BottomNav from "@/components/BottomNav";
 
-export default function MessageToast() {
-  const [notif, setNotif] = useState<any>(null);
-  const [show, setShow] = useState(false);
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+export default function FeedPage() {
   const router = useRouter();
-  const pathname = usePathname();
+  const [me, setMe] = useState<any>(null);
+  const [top, setTop] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [matchId, setMatchId] = useState<string | null>(null);
+  const [showMatch, setShowMatch] = useState(false);
+  const [matchedUser, setMatchedUser] = useState<any>(null);
+  
+  const loadingTopRef = useRef(false);
+  const meRef = useRef<any>(null);
+  const lastUpdateCoordsRef = useRef<{lat: number, lon: number} | null>(null);
 
-  useEffect(() => {
-    // 1. მოვითხოვოთ ბრაუზერის შეტყობინებების უფლება (როცა აპლიკაცია დახურულია)
-    if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
+const saveLocation = useCallback(async (uid: string) => {
+  if (!navigator.geolocation) return;
+
+  const watchId = navigator.geolocation.watchPosition(async (pos) => {
+    const lat = pos.coords.latitude;
+    const lon = pos.coords.longitude;
+
+    // 1. შემოწმება: განახლდეს მხოლოდ თუ გაიარა 2 კმ-ზე მეტი
+    if (lastUpdateCoordsRef.current) {
+      const distanceMoved = haversineKm(
+        lastUpdateCoordsRef.current.lat, 
+        lastUpdateCoordsRef.current.lon, 
+        lat, lon
+      );
+      
+      // თუ 2 კმ-ზე ნაკლებია, ვაჩერებთ ფუნქციას
+      if (distanceMoved < 2) return; 
     }
 
-    let myAnonId: string | null = null;
-    let myUserId: string | null = null;
+    // 2. ქალაქის განახლება (რადგან 2 კმ უკვე გავიარეთ, ქალაქიც გადავამოწმოთ)
+    let city = meRef.current?.city || "";
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=10&addressdetails=1&email=შენი_მეილი@gmail.com`,
+        { headers: { "Accept-Language": "ka" }, signal: AbortSignal.timeout(5000) }
+      );
+      if (res.ok) {
+        const json = await res.json();
+        city = json.address?.city || json.address?.town || json.address?.village || json.address?.county || "";
+      }
+    } catch (err) {
+      console.log("Geocoding failed");
+    }
 
-    const setup = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-      myUserId = session.user.id;
+    // 3. ბაზაში გაგზავნა
+    await supabase.from("profiles").update({ 
+      latitude: lat, 
+      longitude: lon, 
+      city,
+      last_seen: new Date().toISOString()
+    }).eq("user_id", uid);
+
+    console.log("📍 მნიშვნელოვანი გადაადგილება (2კმ+)! ბაზა განახლდა.");
+
+    // მნიშვნელოვანია: ბოლო წერტილის დამახსოვრება
+    lastUpdateCoordsRef.current = { lat, lon };
+    
+    // სტეიტის განახლება, რომ ეკრანზეც შეიცვალოს მანძილი
+    setMe((prev: any) => prev ? { ...prev, latitude: lat, longitude: lon, city } : prev);
+
+  }, (err) => console.error(err), {
+    enableHighAccuracy: true,
+    maximumAge: 60000, // 1 წუთიანი ქეშირება (ელემენტის დასაზოგად)
+    timeout: 15000
+  });
+
+  return watchId;
+}, []);
+
+  const loadMe = useCallback(async () => {
+    const { data } = await supabase.auth.getSession();
+    const user = data.session?.user;
+    if (!user) { router.replace("/login"); return null; }
+    const { data: row } = await supabase
+      .from("profiles")
+      .select("user_id,anon_id,seeking,gender,age,first_name,nickname,photo1_url,last_seen,latitude,longitude,city,onboarding_completed")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    setMe(row);
+    meRef.current = row;
+    return row;
+  }, [router]);
+
+  const loadTop = useCallback(async (myProfile: any) => {
+    if (loadingTopRef.current) return;
+    loadingTopRef.current = true;
+    const myId = myProfile.user_id;
+    const seeking = myProfile.seeking ?? "everyone";
+    const myGender = myProfile.gender ?? null;
+    const { data: swiped } = await supabase.from("swipes").select("to_id").eq("from_id", myId);
+    const excludedIds = swiped?.map((s: any) => s.to_id) ?? [];
+    
+    let query = supabase.from("profiles")
+      .select("user_id,first_name,nickname,age,city,photo1_url,last_seen,latitude,longitude,seeking,gender,onboarding_completed")
+      .eq("onboarding_completed", true)
+      .neq("user_id", myId)
+      .not("photo1_url", "is", null);
       
-      const { data: profile } = await supabase
-        .from("profiles").select("anon_id").eq("user_id", myUserId).single();
-      myAnonId = profile?.anon_id;
+    if (seeking !== "everyone") query = query.eq("gender", seeking);
+    if (myGender) query = query.or(`seeking.eq.everyone,seeking.eq.${myGender}`);
+    if (excludedIds.length > 0) query = query.not("user_id", "in", `(${excludedIds.join(",")})`);
+    
+    const { data } = await query.order("created_at", { ascending: false }).limit(1).maybeSingle();
+    setTop(data ?? null);
+    loadingTopRef.current = false;
+  }, []);
 
-      const channel = supabase.channel('global-realtime-v3')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async (payload) => {
-          const msg = payload.new;
+  // იტვირთება პროფილი და იწყებს ლოკაციის თრექინგს
+  useEffect(() => {
+    let watchId: number;
+    let alive = true;
 
-          // 🛑 მკაცრი ფილტრები
-          const isInThisChat = pathname?.includes(`/chat/${msg.match_id}`);
-          const isMine = msg.sender_anon === myAnonId;
+    (async () => {
+      const my = await loadMe();
+      if (!alive || !my) return;
+      
+      saveLocation(my.user_id).then(id => { if (id) watchId = id; });
+      await loadTop(my);
+      if (alive) setLoading(false);
+    })();
 
-          if (!isMine && !isInThisChat) {
-            const { data: sender } = await supabase.from("profiles")
-              .select("first_name, nickname, photo1_url")
-              .eq("anon_id", msg.sender_anon)
-              .maybeSingle();
-
-            const title = sender?.first_name || sender?.nickname || "ახალი მესიჯი";
-            const content = msg.type === "text" ? msg.content : "📷 ფოტო/ხმოვანი";
-            const photo = sender?.photo1_url ? photoSrc(sender.photo1_url) : null;
-
-            // 📱 თუ მომხმარებელი აპლიკაციაშია - ვაჩვენებთ შავ პანელს
-            if (document.visibilityState === "visible") {
-              setNotif({ title, text: content, photo, matchId: msg.match_id });
-              setTimeout(() => setShow(true), 10);
-              
-              setTimeout(() => {
-                setShow(false);
-                setTimeout(() => setNotif(null), 500);
-              }, 4500);
-            } 
-            // 🔔 თუ მომხმარებელი აპლიკაციის გარეთაა - ბრაუზერის სისტემური ნოტიფიკაცია
-            else if (Notification.permission === "granted") {
-              new Notification(title, { body: content, icon: photo || "/favicon.ico" });
-            }
-          }
-        })
-        .subscribe();
-
-      return channel;
+    return () => { 
+      alive = false; 
+      if (watchId) navigator.geolocation.clearWatch(watchId);
     };
+  }, [loadMe, loadTop, saveLocation]);
 
-    const promise = setup();
-    return () => { promise.then(ch => ch && supabase.removeChannel(ch)); };
-  }, [pathname]);
+  useEffect(() => {
+    if (!me) return;
+    const ch = supabase.channel(`feed-matches-${me.user_id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "matches" }, async (payload) => {
+        const match = payload.new as any;
+        if (match.user_a !== me.user_id && match.user_b !== me.user_id) return;
+        const otherId = match.user_a === me.user_id ? match.user_b : match.user_a;
+        const { data: otherProfile } = await supabase
+          .from("profiles").select("user_id,first_name,nickname,photo1_url")
+          .eq("user_id", otherId).maybeSingle();
+        setMatchedUser(otherProfile ?? null);
+        setMatchId(String(match.id));
+        setShowMatch(true);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [me]);
 
-  if (!notif) return null;
+  async function checkAndCreateMatch(myId: string, otherId: string): Promise<string | null> {
+    const { data: theirSwipe } = await supabase.from("swipes").select("id")
+      .eq("from_id", otherId).eq("to_id", myId).eq("action", "like").maybeSingle();
+    if (!theirSwipe) return null;
+    const { data: existing } = await supabase.from("matches").select("id")
+      .or(`and(user_a.eq.${myId},user_b.eq.${otherId}),and(user_a.eq.${otherId},user_b.eq.${myId})`)
+      .limit(1).maybeSingle();
+    if (existing?.id) return String(existing.id);
+    const { data: created } = await supabase.from("matches").insert({ user_a: myId, user_b: otherId }).select("id").single();
+    return created?.id ? String(created.id) : null;
+  }
+
+  const onLike = async () => {
+    if (!me || !top) return;
+    const currentTop = { ...top };
+    await supabase.from("swipes").insert({ from_id: me.user_id, to_id: top.user_id, action: "like" });
+    const mid = await checkAndCreateMatch(me.user_id, top.user_id);
+    if (mid) {
+      setMatchedUser(currentTop);
+      setMatchId(mid);
+      setShowMatch(true);
+    }
+    setTop(null);
+    await loadTop(me);
+  };
+
+  const onSkip = async () => {
+    if (!me || !top) return;
+    await supabase.from("swipes").insert({ from_id: me.user_id, to_id: top.user_id, action: "skip" });
+    setTop(null);
+    await loadTop(me);
+  };
+
+  const distanceKm = useMemo(() => {
+    if (!me?.latitude || !me?.longitude) return undefined;
+    if (!top?.latitude || !top?.longitude) return undefined;
+    return haversineKm(me.latitude, me.longitude, top.latitude, top.longitude);
+  }, [me, top]);
+
+  const cardUser = useMemo(() => {
+    if (!top) return null;
+    return {
+      id: top.user_id, user_id: top.user_id,
+      nickname: top.first_name ?? top.nickname ?? "Anonymous",
+      age: top.age ?? 18,
+      city: top.city || undefined,
+      distanceKm,
+      recentlyActive: top.last_seen ? (Date.now() - new Date(top.last_seen).getTime()) < 30 * 60 * 1000 : false,
+      photo_url: top.photo1_url ? photoSrc(top.photo1_url) : null,
+      photo1_url: top.photo1_url,
+    };
+  }, [top, distanceKm]);
 
   return (
-    <div 
-      onClick={() => {
-        router.push(`/chat/${notif.matchId}`);
-        setShow(false);
-      }}
-      className={`
-        fixed top-4 left-1/2 -translate-x-1/2 z-[100000] 
-        w-[92%] max-w-sm bg-zinc-900/95 backdrop-blur-xl 
-        border border-white/10 rounded-2xl p-3
-        shadow-[0_15px_40px_rgba(0,0,0,0.7)] 
-        flex items-center gap-3 cursor-pointer 
-        transition-all duration-500 ease-out
-        ${show ? "translate-y-0 opacity-100" : "-translate-y-28 opacity-0"}
-      `}
-    >
-      <div className="w-11 h-11 rounded-full overflow-hidden bg-zinc-800 shrink-0 border border-white/5">
-        {notif.photo ? (
-          <img src={notif.photo} className="w-full h-full object-cover" alt="" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-lg bg-zinc-800">👤</div>
-        )}
+    <div className="bg-black min-h-screen flex justify-center">
+      <div className="w-full max-w-lg relative" style={{ height: "100dvh" }}>
+        <TinderCard
+          key={cardUser?.id ?? "empty"}
+          user={cardUser}
+          otherUserId={cardUser?.user_id}
+          myProfile={me}
+          onLike={onLike}
+          onSkip={onSkip}
+          onOpenProfile={() => cardUser && router.push(`/profile/${cardUser.user_id}`)}
+          externalMatchId={matchId}
+          externalShowMatch={showMatch}
+          onCloseMatch={() => { setShowMatch(false); setMatchId(null); setMatchedUser(null); }}
+          onOpenChat={() => matchId && router.push(`/chat/${matchId}`)}
+          matchedUserName={matchedUser?.first_name ?? matchedUser?.nickname ?? undefined}
+          matchedUserPhoto={matchedUser?.photo1_url ?? undefined}
+        />
       </div>
-
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-bold text-white truncate">{notif.title}</span>
-          <span className="text-[10px] text-pink-500 font-black uppercase tracking-tighter shrink-0">Shekhvdi</span>
-        </div>
-        <p className="text-xs text-white/50 truncate mt-0.5 leading-tight">
-          {notif.text}
-        </p>
-      </div>
-
-      <div className="w-1.5 h-1.5 rounded-full bg-pink-500 shadow-[0_0_8px_rgba(236,72,153,0.8)] shrink-0" />
+      <BottomNav />
     </div>
   );
 }
