@@ -523,41 +523,63 @@ const applyTheme = useCallback((color: string, bg: string) => {
       .eq("match_id", matchId).neq("sender_anon", anonId).is("delivered_at", null);
   }, [matchId]);
 
-  useEffect(() => {
+useEffect(() => {
+    if (!matchId) return;
+    
     (async () => {
+      // 1. ვიგებთ ვინ შემოდის (ეს ლოკალურია და მომენტალურია)
       const { data: session } = await supabase.auth.getSession();
       const user = session?.session?.user;
       if (!user) { router.replace("/login"); return; }
       setMyUserId(user.id);
-      const [meRes, matchRes] = await Promise.all([
+
+      // 2. PARALLEL FETCH 1: ერთდროულად მოგვაქვს 3 რამ (შენი ინფო, მატჩი და მესიჯები!)
+      const[meRes, matchRes, msgsRes] = await Promise.all([
         supabase.from("profiles").select("anon_id").eq("user_id", user.id).maybeSingle(),
         supabase.from("matches").select("user_a,user_b,created_at").eq("id", matchId).maybeSingle(),
+        supabase.from("messages").select("*").eq("match_id", matchId).order("created_at", { ascending: false }).limit(20),
       ]);
+
       const anonId = meRes.data?.anon_id ?? ctxAnonId ?? null;
       setMyAnonId(anonId);
       myAnonIdRef.current = anonId;
+
       const matchRow = matchRes.data;
       if (!matchRow) return;
       setMatchCreatedAt(matchRow.created_at ?? null);
+      
       const otherId = matchRow.user_a === user.id ? matchRow.user_b : matchRow.user_a;
       setOtherUserId(otherId);
-      const [profileRes, msgsRes] = await Promise.all([
+
+      const msgsData = msgsRes.data ??[];
+      const msgIds = msgsData.map((m: any) => m.id);
+
+      // 3. PARALLEL FETCH 2: ერთდროულად მოგვაქვს სხვა იუზერის პროფილი და რეაქციები!
+      const [profileRes, reactionsRes] = await Promise.all([
         supabase.from("profiles").select("user_id,nickname,first_name,photo1_url,last_seen").eq("user_id", otherId).maybeSingle(),
-        supabase.from("messages").select("*").eq("match_id", matchId).order("created_at", { ascending: false }).limit(20),
+        msgIds.length > 0
+          ? supabase.from("message_reactions").select("*").in("message_id", msgIds)
+          : Promise.resolve({ data: [] }),
       ]);
-      const msgIds = (msgsRes.data ?? []).map((m: any) => m.id);
-      const reactionsRes = msgIds.length
-        ? await supabase.from("message_reactions").select("*").in("message_id", msgIds)
-        : { data: [] };
+
+      // ვინახავთ ყველაფერს სთეითში ერთიანად
       setOtherProfile(profileRes.data ?? null);
-      setMsgs((msgsRes.data ?? []).reverse());
-      setReactions(reactionsRes.data ?? []);
+      setMsgs(msgsData.reverse());
+      setReactions(reactionsRes.data ??[]);
+      
+      // 🚀 ვაქრობთ ლოუდერს მომენტალურად!
       setIsLoaded(true);
-      await markRead(anonId, user.id);
-      await markDelivered(anonId);
-      await supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("user_id", user.id);
+
+      // 4. ბექგრაუნდ ამოცანები (არ აფერხებს ეკრანის გახსნას)
+      // წაკითხულად მონიშვნა და ონლაინის განახლება უკანა ფონზე გაეშვება თავისთვის
+      Promise.all([
+        markRead(anonId, user.id),
+        markDelivered(anonId),
+        supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("user_id", user.id)
+      ]).catch(console.error);
+      
     })();
-  }, [matchId, router, markRead, markDelivered]);
+  }, [matchId, router, markRead, markDelivered, ctxAnonId]);
 
   useEffect(() => {
     if (!matchId) return;
