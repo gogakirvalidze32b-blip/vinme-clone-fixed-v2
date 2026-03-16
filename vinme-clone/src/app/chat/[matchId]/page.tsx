@@ -63,23 +63,24 @@ function Ticks({ isTemp, delivered, read, mine }: { isTemp: boolean; delivered: 
 }
 
 function ThemeModal({ current, onClose, onSelect }: {
-  current: string; onClose: () => void; onSelect: (color: string) => void;
+ current: string; onClose: () => void; 
+  onSelect: (color: string, bg: string) => void;
 }) {
   const [custom, setCustom] = useState(current);
-  const themes = [
-    { color: "#7C3AED", label: "Purple" },
-    { color: "#EC4899", label: "Pink" },
-    { color: "#3B82F6", label: "Blue" },
-    { color: "#10B981", label: "Green" },
-    { color: "#F59E0B", label: "Orange" },
-    { color: "#EF4444", label: "Red" },
-    { color: "#6366F1", label: "Indigo" },
-    { color: "#14B8A6", label: "Teal" },
-    { color: "#F97316", label: "Amber" },
-    { color: "#8B5CF6", label: "Violet" },
-    { color: "#06B6D4", label: "Cyan" },
-    { color: "#84CC16", label: "Lime" },
-  ];
+ const themes = [
+  { color: "#7C3AED", label: "Purple", bg: "" },
+  { color: "#EC4899", label: "Pink", bg: "" },
+  { color: "#3B82F6", label: "Blue", bg: "linear-gradient(135deg, #0f0c29, #302b63, #24243e)" },
+  { color: "#10B981", label: "Forest", bg: "linear-gradient(135deg, #0a0a0a, #0d2b1a)" },
+  { color: "#F59E0B", label: "Sunset", bg: "linear-gradient(135deg, #1a0a00, #2d1000)" },
+  { color: "#EF4444", label: "Dark Red", bg: "linear-gradient(135deg, #0a0000, #1a0000)" },
+  { color: "#6366F1", label: "Indigo", bg: "linear-gradient(135deg, #0a0014, #1a0033)" },
+  { color: "#14B8A6", label: "Teal", bg: "linear-gradient(135deg, #001a18, #002d29)" },
+  { color: "#F97316", label: "Amber", bg: "" },
+  { color: "#8B5CF6", label: "Violet", bg: "" },
+  { color: "#06B6D4", label: "Cyan", bg: "" },
+  { color: "#84CC16", label: "Lime", bg: "" },
+];
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
@@ -90,7 +91,8 @@ function ThemeModal({ current, onClose, onSelect }: {
         </div>
         <div className="grid grid-cols-6 gap-3 mb-5">
           {themes.map(t => (
-            <button key={t.color} onClick={() => { onSelect(t.color); onClose(); }}
+            <button key={t.color} onClick={() => { onSelect(t.color, t.bg); onClose(); }}
+
               className="flex flex-col items-center gap-1.5">
               <div className="w-11 h-11 rounded-full transition-transform active:scale-90"
                 style={{ background: t.color, outline: current === t.color ? "3px solid white" : "3px solid transparent", outlineOffset: "2px" }} />
@@ -106,11 +108,11 @@ function ThemeModal({ current, onClose, onSelect }: {
             <input value={custom} onChange={e => setCustom(e.target.value)}
               className="flex-1 bg-zinc-800 rounded-xl px-3 py-2 text-sm text-white outline-none font-mono"
               placeholder="#7C3AED" />
-            <button onClick={() => { onSelect(custom); onClose(); }}
-              className="rounded-xl px-4 py-2 text-sm font-bold text-white"
-              style={{ background: custom }}>
-              OK
-            </button>
+           <button onClick={() => { onSelect(custom, ""); onClose(); }}
+  className="rounded-xl px-4 py-2 text-sm font-bold text-white"
+  style={{ background: custom }}>
+  OK
+</button>
           </div>
         </div>
         <div className="h-4" />
@@ -743,10 +745,12 @@ export default function ChatThreadPage() {
 
         {/* MESSAGES */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 scrollbar-hide"
-          style={{ overscrollBehavior: "none" }}
-          onPointerDown={() => {
-            bgLongPressTimer.current = setTimeout(() => setShowThemeModal(true), 700);
-          }}
+  style={{ overscrollBehavior: "none", userSelect: "none", WebkitUserSelect: "none" }}
+         onTouchStart={e => {
+  bgLongPressTimer.current = setTimeout(() => setShowThemeModal(true), 700);
+}}
+onTouchEnd={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer.current); }}
+onTouchMove={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer.current); }}
           onPointerUp={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer.current); }}
           onPointerLeave={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer.current); }}>
           <div className="flex flex-col justify-end min-h-full space-y-0.5 pb-2">
