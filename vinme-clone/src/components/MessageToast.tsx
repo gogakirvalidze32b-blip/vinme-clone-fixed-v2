@@ -7,72 +7,106 @@ import { useRouter, usePathname } from "next/navigation";
 
 export default function MessageToast() {
   const [notif, setNotif] = useState<any>(null);
+  const [show, setShow] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
-    // 🚩 შემოწმება 1: საერთოდ თუ ირთვება ფაილი
-    console.log("🚀 MessageToast: კომპონენტი ჩაირთო");
+    // 🔔 ბრაუზერის ნოტიფიკაციის უფლება (როცა აპი დახურულია)
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
 
     let myAnonId: string | null = null;
 
     const setup = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        console.log("❌ MessageToast: სესია ვერ მოიძებნა");
-        return;
-      }
+      if (!session) return;
       
       const { data: profile } = await supabase
         .from("profiles").select("anon_id").eq("user_id", session.user.id).single();
-      
       myAnonId = profile?.anon_id;
-      console.log("✅ MessageToast: ჩემი AnonID არის:", myAnonId);
 
-      const channel = supabase.channel('global-notifs')
+      const channel = supabase.channel('global-notifs-v4')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async (payload) => {
-          console.log("📩 MessageToast: ახალი მესიჯი მოვიდა ბაზიდან!", payload.new);
-
           const msg = payload.new;
 
-          // დროებით ამოვიღოთ ყველა შემოწმება (if), რომ ვნახოთ საერთოდ თუ ამოაგდებს
-          const { data: sender } = await supabase.from("profiles")
-            .select("first_name, nickname, photo1_url").eq("anon_id", msg.sender_anon).single();
+          // 🛑 ფილტრები: არ ამოხტეს თუ ჩემია ან თუ უკვე ჩათში ვარ
+          const isInThisChat = pathname?.includes(`/chat/${msg.match_id}`);
+          const isMine = msg.sender_anon === myAnonId;
 
-          setNotif({
-            title: sender?.first_name || sender?.nickname || "ახალი მესიჯი",
-            text: msg.content,
-            photo: sender?.photo1_url ? photoSrc(sender.photo1_url) : null,
-            matchId: msg.match_id
-          });
+          if (!isMine && !isInThisChat) {
+            const { data: sender } = await supabase.from("profiles")
+              .select("first_name, nickname, photo1_url").eq("anon_id", msg.sender_anon).single();
 
-          setTimeout(() => setNotif(null), 6000);
+            const title = sender?.first_name || sender?.nickname || "ახალი მესიჯი";
+            const content = msg.type === "text" ? msg.content : "📷 ფოტო/ხმოვანი";
+            const photo = sender?.photo1_url ? photoSrc(sender.photo1_url) : null;
+
+            // 📱 თუ აპლიკაციაში ვართ - შავი ელეგანტური პანელი
+            if (document.visibilityState === "visible") {
+              setNotif({ title, text: content, photo, matchId: msg.match_id });
+              setTimeout(() => setShow(true), 20); // რბილი ჩამოსვლისთვის
+              
+              // 4 წამში გაქრობა
+              setTimeout(() => {
+                setShow(false);
+                setTimeout(() => setNotif(null), 500);
+              }, 4000);
+            } 
+            // 🔔 თუ აპლიკაციიდან გასულები ვართ - სისტემური შეტყობინება
+            else if (Notification.permission === "granted") {
+              new Notification(title, { body: content, icon: photo || "/favicon.ico" });
+            }
+          }
         })
-        .subscribe((status) => {
-          // 🚩 შემოწმება 2: კავშირი ბაზასთან
-          console.log("📡 MessageToast: Realtime სტატუსი არის:", status);
-        });
+        .subscribe();
 
       return channel;
     };
 
-    setup();
+    const promise = setup();
+    return () => { promise.then(ch => ch && supabase.removeChannel(ch)); };
   }, [pathname]);
 
   if (!notif) return null;
 
   return (
     <div 
-      onClick={() => { router.push(`/chat/${notif.matchId}`); setNotif(null); }}
-      className="fixed top-6 left-1/2 -translate-x-1/2 z-[99999] w-[90%] max-w-md bg-white text-black rounded-2xl p-4 shadow-2xl flex items-center gap-3 cursor-pointer ring-4 ring-pink-500 animate-bounce"
+      onClick={() => {
+        router.push(`/chat/${notif.matchId}`);
+        setShow(false);
+      }}
+      className={`
+        fixed top-4 left-1/2 -translate-x-1/2 z-[999999] 
+        w-[94%] max-w-sm bg-[#0a0a0a] border border-white/10 
+        rounded-2xl p-3.5 shadow-[0_20px_60px_rgba(0,0,0,0.9)] 
+        flex items-center gap-3 cursor-pointer 
+        transition-all duration-500 ease-out
+        ${show ? "translate-y-0 opacity-100" : "-translate-y-32 opacity-0"}
+      `}
     >
-      <div className="w-12 h-12 rounded-full bg-zinc-200 overflow-hidden shrink-0">
-        {notif.photo && <img src={notif.photo} className="w-full h-full object-cover" />}
+      {/* სუფთა შავი ფონი და თეთრი ტექსტი */}
+      <div className="w-11 h-11 rounded-full overflow-hidden bg-zinc-800 shrink-0 ring-1 ring-white/10">
+        {notif.photo ? (
+          <img src={notif.photo} className="w-full h-full object-cover" alt="" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-xl bg-zinc-900">👤</div>
+        )}
       </div>
-      <div className="flex-1">
-        <div className="font-bold">{notif.title}</div>
-        <div className="text-sm opacity-70">{notif.text}</div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-bold text-white truncate">{notif.title}</span>
+          <span className="text-[10px] text-pink-500 font-black tracking-tighter shrink-0 ml-2">SHEKHVDI</span>
+        </div>
+        <p className="text-[13px] text-white/60 truncate mt-0.5">
+          {notif.text}
+        </p>
       </div>
+
+      {/* პატარა წერტილი (Unread indicator) */}
+      <div className="w-2 h-2 rounded-full bg-pink-500 shadow-[0_0_10px_#ec4899] shrink-0" />
     </div>
   );
 }
