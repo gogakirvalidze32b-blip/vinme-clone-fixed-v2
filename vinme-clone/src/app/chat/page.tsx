@@ -42,25 +42,42 @@ export default function ChatPage() {
   const ka = lang !== "en";
   const L = (k: string, e: string) => ka ? k : e;
 
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const[notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const { anonId: ctxAnonId } = useUser();
-  const [ctxReady, setCtxReady] = useState(false);
+  const[ctxReady, setCtxReady] = useState(false);
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [myId, setMyId] = useState<string | null>(null);
   const [myAnonId, setMyAnonId] = useState<string | null>(null);
   const loadingRef = useRef(false);
-  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const[selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const longPressRef = useRef<NodeJS.Timeout | null>(null);
+
+  // 🚀 ტრიუკი 1: შემოსვლისთანავე, წამიერად ვაჩვენებთ დამახსოვრებულ სიას
+  useEffect(() => {
+    try {
+      const cachedMatches = localStorage.getItem("chat_list_cache");
+      if (cachedMatches) {
+        setMatches(JSON.parse(cachedMatches));
+        setLoading(false); // ლოუდერს ეგრევე ვთიშავთ!
+      }
+    } catch (e) {
+      console.error("Cache error", e);
+    }
+  },[]);
 
   useEffect(() => {
     if (ctxAnonId !== null && !ctxReady) setCtxReady(true);
-  }, [ctxAnonId]);
+  },[ctxAnonId]);
 
   async function deleteMatch(matchId: string) {
     await supabase.from("matches").delete().eq("id", matchId);
-    setMatches(prev => prev.filter(m => m.id !== matchId));
+    setMatches(prev => {
+      const updated = prev.filter(m => m.id !== matchId);
+      localStorage.setItem("chat_list_cache", JSON.stringify(updated)); // წაშლისასაც ვაახლებთ ქეშს
+      return updated;
+    });
     setSelectedMatchId(null);
   }
 
@@ -76,7 +93,13 @@ export default function ChatPage() {
     if (!rows) { setLoading(false); loadingRef.current = false; return; }
 
     const otherIds = rows.map((r: any) => r.user_a === uid ? r.user_b : r.user_a);
-    if (!otherIds.length) { setMatches([]); setLoading(false); loadingRef.current = false; return; }
+    if (!otherIds.length) { 
+      setMatches([]); 
+      localStorage.removeItem("chat_list_cache");
+      setLoading(false); 
+      loadingRef.current = false; 
+      return; 
+    }
 
     const matchIds = rows.map((r: any) => r.id);
 
@@ -89,13 +112,13 @@ export default function ChatPage() {
     ]);
 
     const profileMap = new Map<string, Profile>();
-    (profilesRes.data ?? []).forEach((p: any) => profileMap.set(p.user_id, p));
+    (profilesRes.data ??[]).forEach((p: any) => profileMap.set(p.user_id, p));
 
     const allMsgs = msgsRes.data;
     const lastMsgMap = new Map<string, any>();
     const unreadMap = new Map<string, number>();
 
-    for (const msg of (allMsgs ?? [])) {
+    for (const msg of (allMsgs ??[])) {
       if (!lastMsgMap.has(msg.match_id)) lastMsgMap.set(msg.match_id, msg);
       if (anonId && msg.sender_anon !== anonId) {
         if (!unreadMap.has(msg.match_id)) {
@@ -104,7 +127,7 @@ export default function ChatPage() {
       }
     }
 
-    const result: Match[] = [];
+    const result: Match[] =[];
     for (const row of rows) {
       const otherId = row.user_a === uid ? row.user_b : row.user_a;
       const profile = profileMap.get(otherId);
@@ -126,7 +149,12 @@ export default function ChatPage() {
       });
     }
 
+    // 💾 ტრიუკი 2: ვაახლებთ სიას და ვინახავთ ლოკალურად მომავალი შემოსვლისთვის
     setMatches(result);
+    try {
+      localStorage.setItem("chat_list_cache", JSON.stringify(result));
+    } catch(e) {}
+    
     setLoading(false);
     loadingRef.current = false;
   }
@@ -139,34 +167,37 @@ export default function ChatPage() {
       if (!uid) { router.replace("/login"); return; }
       setMyId(uid);
       setMyAnonId(ctxAnonId);
+      
+      // ეს გაეშვება უკანა ფონზე და ჩუმად განაახლებს ბაზიდან მონაცემებს
       await loadMatches(uid, ctxAnonId);
-const { data: notifs } = await supabase
-  .from("notifications")
-  .select("*")
-  .eq("user_id", uid)
-  .neq("read", true)
-  .order("created_at", { ascending: false });
 
-const fromUserIds = (notifs ?? []).map((n: any) => n.from_user).filter(Boolean);
-const fromProfileMap: Record<string, {name: string, photo: string|null}> = {};
-if (fromUserIds.length > 0) {
-  const { data: fps } = await supabase
-    .from("profiles")
-    .select("user_id, first_name, nickname, photo1_url")
-    .in("user_id", fromUserIds);
-  (fps ?? []).forEach((p: any) => {
-    fromProfileMap[p.user_id] = {
-      name: p.first_name ?? p.nickname ?? "ვინმე",
-      photo: p.photo1_url ?? null
-    };
-  });
-}
+      const { data: notifs } = await supabase
+        .from("notifications")
+        .select("*")
+        .eq("user_id", uid)
+        .neq("read", true)
+        .order("created_at", { ascending: false });
 
-setNotifications((notifs ?? []).map((n: any) => ({
-  ...n,
-  from_name: fromProfileMap[n.from_user]?.name ?? "ვინმე",
-  from_photo: fromProfileMap[n.from_user]?.photo ?? null
-})));
+      const fromUserIds = (notifs ??[]).map((n: any) => n.from_user).filter(Boolean);
+      const fromProfileMap: Record<string, {name: string, photo: string|null}> = {};
+      if (fromUserIds.length > 0) {
+        const { data: fps } = await supabase
+          .from("profiles")
+          .select("user_id, first_name, nickname, photo1_url")
+          .in("user_id", fromUserIds);
+        (fps ?? []).forEach((p: any) => {
+          fromProfileMap[p.user_id] = {
+            name: p.first_name ?? p.nickname ?? "ვინმე",
+            photo: p.photo1_url ?? null
+          };
+        });
+      }
+
+      setNotifications((notifs ??[]).map((n: any) => ({
+        ...n,
+        from_name: fromProfileMap[n.from_user]?.name ?? "ვინმე",
+        from_photo: fromProfileMap[n.from_user]?.photo ?? null
+      })));
     })();
   }, [ctxReady]);
   
@@ -175,29 +206,41 @@ setNotifications((notifs ?? []).map((n: any) => ({
     const ch = supabase.channel(`chat-list-${Date.now()}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
         const msg = payload.new as any;
-        setMatches(prev => prev.map(m => {
-          if (String(m.id) !== String(msg.match_id)) return m;
-          const isUnread = msg.sender_anon !== myAnonId;
-          return {
-            ...m,
-            _hasMessages: true,
-            last_message: msg.type === "voice" ? "🎤 Voice" : msg.type === "image" ? "📷 Photo" : msg.content,
-            last_message_time: msg.created_at,
-            last_sender_anon: msg.sender_anon,
-            _unreadCount: isUnread ? m._unreadCount + 1 : m._unreadCount,
-          };
-        }));
+        setMatches(prev => {
+          const updated = prev.map(m => {
+            if (String(m.id) !== String(msg.match_id)) return m;
+            const isUnread = msg.sender_anon !== myAnonId;
+            return {
+              ...m,
+              _hasMessages: true,
+              last_message: msg.type === "voice" ? "🎤 Voice" : msg.type === "image" ? "📷 Photo" : msg.content,
+              last_message_time: msg.created_at,
+              last_sender_anon: msg.sender_anon,
+              _unreadCount: isUnread ? m._unreadCount + 1 : m._unreadCount,
+            };
+          });
+          localStorage.setItem("chat_list_cache", JSON.stringify(updated));
+          return updated;
+        });
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "matches" }, (payload) => {
-        setMatches(prev => prev.filter(m => String(m.id) !== String(payload.old.id)));
+        setMatches(prev => {
+          const updated = prev.filter(m => String(m.id) !== String(payload.old.id));
+          localStorage.setItem("chat_list_cache", JSON.stringify(updated));
+          return updated;
+        });
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, (payload) => {
         const msg = payload.new as any;
         if (msg.read_at) {
-          setMatches(prev => prev.map(m => {
-            if (String(m.id) !== String(msg.match_id)) return m;
-            return { ...m, _unreadCount: 0 };
-          }));
+          setMatches(prev => {
+            const updated = prev.map(m => {
+              if (String(m.id) !== String(msg.match_id)) return m;
+              return { ...m, _unreadCount: 0 };
+            });
+            localStorage.setItem("chat_list_cache", JSON.stringify(updated));
+            return updated;
+          });
         }
       })
       .subscribe();
@@ -267,34 +310,34 @@ setNotifications((notifs ?? []).map((n: any) => ({
         </div>
 
         {showNotifications && (
-  <div className="mb-4 space-y-2">
-    {notifications.length === 0 ? (
-      <div className="text-center text-white/40 text-sm py-3">შეტყობინება არ არის</div>
-    ) : (
-      notifications.map(n => (
-        <div key={n.id} className="flex items-start gap-3 rounded-2xl bg-zinc-800/80 border border-white/8 px-4 py-3">
-          <div className="w-10 h-10 rounded-full bg-zinc-700 overflow-hidden shrink-0">
-            {n.from_photo ? (
-              <img src={photoSrc(n.from_photo)} className="w-full h-full object-cover" />
+          <div className="mb-4 space-y-2">
+            {notifications.length === 0 ? (
+              <div className="text-center text-white/40 text-sm py-3">შეტყობინება არ არის</div>
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-lg">👤</div>
+              notifications.map(n => (
+                <div key={n.id} className="flex items-start gap-3 rounded-2xl bg-zinc-800/80 border border-white/8 px-4 py-3">
+                  <div className="w-10 h-10 rounded-full bg-zinc-700 overflow-hidden shrink-0">
+                    {n.from_photo ? (
+                      <img src={photoSrc(n.from_photo)} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-lg">👤</div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-white">
+                      {n.from_name}-მ გააკეთა Unmatch
+                    </div>
+                    <div className="text-xs text-white/50 mt-0.5">{n.message}</div>
+                  </div>
+                  <button onClick={async () => {
+                    await supabase.from("notifications").update({ read: true }).eq("id", n.id);
+                    setNotifications(prev => prev.filter(x => x.id !== n.id));
+                  }} className="text-white/30 hover:text-white text-lg shrink-0">✕</button>
+                </div>
+              ))
             )}
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold text-white">
-              {n.from_name}-მ გააკეთა Unmatch
-            </div>
-            <div className="text-xs text-white/50 mt-0.5">{n.message}</div>
-          </div>
-          <button onClick={async () => {
-            await supabase.from("notifications").update({ read: true }).eq("id", n.id);
-            setNotifications(prev => prev.filter(x => x.id !== n.id));
-          }} className="text-white/30 hover:text-white text-lg shrink-0">✕</button>
-        </div>
-      ))
-    )}
-  </div>
-)}
+        )}
 
         {newMatches.length > 0 && (
           <div className="mb-6">
