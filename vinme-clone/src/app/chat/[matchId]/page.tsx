@@ -341,8 +341,25 @@ export default function ChatThreadPage() {
   const { anonId: ctxAnonId } = useUser();
 
   const [matchCreatedAt, setMatchCreatedAt] = useState<string|null>(null);
-  const [chatTheme, setChatTheme] = useState("#7C3AED");
+const [chatTheme, setChatTheme] = useState("#7C3AED");
+const [chatBg, setChatBg] = useState("");  
   const [showThemeModal, setShowThemeModal] = useState(false);
+
+  useEffect(() => {
+  const saved = localStorage.getItem(`chat-theme-${matchId}`);
+  if (saved) {
+    const { color, bg } = JSON.parse(saved);
+    setChatTheme(color);
+    setChatBg(bg);
+  }
+}, [matchId]);
+
+
+function applyTheme(color: string, bg: string) {
+  setChatTheme(color);
+  setChatBg(bg);
+  localStorage.setItem(`chat-theme-${matchId}`, JSON.stringify({ color, bg }));
+}
 
   const swipeStartX = useRef<number>(0);
   const swipeStartY = useRef<number>(0);
@@ -697,8 +714,9 @@ export default function ChatThreadPage() {
   const hasFocusOrText = text.trim().length > 0;
 
   if (!isLoaded) return (
-    <div className="fixed inset-0 bg-[#111] flex justify-center">
-      <div className="w-full max-w-lg flex flex-col bg-[#111]">
+<div className="fixed inset-0 flex justify-center"
+  style={{ background: chatBg || "#111111" }}>
+          <div className="w-full max-w-lg flex flex-col bg-[#111]">
         <div className="flex items-center gap-3 px-4 py-3 bg-zinc-900 border-b border-white/10 shrink-0">
           <div className="w-9 h-9 rounded-full bg-white/10 animate-pulse" />
           <div className="flex items-center gap-3 flex-1">
@@ -1003,10 +1021,10 @@ onTouchMove={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer
 
       {showAttachSheet && <AttachSheet lang={lang} onClose={() => setShowAttachSheet(false)}
         onGallery={() => galleryInputRef.current?.click()} onCamera={() => cameraInputRef.current?.click()} />}
-
-      {showThemeModal && (
-        <ThemeModal current={chatTheme} onClose={() => setShowThemeModal(false)} onSelect={setChatTheme} />
-      )}
+{showThemeModal && (
+  <ThemeModal current={chatTheme} onClose={() => setShowThemeModal(false)}
+    onSelect={(color, bg) => applyTheme(color, bg)} />
+)}
 
       {(reactionMsgId || selectedMsgId) && (
         <div className="fixed inset-0 z-30" onClick={() => { setReactionMsgId(null); setSelectedMsgId(null); }} />
