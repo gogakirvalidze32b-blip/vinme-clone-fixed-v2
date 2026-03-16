@@ -12,52 +12,65 @@ export default function MessageToast() {
   const pathname = usePathname();
 
   useEffect(() => {
-    // 🔔 ბრაუზერის ნოტიფიკაციის უფლება (როცა აპი დახურულია)
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
     }
 
     let myAnonId: string | null = null;
+    let myUserId: string | null = null;
 
     const setup = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
+      myUserId = session.user.id;
       
       const { data: profile } = await supabase
-        .from("profiles").select("anon_id").eq("user_id", session.user.id).single();
+        .from("profiles").select("anon_id").eq("user_id", myUserId).single();
       myAnonId = profile?.anon_id;
 
-      const channel = supabase.channel('global-notifs-v4')
+      // ვუსმენთ მესიჯებს
+      const channel = supabase.channel('global-secure-notifs')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async (payload) => {
           const msg = payload.new;
 
-          // 🛑 ფილტრები: არ ამოხტეს თუ ჩემია ან თუ უკვე ჩათში ვარ
-          const isInThisChat = pathname?.includes(`/chat/${msg.match_id}`);
+          // 🛑 1. შემოწმება: ჩემი გაგზავნილი ხომ არ არის?
           const isMine = msg.sender_anon === myAnonId;
+          if (isMine) return;
 
-          if (!isMine && !isInThisChat) {
-            const { data: sender } = await supabase.from("profiles")
-              .select("first_name, nickname, photo1_url").eq("anon_id", msg.sender_anon).single();
+          // 🛑 2. შემოწმება: ვარ თუ არა ამ მიმოწერის მონაწილე? (ყველაზე მნიშვნელოვანი ფილტრი)
+          const { data: match } = await supabase
+            .from('matches')
+            .select('user_a, user_b')
+            .eq('id', msg.match_id)
+            .single();
 
-            const title = sender?.first_name || sender?.nickname || "ახალი მესიჯი";
-            const content = msg.type === "text" ? msg.content : "📷 ფოტო/ხმოვანი";
-            const photo = sender?.photo1_url ? photoSrc(sender.photo1_url) : null;
+          const isMyMatch = match && (match.user_a === myUserId || match.user_b === myUserId);
+          if (!isMyMatch) return; // თუ ამ მაჩის წევრი არ ვარ, გავჩერდეთ
 
-            // 📱 თუ აპლიკაციაში ვართ - შავი ელეგანტური პანელი
-            if (document.visibilityState === "visible") {
-              setNotif({ title, text: content, photo, matchId: msg.match_id });
-              setTimeout(() => setShow(true), 20); // რბილი ჩამოსვლისთვის
-              
-              // 4 წამში გაქრობა
-              setTimeout(() => {
-                setShow(false);
-                setTimeout(() => setNotif(null), 500);
-              }, 4000);
-            } 
-            // 🔔 თუ აპლიკაციიდან გასულები ვართ - სისტემური შეტყობინება
-            else if (Notification.permission === "granted") {
-              new Notification(title, { body: content, icon: photo || "/favicon.ico" });
-            }
+          // 🛑 3. შემოწმება: უკვე ამ ჩათში ხომ არ ვარ გახსნილი?
+          const isInThisChat = pathname?.includes(`/chat/${msg.match_id}`);
+          if (isInThisChat) return;
+
+          // თუ ყველა ფილტრი გაიარა, მაშინ ვაჩვენებთ შეტყობინებას
+          const { data: sender } = await supabase.from("profiles")
+            .select("first_name, nickname, photo1_url")
+            .eq("anon_id", msg.sender_anon)
+            .single();
+
+          const title = sender?.first_name || sender?.nickname || "ახალი მესიჯი";
+          const content = msg.type === "text" ? msg.content : "📷 ფოტო/ხმოვანი";
+          const photo = sender?.photo1_url ? photoSrc(sender.photo1_url) : null;
+
+          if (document.visibilityState === "visible") {
+            setNotif({ title, text: content, photo, matchId: msg.match_id });
+            setTimeout(() => setShow(true), 20);
+            
+            setTimeout(() => {
+              setShow(false);
+              setTimeout(() => setNotif(null), 500);
+            }, 4000);
+          } else if (Notification.permission === "granted") {
+            new Notification(title, { body: content, icon: photo || "/favicon.ico" });
           }
         })
         .subscribe();
@@ -86,7 +99,6 @@ export default function MessageToast() {
         ${show ? "translate-y-0 opacity-100" : "-translate-y-32 opacity-0"}
       `}
     >
-      {/* სუფთა შავი ფონი და თეთრი ტექსტი */}
       <div className="w-11 h-11 rounded-full overflow-hidden bg-zinc-800 shrink-0 ring-1 ring-white/10">
         {notif.photo ? (
           <img src={notif.photo} className="w-full h-full object-cover" alt="" />
@@ -104,8 +116,6 @@ export default function MessageToast() {
           {notif.text}
         </p>
       </div>
-
-      {/* პატარა წერტილი (Unread indicator) */}
       <div className="w-2 h-2 rounded-full bg-pink-500 shadow-[0_0_10px_#ec4899] shrink-0" />
     </div>
   );
