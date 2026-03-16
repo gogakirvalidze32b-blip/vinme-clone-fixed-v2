@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { photoSrc } from "@/lib/photos";
@@ -24,16 +24,17 @@ export default function ProfileClient() {
   const ka = lang !== "en";
   const L = (k: string, e: string) => ka ? k : e;
 
-  const [me, setMe] = useState<any>(null);
-
-  useEffect(() => {
+  const [me, setMe] = useState<any>(() => {
     try {
-      const cached = localStorage.getItem("my_profile_cache");
-      if (cached) setMe(JSON.parse(cached));
+      if (typeof window !== "undefined") {
+        const cached = sessionStorage.getItem("profile_cache");
+        return cached ? JSON.parse(cached) : {};
+      }
     } catch (e) {
       console.error("Cache error:", e);
     }
-  }, []);
+    return {};
+  });
 
   useEffect(() => {
     (async () => {
@@ -47,20 +48,24 @@ export default function ProfileClient() {
         if (!data.onboarding_completed) { router.replace("/onboarding"); return; }
         
         setMe(data);
-        localStorage.setItem("my_profile_cache", JSON.stringify(data));
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem("profile_cache", JSON.stringify(data));
+        }
 
+        // ✅ Auto-update location + age in background
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(async (pos) => {
             try {
-              const currentLang = localStorage.getItem("lang") ?? "ka";
-              const acceptLang = currentLang === "en" ? "en" : "ka";
-              
+              const lang = typeof window !== "undefined" ? (localStorage.getItem("app_lang") ?? "ka") : "ka";
+              const acceptLang = lang === "en" ? "en" : "ka";
               const res = await fetch(
-                `https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json&accept-language=${acceptLang}&email=shekhvdi_app@gmail.com`
+                `https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json&accept-language=${acceptLang}`,
+                { headers: { "User-Agent": "Shekhvdi/1.0" } }
               );
               const geo = await res.json();
               const cityName = geo.address?.city || geo.address?.town || geo.address?.village || geo.address?.suburb || geo.address?.county;
               
+              // Calculate age from birth_date
               const birthDate = data?.birth_date ? new Date(data.birth_date) : null;
               const age = birthDate ? Math.floor((new Date().getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : null;
               
@@ -74,14 +79,15 @@ export default function ProfileClient() {
               
               await supabase.from("profiles").update(updateData).eq("user_id", uid);
               
-              const updatedProfile = { ...data, ...updateData };
-              setMe(updatedProfile);
-              localStorage.setItem("my_profile_cache", JSON.stringify(updatedProfile));
-              
+              // Update local state
+             setMe((prev: any) => ({
+  ...prev,
+  ...updateData
+}));
             } catch (e) {
-              console.error("Geolocation fetch error:", e);
+              console.error("Geolocation error:", e);
             }
-          }, () => {}, { timeout: 10000 });
+          }, () => {});
         }
       } catch (e) {
         console.error("Profile load error:", e);
@@ -99,6 +105,7 @@ export default function ProfileClient() {
 
       <div className="mx-auto w-full max-w-lg px-4 pt-5">
 
+        {/* TOP ROW */}
         <div className="flex items-center justify-between mb-6">
           <button onClick={() => router.push("/feed")}
             className="rounded-full bg-white/8 px-4 py-2 text-sm font-semibold hover:bg-white/12 transition">
@@ -112,7 +119,9 @@ export default function ProfileClient() {
           </div>
         </div>
 
+        {/* AVATAR + NAME */}
         <div className="flex items-center gap-4 mb-6">
+          {/* Progress ring */}
           <div className="relative h-20 w-20 shrink-0">
             <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 80 80">
               <circle cx="40" cy="40" r="36" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="5" />
@@ -123,7 +132,13 @@ export default function ProfileClient() {
             </svg>
             <div className="absolute inset-[5px] rounded-full overflow-hidden bg-zinc-800">
               {avatarUrl
-                ? <img src={avatarUrl} alt="" className="w-full h-full object-cover" loading="eager" decoding="async" />
+                ? <img 
+                    src={avatarUrl} 
+                    alt="" 
+                    className="w-full h-full object-cover" 
+                    loading="eager"
+                    decoding="async"
+                  />
                 : <div className="w-full h-full flex items-center justify-center text-3xl">👤</div>}
             </div>
             <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-zinc-950 rounded-full px-2 py-0.5 text-[10px] font-bold ring-2 ring-pink-500 whitespace-nowrap">
@@ -134,11 +149,9 @@ export default function ProfileClient() {
           <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-2xl font-extrabold">
-                {name ? `${name}${age ? `, ${age}` : ""}` : "..."}
+                {name ? `${name}${age ? `, ${age}` : ""}` : null}
               </h1>
-              {name && (
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 text-xs border border-blue-400/40">✓</span>
-              )}
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 text-xs border border-blue-400/40">✓</span>
             </div>
             <button onClick={() => router.push("/profile/edit")}
               className="mt-3 inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-zinc-900 hover:bg-zinc-100 transition active:scale-[0.99]">
@@ -147,6 +160,7 @@ export default function ProfileClient() {
           </div>
         </div>
 
+        {/* DOUBLE DATE */}
         <div className="rounded-3xl bg-white/8 p-4 ring-1 ring-white/10 mb-4 flex items-center gap-3">
           <div className="text-2xl shrink-0">👥</div>
           <div className="flex-1">
@@ -156,12 +170,14 @@ export default function ProfileClient() {
           <button onClick={() => {}} className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-white/70 shrink-0">→</button>
         </div>
 
+        {/* TILES */}
         <div className="grid grid-cols-3 gap-3 mb-4">
           <Tile icon="⭐" title={L("სუპერ ლაიქი", "Super Likes")} sub="0" onClick={() => {}} />
           <Tile icon="⚡" title={L("ბუსტი", "Boosts")} sub={L("ჩემი ბუსტები", "My Boosts")} onClick={() => {}} />
           <Tile icon="🔥" title={L("გამოწერა", "Subs")} sub={L("გამოწერები", "Subscriptions")} onClick={() => {}} />
         </div>
 
+        {/* PREMIUM */}
         <div className="rounded-3xl bg-gradient-to-br from-amber-500/20 to-orange-500/10 p-4 ring-1 ring-amber-500/20 flex items-center justify-between">
           <div>
             <div className="font-extrabold">Premium</div>
