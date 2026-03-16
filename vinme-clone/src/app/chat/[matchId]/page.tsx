@@ -62,14 +62,70 @@ function Ticks({ isTemp, delivered, read, mine }: { isTemp: boolean; delivered: 
   );
 }
 
+function ThemeModal({ current, onClose, onSelect }: {
+  current: string; onClose: () => void; onSelect: (color: string) => void;
+}) {
+  const [custom, setCustom] = useState(current);
+  const themes = [
+    { color: "#7C3AED", label: "Purple" },
+    { color: "#EC4899", label: "Pink" },
+    { color: "#3B82F6", label: "Blue" },
+    { color: "#10B981", label: "Green" },
+    { color: "#F59E0B", label: "Orange" },
+    { color: "#EF4444", label: "Red" },
+    { color: "#6366F1", label: "Indigo" },
+    { color: "#14B8A6", label: "Teal" },
+    { color: "#F97316", label: "Amber" },
+    { color: "#8B5CF6", label: "Violet" },
+    { color: "#06B6D4", label: "Cyan" },
+    { color: "#84CC16", label: "Lime" },
+  ];
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="relative w-full max-w-lg bg-zinc-900 rounded-t-3xl p-5" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-white text-base">🎨 ჩათის თემა</h3>
+          <button onClick={onClose} className="text-white/40 hover:text-white text-xl">✕</button>
+        </div>
+        <div className="grid grid-cols-6 gap-3 mb-5">
+          {themes.map(t => (
+            <button key={t.color} onClick={() => { onSelect(t.color); onClose(); }}
+              className="flex flex-col items-center gap-1.5">
+              <div className="w-11 h-11 rounded-full transition-transform active:scale-90"
+                style={{ background: t.color, outline: current === t.color ? "3px solid white" : "3px solid transparent", outlineOffset: "2px" }} />
+              <span className="text-[10px] text-white/50">{t.label}</span>
+            </button>
+          ))}
+        </div>
+        <div className="border-t border-white/8 pt-4">
+          <div className="text-xs text-white/40 mb-2">ხელით შეყვანა</div>
+          <div className="flex items-center gap-3">
+            <input type="color" value={custom} onChange={e => setCustom(e.target.value)}
+              className="w-10 h-10 rounded-xl cursor-pointer bg-transparent border-0 p-0" />
+            <input value={custom} onChange={e => setCustom(e.target.value)}
+              className="flex-1 bg-zinc-800 rounded-xl px-3 py-2 text-sm text-white outline-none font-mono"
+              placeholder="#7C3AED" />
+            <button onClick={() => { onSelect(custom); onClose(); }}
+              className="rounded-xl px-4 py-2 text-sm font-bold text-white"
+              style={{ background: custom }}>
+              OK
+            </button>
+          </div>
+        </div>
+        <div className="h-4" />
+      </div>
+    </div>
+  );
+}
+
 function ReactionBar({ msgId, myAnonId, reactions, onReact, onClose, mine }: {
   msgId: string; myAnonId: string; reactions: Reaction[];
   onReact: (msgId: string, emoji: string) => void; onClose: () => void; mine: boolean;
 }) {
-  const emojis =["❤️", "😂", "😮", "😢", "😡", "👍"];
+  const emojis = ["❤️", "😂", "😮", "😢", "😡", "👍"];
   return (
-    <div
-      className={`absolute bottom-full mb-2 z-50 flex items-center gap-1 bg-zinc-800 rounded-full px-3 py-2 shadow-2xl ring-1 ring-white/10 ${mine ? "right-0" : "left-0"}`}
+    <div className={`absolute bottom-full mb-2 z-50 flex items-center gap-1 bg-zinc-800 rounded-full px-3 py-2 shadow-2xl ring-1 ring-white/10 ${mine ? "right-0" : "left-0"}`}
       onClick={e => e.stopPropagation()}>
       {emojis.map(e => {
         const active = reactions.some(r => r.message_id === msgId && r.sender_anon === myAnonId && r.emoji === e);
@@ -85,32 +141,26 @@ function ReactionBar({ msgId, myAnonId, reactions, onReact, onClose, mine }: {
   );
 }
 
-// შეცვლილი: რეაქციები დაჯგუფებულია უნიკალურად თითო იუზერზე, რათა "2" არ დაიწეროს ტყუილად
-function ReactionsDisplay({ msgId, reactions, myAnonId, onReact }: {
+function ReactionsDisplay({ msgId, reactions, myAnonId, onReact, theme }: {
   msgId: string; reactions: Reaction[]; myAnonId: string;
-  onReact: (msgId: string, emoji: string) => void;
+  onReact: (msgId: string, emoji: string) => void; theme: string;
 }) {
   const msgReactions = reactions.filter(r => r.message_id === msgId);
   if (!msgReactions.length) return null;
-
-  // ვიტოვებთ მხოლოდ 1 რეაქციას 1 იუზერზე (რომ დუბლირება არ მოხდეს)
   const latestReactions = new Map<string, Reaction>();
   msgReactions.forEach(r => { latestReactions.set(r.sender_anon, r); });
   const activeReactions = Array.from(latestReactions.values());
   if (!activeReactions.length) return null;
-
   const grouped: Record<string, number> = {};
   activeReactions.forEach(r => { grouped[r.emoji] = (grouped[r.emoji] ?? 0) + 1; });
-
   return (
     <div className="flex items-center gap-1">
       {Object.entries(grouped).map(([emoji, count]) => {
         const isMine = activeReactions.some(r => r.emoji === emoji && r.sender_anon === myAnonId);
         return (
           <button key={emoji} onClick={() => onReact(msgId, emoji)}
-            className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[11px] transition active:scale-90 shadow-md ${
-              isMine ? "bg-[#7C3AED] text-white border border-[#7C3AED]" : "bg-zinc-800 text-white border border-white/10"
-            }`}>
+            className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[11px] transition active:scale-90 shadow-md text-white border"
+            style={isMine ? { background: theme, borderColor: theme } : { background: "#27272a", borderColor: "rgba(255,255,255,0.1)" }}>
             <span style={{ fontSize: 13, lineHeight: 1 }}>{emoji}</span>
             {count > 1 && <span className="font-medium ml-0.5">{count}</span>}
           </button>
@@ -125,7 +175,6 @@ function UnmatchModal({ onClose, onConfirm, ka }: {
 }) {
   const [selected, setSelected] = useState<string|null>(null);
   const [feedback, setFeedback] = useState("");
-
   function isRealText(text: string): boolean {
     if (text.length < 10) return false;
     const unique = new Set(text.toLowerCase().replace(/\s/g, "")).size;
@@ -135,20 +184,12 @@ function UnmatchModal({ onClose, onConfirm, ka }: {
     if (words.length < 2) return false;
     return new Set(words.map(w => w.toLowerCase())).size >= 2;
   }
-
   const canConfirm = selected !== null || isRealText(feedback);
-
-  function handleConfirm() {
-    if (!canConfirm) return;
-    onConfirm(selected ?? feedback);
-  }
-
-  const reasons =[
+  const reasons = [
     ka ? "არ ვართ თავსებადი" : "Not compatible",
     ka ? "შეურაცხმყოფელი ქცევა" : "Offensive behavior",
     ka ? "სპამი ან ყალბი პროფილი" : "Spam or fake profile",
   ];
-
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
@@ -178,7 +219,7 @@ function UnmatchModal({ onClose, onConfirm, ka }: {
           <button onClick={onClose} className="flex-1 rounded-2xl bg-white/8 py-3.5 text-sm font-semibold text-white/70">
             {ka?"გაუქმება":"Cancel"}
           </button>
-          <button onClick={handleConfirm} disabled={!canConfirm}
+          <button onClick={() => canConfirm && onConfirm(selected ?? feedback)} disabled={!canConfirm}
             className="flex-1 rounded-2xl bg-red-500 py-3.5 text-sm font-bold text-white disabled:opacity-40 transition">
             Unmatch
           </button>
@@ -219,7 +260,6 @@ function ChatMenu({ onClose, onViewProfile, onUnmatch, onBlock, lang }: {
   );
 }
 
-// შეცვლილი: ატვირთვის მენიუს ზომები დაპატარავდა
 function AttachSheet({ onClose, onGallery, onCamera, lang }: {
   onClose: () => void; onGallery: () => void; onCamera: () => void; lang: string;
 }) {
@@ -257,18 +297,12 @@ function AttachSheet({ onClose, onGallery, onCamera, lang }: {
   );
 }
 
-const EMOJI_ROWS =[["😀","😃","😄","😁","😆","😅","🤣","😂","🙂","😊","😇","🥰","😍","🤩","😘","😗"],["😙","😚","😋","😛","😜","🤪","😝","🤑","🤗","🤭","🤫","🤔","🤐","🤨","😐","😑"],["😶","😏","😒","🙄","😬","🤥","😌","😔","😪","🤤","😴","😷","🤒","🤕","🤢","🤧"],["🥵","🥶","🥴","😵","🤯","🤠","🥳","😎","🤓","🧐","😕","😟","🙁","☹️","😮","😯"],["😲","😳","🥺","😦","😧","😨","😰","😥","😢","😭","😱","😖","😣","😞","😓","😩"],["😫","🥱","😤","😡","😠","🤬","😈","👿","💀","☠️","💩","🤡","👹","👺","👻","👽"],["❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎","💔","❣️","💕","💞","💓","💗","💖"],["💘","💝","💟","☮️","✝️","☪️","🕉","✡️","🔯","🕎","☯️","☦️","🛐","⛎","♈","♉"],["👍","👎","👌","🤌","🤏","✌️","🤞","🤟","🤘","🤙","👈","👉","👆","🖕","👇","☝️"],["👋","🤚","🖐","✋","🖖","👏","🙌","🤲","🤝","🙏","✍️","💅","🤳","💪","🦾","🦿"],["🎉","🎊","🎈","🎁","🎀","🎗","🎟","🎫","🏆","🥇","🥈","🥉","⚽","🏀","🏈","⚾"],["🔥","💥","✨","⭐","🌟","💫","⚡","☄️","🌈","☀️","🌤","⛅","🌥","☁️","🌦","🌧"],["😻","😺","😸","😹","😼","😽","🙀","😿","😾","🐶","🐱","🐭","🐹","🐰","🦊","🐻"],
-];
-
+const EMOJI_ROWS = [["😀","😃","😄","😁","😆","😅","🤣","😂","🙂","😊","😇","🥰","😍","🤩","😘","😗"],["😙","😚","😋","😛","😜","🤪","😝","🤑","🤗","🤭","🤫","🤔","🤐","🤨","😐","😑"],["😶","😏","😒","🙄","😬","🤥","😌","😔","😪","🤤","😴","😷","🤒","🤕","🤢","🤧"],["🥵","🥶","🥴","😵","🤯","🤠","🥳","😎","🤓","🧐","😕","😟","🙁","☹️","😮","😯"],["😲","😳","🥺","😦","😧","😨","😰","😥","😢","😭","😱","😖","😣","😞","😓","😩"],["😫","🥱","😤","😡","😠","🤬","😈","👿","💀","☠️","💩","🤡","👹","👺","👻","👽"],["❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎","💔","❣️","💕","💞","💓","💗","💖"],["💘","💝","💟","☮️","✝️","☪️","🕉","✡️","🔯","🕎","☯️","☦️","🛐","⛎","♈","♉"],["👍","👎","👌","🤌","🤏","✌️","🤞","🤟","🤘","🤙","👈","👉","👆","🖕","👇","☝️"],["👋","🤚","🖐","✋","🖖","👏","🙌","🤲","🤝","🙏","✍️","💅","🤳","💪","🦾","🦿"],["🎉","🎊","🎈","🎁","🎀","🎗","🎟","🎫","🏆","🥇","🥈","🥉","⚽","🏀","🏈","⚾"],["🔥","💥","✨","⭐","🌟","💫","⚡","☄️","🌈","☀️","🌤","⛅","🌥","☁️","🌦","🌧"],["😻","😺","😸","😹","😼","😽","🙀","😿","😾","🐶","🐱","🐭","🐹","🐰","🦊","🐻"]];
 const ALL_EMOJIS = EMOJI_ROWS.flat();
 
-
-// შეცვლილი: Emoji Picker გახდა კომპაქტური Grid, Messenger-ის მსგავსი
 function QuickEmojiPicker({ onPick, onClose }: { onPick: (e: string) => void; onClose: () => void }) {
   const [search, setSearch] = useState("");
   const filtered = search ? ALL_EMOJIS.filter(e => e.includes(search)) : ALL_EMOJIS;
-  // useMemo ამოშალე
-
   return (
     <div className="bg-zinc-900 border-t border-white/8 rounded-t-2xl shadow-xl" onClick={e => e.stopPropagation()}>
       <div className="flex items-center gap-2 px-3 pt-3 pb-2 border-b border-white/5">
@@ -304,38 +338,38 @@ export default function ChatThreadPage() {
   const ka = lang !== "en";
   const { anonId: ctxAnonId } = useUser();
 
-  
-const [matchCreatedAt, setMatchCreatedAt] = useState<string|null>(null);
+  const [matchCreatedAt, setMatchCreatedAt] = useState<string|null>(null);
+  const [chatTheme, setChatTheme] = useState("#7C3AED");
+  const [showThemeModal, setShowThemeModal] = useState(false);
 
   const swipeStartX = useRef<number>(0);
   const swipeStartY = useRef<number>(0);
   const headerRef = useRef<HTMLDivElement>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [headerTop, setHeaderTop] = useState(0);
-
   const [msgs, setMsgs] = useState<MsgRow[]>([]);
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [text, setText] = useState("");
   const [myAnonId, setMyAnonId] = useState<string|null>(null);
   const [myUserId, setMyUserId] = useState<string|null>(null);
   const [otherProfile, setOtherProfile] = useState<any>(null);
-  const[otherUserId, setOtherUserId] = useState<string|null>(null);
+  const [otherUserId, setOtherUserId] = useState<string|null>(null);
   const [sending, setSending] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
-  const[isLoaded, setIsLoaded] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showUnmatchModal, setShowUnmatchModal] = useState(false);
-  const[showAttachSheet, setShowAttachSheet] = useState(false);
+  const [showAttachSheet, setShowAttachSheet] = useState(false);
   const [reactionMsgId, setReactionMsgId] = useState<string|null>(null);
   const [selectedMsgId, setSelectedMsgId] = useState<string|null>(null);
   const longPressTimer = useRef<NodeJS.Timeout|null>(null);
   const [replyTo, setReplyTo] = useState<MsgRow|null>(null);
-  const[hoveredMsgId, setHoveredMsgId] = useState<string|null>(null);
+  const [hoveredMsgId, setHoveredMsgId] = useState<string|null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [recording, setRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob|null>(null);
-  const[audioPreviewUrl, setAudioPreviewUrl] = useState<string|null>(null);
-  const[recordTime, setRecordTime] = useState(0);
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string|null>(null);
+  const [recordTime, setRecordTime] = useState(0);
   const [uploadingVoice, setUploadingVoice] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder|null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -348,24 +382,11 @@ const [matchCreatedAt, setMatchCreatedAt] = useState<string|null>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [uploadingImg, setUploadingImg] = useState(false);
   const [imagePreview, setImagePreview] = useState<{file: File, url: string} | null>(null);
-  const msgReactionIds = useMemo(() => 
-  new Set(reactions.map(r => r.message_id)), 
-[reactions]);
+  const msgReactionIds = useMemo(() => new Set(reactions.map(r => r.message_id)), [reactions]);
 
   useEffect(() => { if (ctxAnonId && !myAnonId) setMyAnonId(ctxAnonId); }, [ctxAnonId]);
-
-  useEffect(() => {
-    return () => {
-      setReactionMsgId(null);
-      setSelectedMsgId(null);
-    };
-  },[]);
-
-  useEffect(() => {
-    if (headerRef.current) {
-      setHeaderTop(headerRef.current.getBoundingClientRect().top);
-    }
-  }, [isLoaded]);
+  useEffect(() => { return () => { setReactionMsgId(null); setSelectedMsgId(null); }; }, []);
+  useEffect(() => { if (headerRef.current) setHeaderTop(headerRef.current.getBoundingClientRect().top); }, [isLoaded]);
 
   useEffect(() => {
     const vv = window.visualViewport;
@@ -380,11 +401,9 @@ const [matchCreatedAt, setMatchCreatedAt] = useState<string|null>(null);
     }
     vv.addEventListener("resize", onResize);
     return () => vv.removeEventListener("resize", onResize);
-  },[]);
+  }, []);
 
-  useEffect(() => {
-    if (keyboardHeight > 0) bottomRef.current?.scrollIntoView({ behavior: "instant" });
-  }, [keyboardHeight]);
+  useEffect(() => { if (keyboardHeight > 0) bottomRef.current?.scrollIntoView({ behavior: "instant" }); }, [keyboardHeight]);
 
   useEffect(() => {
     function onFocus() {
@@ -409,11 +428,8 @@ const [matchCreatedAt, setMatchCreatedAt] = useState<string|null>(null);
     }
     window.addEventListener("focusin", onFocus);
     window.addEventListener("focusout", onBlur);
-    return () => {
-      window.removeEventListener("focusin", onFocus);
-      window.removeEventListener("focusout", onBlur);
-    };
-  },[]);
+    return () => { window.removeEventListener("focusin", onFocus); window.removeEventListener("focusout", onBlur); };
+  }, []);
 
   const isOnline = useMemo(() => {
     if (!otherProfile?.last_seen) return false;
@@ -425,15 +441,12 @@ const [matchCreatedAt, setMatchCreatedAt] = useState<string|null>(null);
     await supabase.from("messages").update({ read_at: new Date().toISOString() })
       .eq("match_id", matchId).neq("sender_anon", anonId).is("read_at", null);
     await supabase.from("matches").update({ has_unread: false }).eq("id", matchId);
-    setMsgs(prev => prev.map(m =>
-      m.sender_anon !== anonId && !m.read_at ? { ...m, read_at: new Date().toISOString() } : m
-    ));
+    setMsgs(prev => prev.map(m => m.sender_anon !== anonId && !m.read_at ? { ...m, read_at: new Date().toISOString() } : m));
   }, [matchId]);
 
   const markDelivered = useCallback(async (anonId: string|null) => {
     if (!anonId) return;
-    await supabase.from("messages")
-      .update({ delivered_at: new Date().toISOString() })
+    await supabase.from("messages").update({ delivered_at: new Date().toISOString() })
       .eq("match_id", matchId).neq("sender_anon", anonId).is("delivered_at", null);
   }, [matchId]);
 
@@ -442,40 +455,36 @@ const [matchCreatedAt, setMatchCreatedAt] = useState<string|null>(null);
       const { data: session } = await supabase.auth.getSession();
       const user = session?.session?.user;
       if (!user) { router.replace("/login"); return; }
-    setMyUserId(user.id);
-const [meRes, matchRes] = await Promise.all([
-  supabase.from("profiles").select("anon_id").eq("user_id", user.id).maybeSingle(),
-  supabase.from("matches").select("user_a,user_b,created_at").eq("id", matchId).maybeSingle(),
-  
-]);
+      setMyUserId(user.id);
+      const [meRes, matchRes] = await Promise.all([
+        supabase.from("profiles").select("anon_id").eq("user_id", user.id).maybeSingle(),
+        supabase.from("matches").select("user_a,user_b,created_at").eq("id", matchId).maybeSingle(),
+      ]);
       const anonId = meRes.data?.anon_id ?? ctxAnonId ?? null;
       setMyAnonId(anonId);
       myAnonIdRef.current = anonId;
       const matchRow = matchRes.data;
-      
       if (!matchRow) return;
+      setMatchCreatedAt(matchRow.created_at ?? null);
       const otherId = matchRow.user_a === user.id ? matchRow.user_b : matchRow.user_a;
-      setMatchCreatedAt(matchRes.data?.created_at ?? null);
       setOtherUserId(otherId);
-      const[profileRes, msgsRes] = await Promise.all([
+      const [profileRes, msgsRes] = await Promise.all([
         supabase.from("profiles").select("user_id,nickname,first_name,photo1_url,last_seen").eq("user_id", otherId).maybeSingle(),
-       supabase.from("messages").select("*").eq("match_id", matchId)
-  .order("created_at", { ascending: false })
-  .limit(20),
-]);
-const msgIds = (msgsRes.data ?? []).map((m: any) => m.id);
+        supabase.from("messages").select("*").eq("match_id", matchId).order("created_at", { ascending: false }).limit(20),
+      ]);
+      const msgIds = (msgsRes.data ?? []).map((m: any) => m.id);
       const reactionsRes = msgIds.length
         ? await supabase.from("message_reactions").select("*").in("message_id", msgIds)
-        : { data:[] };
+        : { data: [] };
       setOtherProfile(profileRes.data ?? null);
-setMsgs((msgsRes.data ?? []).reverse());
-      setReactions(reactionsRes.data ??[]);
+      setMsgs((msgsRes.data ?? []).reverse());
+      setReactions(reactionsRes.data ?? []);
       setIsLoaded(true);
       await markRead(anonId, user.id);
       await markDelivered(anonId);
       await supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("user_id", user.id);
     })();
-  },[matchId, router, markRead, markDelivered]);
+  }, [matchId, router, markRead, markDelivered]);
 
   useEffect(() => {
     if (!matchId) return;
@@ -518,7 +527,7 @@ setMsgs((msgsRes.data ?? []).reverse());
   useEffect(() => {
     if (!isLoaded) return;
     bottomRef.current?.scrollIntoView({ behavior: "instant" });
-  },[msgs.length, isLoaded]);
+  }, [msgs.length, isLoaded]);
 
   async function handleReact(msgId: string, emoji: string) {
     if (!myAnonId) return;
@@ -534,17 +543,19 @@ setMsgs((msgsRes.data ?? []).reverse());
       }
     } else {
       const tempId = `temp-r-${Date.now()}`;
-      setReactions(prev =>[...prev, { id: tempId, message_id: msgId, sender_anon: myAnonId, emoji }]);
+      setReactions(prev => [...prev, { id: tempId, message_id: msgId, sender_anon: myAnonId, emoji }]);
       const { data } = await supabase.from("message_reactions").insert({ message_id: msgId, sender_anon: myAnonId, emoji }).select().single();
       if (data) {
         setReactions(prev => {
-           const hasReal = prev.some(r => r.id === data.id);
-           if (hasReal) return prev.filter(r => r.id !== tempId);
-           return prev.map(r => r.id === tempId ? data : r);
+          const hasReal = prev.some(r => r.id === data.id);
+          if (hasReal) return prev.filter(r => r.id !== tempId);
+          return prev.map(r => r.id === tempId ? data : r);
         });
       }
     }
   }
+
+  const bgLongPressTimer = useRef<NodeJS.Timeout|null>(null);
 
   function onMsgPointerDown(msgId: string, mine: boolean) {
     longPressTimer.current = setTimeout(() => {
@@ -570,8 +581,7 @@ setMsgs((msgsRes.data ?? []).reverse());
       if (upErr) throw upErr;
       const { data: urlData } = supabase.storage.from("photos").getPublicUrl(path);
       const tempId = `tempi-${Date.now()}`;
-      setMsgs(prev =>[...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: urlData.publicUrl, created_at: new Date().toISOString(), read_at: null, type: "image" }]);
-      
+      setMsgs(prev => [...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: urlData.publicUrl, created_at: new Date().toISOString(), read_at: null, type: "image" }]);
       const { data } = await supabase.from("messages").insert({ match_id: matchId, sender_anon: myAnonId, content: urlData.publicUrl, type: "image" }).select().single();
       if (data) {
         setMsgs(prev => {
@@ -595,10 +605,9 @@ setMsgs((msgsRes.data ?? []).reverse());
     const replyPreview = replyTo ? (replyTo.type==="voice"?"🎤 Voice":replyTo.type==="image"?"📷 Photo":replyTo.content.slice(0,60)) : null;
     const replyId = replyTo?.id ?? null;
     setReplyTo(null);
-    setMsgs(prev =>[...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: t2, created_at: new Date().toISOString(), read_at: null, delivered_at: null, type: "text", reply_to_id: replyId, reply_preview: replyPreview }]);
+    setMsgs(prev => [...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: t2, created_at: new Date().toISOString(), read_at: null, delivered_at: null, type: "text", reply_to_id: replyId, reply_preview: replyPreview }]);
     try {
       const { data } = await supabase.from("messages").insert({ match_id: matchId, sender_anon: myAnonId, content: t2, type: "text", reply_to_id: replyId, reply_preview: replyPreview }).select().single();
-      // მოგვარდა Double გაგზავნის პრობლემა
       if (data) {
         setMsgs(prev => {
           const withoutTemp = prev.filter(m => m.id !== tempId);
@@ -622,7 +631,7 @@ setMsgs((msgsRes.data ?? []).reverse());
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder; chunksRef.current =[];
+      mediaRecorderRef.current = recorder; chunksRef.current = [];
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       recorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
@@ -635,7 +644,7 @@ setMsgs((msgsRes.data ?? []).reverse());
     } catch { alert(ka ? "მიკროფონი მიუწვდომელია" : "Microphone unavailable"); }
   }
   function stopRecording() { mediaRecorderRef.current?.stop(); setRecording(false); if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } }
-  function cancelRecording() { stopRecording(); setAudioBlob(null); if (audioPreviewUrl) { URL.revokeObjectURL(audioPreviewUrl); setAudioPreviewUrl(null); } setRecordTime(0); chunksRef.current =[]; }
+  function cancelRecording() { stopRecording(); setAudioBlob(null); if (audioPreviewUrl) { URL.revokeObjectURL(audioPreviewUrl); setAudioPreviewUrl(null); } setRecordTime(0); chunksRef.current = []; }
 
   async function sendVoice() {
     if (!audioBlob || !myAnonId || uploadingVoice) return;
@@ -645,14 +654,13 @@ setMsgs((msgsRes.data ?? []).reverse());
     if (error) { console.error(error); setUploadingVoice(false); return; }
     const { data: urlData } = supabase.storage.from("voices").getPublicUrl(fileName);
     const tempId = `tempv-${Date.now()}`;
-    setMsgs(prev =>[...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: urlData.publicUrl, created_at: new Date().toISOString(), read_at: null, type: "voice" }]);
+    setMsgs(prev => [...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: urlData.publicUrl, created_at: new Date().toISOString(), read_at: null, type: "voice" }]);
     const { data } = await supabase.from("messages").insert({ match_id: matchId, sender_anon: myAnonId, content: urlData.publicUrl, type: "voice" }).select().single();
-    
     if (data) {
       setMsgs(prev => {
         const withoutTemp = prev.filter(m => m.id !== tempId);
         if (withoutTemp.some(m => m.id === data.id)) return withoutTemp;
-        return[...withoutTemp, data as MsgRow];
+        return [...withoutTemp, data as MsgRow];
       });
     }
     await supabase.from("matches").update({ has_unread: true }).eq("id", matchId);
@@ -681,7 +689,7 @@ setMsgs((msgsRes.data ?? []).reverse());
     router.replace("/chat");
   }
 
-  const avatar = useMemo(() => { const src = photoSrc(otherProfile?.photo1_url ?? null); return src || null; },[otherProfile]);
+  const avatar = useMemo(() => { const src = photoSrc(otherProfile?.photo1_url ?? null); return src || null; }, [otherProfile]);
   const effectiveAnonId = myAnonId ?? myAnonIdRef.current;
   const otherName = otherProfile?.nickname ?? otherProfile?.first_name ?? "...";
   const hasFocusOrText = text.trim().length > 0;
@@ -734,18 +742,22 @@ setMsgs((msgsRes.data ?? []).reverse());
         </div>
 
         {/* MESSAGES */}
-
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 scrollbar-hide"
-          style={{ overscrollBehavior: "none" }}>
+          style={{ overscrollBehavior: "none" }}
+          onPointerDown={() => {
+            bgLongPressTimer.current = setTimeout(() => setShowThemeModal(true), 700);
+          }}
+          onPointerUp={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer.current); }}
+          onPointerLeave={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer.current); }}>
           <div className="flex flex-col justify-end min-h-full space-y-0.5 pb-2">
-                    {matchCreatedAt && (
-  <div className="text-center text-xs text-white/30 py-3">
-    {ka ? `${otherName}-თან შეხვედრა შედგა` : `You matched with ${otherName} on`}{" "}
-    {new Date(matchCreatedAt).toLocaleDateString(ka ? "ka-GE" : "en-US", { day: "numeric", month: "long", year: "numeric" })}
-    {" · "}
-    {new Date(matchCreatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-  </div>
-)}
+            {matchCreatedAt && (
+              <div className="text-center text-xs text-white/30 py-3">
+                {ka ? `${otherName}-თან შეხვედრა შედგა` : `You matched with ${otherName} on`}{" "}
+                {new Date(matchCreatedAt).toLocaleDateString(ka ? "ka-GE" : "en-US", { day: "numeric", month: "long", year: "numeric" })}
+                {" · "}
+                {new Date(matchCreatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </div>
+            )}
             {msgs.map((m, i) => {
               if (!myAnonId) return null;
               const mine = m.sender_anon === myAnonId;
@@ -772,7 +784,6 @@ setMsgs((msgsRes.data ?? []).reverse());
                       onMsgPointerUp();
                       const dx = e.clientX - swipeStartX.current;
                       const dy = Math.abs(e.clientY - swipeStartY.current);
-                      // Swipe მარჯვნივ ან მარცხნივ (>40px) დასარეფლაიებლად
                       if (Math.abs(dx) > 40 && dy < 40) {
                         setReplyTo(m);
                         setTimeout(() => inputRef.current?.focus(), 50);
@@ -785,7 +796,6 @@ setMsgs((msgsRes.data ?? []).reverse());
                     onTouchEnd={e => {
                       const dx = e.changedTouches[0].clientX - swipeStartX.current;
                       const dy = Math.abs(e.changedTouches[0].clientY - swipeStartY.current);
-                      // მობილურზეც Swipe > 40px რომ იყოს რეფლაი
                       if (Math.abs(dx) > 40 && dy < 40) {
                         setReplyTo(m);
                         setTimeout(() => inputRef.current?.focus(), 50);
@@ -812,17 +822,18 @@ setMsgs((msgsRes.data ?? []).reverse());
                         onReact={handleReact} onClose={() => setReactionMsgId(null)} />
                     )}
 
-                    {/* შეცვლილი: მესიჯის ბუშტი და მისი რეაქციები დაჯგუფდა, რეაქცია ქვედა მარჯვენა კუთხეში */}
                     <div className="relative flex flex-col" style={{ maxWidth: "78%" }}>
                       <div>
                         {m.reply_preview && (
-                          <div className={`mb-1 px-3 py-1.5 rounded-xl text-xs border-l-2 border-[#7C3AED] bg-white/8 max-w-[240px] truncate text-white/60 ${mine?"ml-auto":""}`}>
+                          <div className={`mb-1 px-3 py-1.5 rounded-xl text-xs border-l-2 bg-white/8 max-w-[240px] truncate text-white/60 ${mine?"ml-auto":""}`}
+                            style={{ borderColor: chatTheme }}>
                             ↩ {m.reply_preview}
                           </div>
                         )}
 
                         {m.type === "voice" ? (
-                          <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl max-w-[270px] ${mine?"bg-[#7C3AED] rounded-tr-sm":"bg-slate-800 rounded-tl-sm"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
+                          <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl max-w-[270px] ${mine?"rounded-tr-sm":"bg-slate-800 rounded-tl-sm"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}
+                            style={mine ? { background: chatTheme } : {}}>
                             <span className="text-lg shrink-0">🎤</span>
                             <audio controls src={m.content} className="h-8 max-w-[160px]" preload="metadata" />
                             <div className="flex items-center gap-0.5 shrink-0">
@@ -841,20 +852,20 @@ setMsgs((msgsRes.data ?? []).reverse());
                             )}
                           </div>
                         ) : (
-                          <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words select-none ${mine?"bg-[#7C3AED] rounded-2xl rounded-tr-sm":"bg-sinc-800 rounded-2xl rounded-tl-sm"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}>
+                          <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words select-none ${mine?"rounded-2xl rounded-tr-sm":"bg-zinc-800 rounded-2xl rounded-tl-sm"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}
+                            style={mine ? { background: chatTheme } : {}}>
                             <span>{m.content}</span>
                             <span className="inline-flex items-center gap-0.5 ml-2">
-                              <span className={`text-[10px] ${mine?"text-purple-200/50":"text-white/25"}`}>{fmtTime(m.created_at)}</span>
+                              <span className={`text-[10px] ${mine?"text-white/50":"text-white/25"}`}>{fmtTime(m.created_at)}</span>
                               <Ticks isTemp={isTemp} delivered={isDelivered} read={isRead} mine={mine} />
                             </span>
                           </div>
                         )}
                       </div>
 
-                      {/* რეაქციების ბლოკი მესიჯის ქვეშ/გვერდზე */}
-                          {msgReactionIds.has(m.id) && (
-                          <div className={`flex mt-[-10px] z-10 ${mine ? "mr-1 justify-end" : "ml-auto mr-[-10px]"}`}>
-                           <ReactionsDisplay msgId={m.id} reactions={reactions} myAnonId={effectiveAnonId ?? ""} onReact={handleReact} />
+                      {msgReactionIds.has(m.id) && (
+                        <div className={`flex mt-[-10px] z-10 ${mine ? "mr-1 justify-end" : "ml-auto mr-[-10px]"}`}>
+                          <ReactionsDisplay msgId={m.id} reactions={reactions} myAnonId={effectiveAnonId ?? ""} onReact={handleReact} theme={chatTheme} />
                         </div>
                       )}
                     </div>
@@ -875,9 +886,10 @@ setMsgs((msgsRes.data ?? []).reverse());
           )}
 
           {replyTo && (
-            <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2 rounded-2xl bg-zinc-800 border-l-2 border-[#7C3AED]">
+            <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2 rounded-2xl bg-zinc-800"
+              style={{ borderLeft: `2px solid ${chatTheme}` }}>
               <div className="flex-1 min-w-0">
-                <div className="text-xs text-[#A78BFA] font-semibold mb-0.5">↩ {ka?"პასუხი":"Reply"}</div>
+                <div className="text-xs font-semibold mb-0.5" style={{ color: chatTheme }}>↩ {ka?"პასუხი":"Reply"}</div>
                 <div className="text-xs text-white/60 truncate">
                   {replyTo.type==="voice"?"🎤 Voice":replyTo.type==="image"?"📷 Photo":replyTo.content.slice(0,60)}
                 </div>
@@ -916,12 +928,9 @@ setMsgs((msgsRes.data ?? []).reverse());
           {!recording && (
             <div className="flex items-center gap-1.5 px-3 py-2" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)" }}>
               <button onClick={() => setShowAttachSheet(true)}
-                className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90 text-xl">
-                +
-              </button>
+                className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90 text-xl">+</button>
               {!hasFocusOrText && (
-                <button
-                  onPointerDown={e => { e.preventDefault(); startRecording(); }}
+                <button onPointerDown={e => { e.preventDefault(); startRecording(); }}
                   className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
@@ -935,7 +944,6 @@ setMsgs((msgsRes.data ?? []).reverse());
                 <input ref={inputRef} value={text}
                   onChange={e => setText(e.target.value)}
                   onFocus={() => {
-                    // კლავიატურის გახსნისას და სქროლის ავტომატური აწევა
                     setShowEmoji(false);
                     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
                     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 300);
@@ -946,20 +954,20 @@ setMsgs((msgsRes.data ?? []).reverse());
               </div>
               {text.trim() ? (
                 <button onClick={send} disabled={sending} onMouseDown={e => e.preventDefault()}
-                  className="shrink-0 w-10 h-10 rounded-full bg-[#7C3AED] flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg">
+                  className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg"
+                  style={{ background: chatTheme }}>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
                 </button>
               ) : audioBlob ? (
                 <button onClick={sendVoice} disabled={uploadingVoice}
-                  className="shrink-0 w-10 h-10 rounded-full bg-[#7C3AED] flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg">
+                  className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg"
+                  style={{ background: chatTheme }}>
                   {uploadingVoice ? <span className="text-xs text-white">⏳</span>
                     : <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>}
                 </button>
               ) : (
                 <button onClick={e => { e.stopPropagation(); setShowEmoji(p => !p); }}
-                  className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition text-xl">
-                  🙂
-                </button>
+                  className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition text-xl">🙂</button>
               )}
             </div>
           )}
@@ -971,7 +979,8 @@ setMsgs((msgsRes.data ?? []).reverse());
           <div className="flex items-center justify-between px-4 py-3" style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 12px)" }}>
             <button onClick={() => setImagePreview(null)} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white text-lg">✕</button>
             <button onClick={async () => { const f = imagePreview.file; setImagePreview(null); await uploadImage(f); }} disabled={uploadingImg}
-              className="w-12 h-12 rounded-full bg-[#7C3AED] flex items-center justify-center shadow-xl disabled:opacity-50 active:scale-90 transition">
+              className="w-12 h-12 rounded-full flex items-center justify-center shadow-xl disabled:opacity-50 active:scale-90 transition"
+              style={{ background: chatTheme }}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
             </button>
           </div>
@@ -990,6 +999,10 @@ setMsgs((msgsRes.data ?? []).reverse());
 
       {showAttachSheet && <AttachSheet lang={lang} onClose={() => setShowAttachSheet(false)}
         onGallery={() => galleryInputRef.current?.click()} onCamera={() => cameraInputRef.current?.click()} />}
+
+      {showThemeModal && (
+        <ThemeModal current={chatTheme} onClose={() => setShowThemeModal(false)} onSelect={setChatTheme} />
+      )}
 
       {(reactionMsgId || selectedMsgId) && (
         <div className="fixed inset-0 z-30" onClick={() => { setReactionMsgId(null); setSelectedMsgId(null); }} />
