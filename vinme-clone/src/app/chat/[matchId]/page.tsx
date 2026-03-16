@@ -788,8 +788,9 @@ const applyTheme = useCallback((color: string, bg: string) => {
   );
 
   return (
-    <div className="fixed inset-0 bg-[#111] flex justify-center">
-<div className="w-full max-w-lg flex flex-col" style={{ background: "transparent" }}>
+  <div className="fixed inset-0 flex justify-center"
+    style={{ background: chatBg || "#111111" }}>
+      <div className="w-full max-w-lg flex flex-col" style={{ background: "transparent" }}>
         {/* HEADER */}
         <div ref={headerRef} className="flex items-center gap-3 px-4 py-3 bg-slate-900 border-b border-white/8 shrink-0"
           style={{ position: "sticky", top: headerTop, zIndex: 50 }}>
