@@ -409,7 +409,9 @@ const [chatBg, setChatBg] = useState("");
 const applyTheme = useCallback((color: string, bg: string) => {
   setChatTheme(color);
   setChatBg(bg);
-  localStorage.setItem(`chat-theme-${matchId}`, JSON.stringify({ color, bg }));
+  setTimeout(() => {
+    localStorage.setItem(`chat-theme-${matchId}`, JSON.stringify({ color, bg }));
+  }, 0);
 }, [matchId]);
 
   const swipeStartX = useRef<number>(0);
@@ -453,6 +455,7 @@ const applyTheme = useCallback((color: string, bg: string) => {
   const [uploadingImg, setUploadingImg] = useState(false);
   const [imagePreview, setImagePreview] = useState<{file: File, url: string} | null>(null);
   const msgReactionIds = useMemo(() => new Set(reactions.map(r => r.message_id)), [reactions]);
+  const bgStyle = useMemo(() => ({ background: chatBg || "#111111" }), [chatBg]);
 
   useEffect(() => { if (ctxAnonId && !myAnonId) setMyAnonId(ctxAnonId); }, [ctxAnonId]);
   useEffect(() => { return () => { setReactionMsgId(null); setSelectedMsgId(null); }; }, []);
@@ -765,8 +768,8 @@ const applyTheme = useCallback((color: string, bg: string) => {
   const hasFocusOrText = text.trim().length > 0;
 
   if (!isLoaded) return (
-<div className="fixed inset-0 flex justify-center"
-  style={{ background: chatBg || "#111111" }}>
+<div className="fixed inset-0 flex justify-center" 
+  style={{ ...bgStyle, willChange: "background" }}>
           <div className="w-full max-w-lg flex flex-col bg-[#111]">
         <div className="flex items-center gap-3 px-4 py-3 bg-zinc-900 border-b border-white/10 shrink-0">
           <div className="w-9 h-9 rounded-full bg-white/10 animate-pulse" />
@@ -789,7 +792,7 @@ const applyTheme = useCallback((color: string, bg: string) => {
 
   return (
   <div className="fixed inset-0 flex justify-center"
-    style={{ background: chatBg || "#111111" }}>
+  style={{ ...bgStyle, willChange: "auto" }}>
       <div className="w-full max-w-lg flex flex-col" style={{ background: "transparent" }}>
         {/* HEADER */}
         <div ref={headerRef} className="flex items-center gap-3 px-4 py-3 bg-slate-900 border-b border-white/8 shrink-0"
