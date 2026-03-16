@@ -24,7 +24,8 @@ export default function FeedPage() {
   const [matchId, setMatchId] = useState<string | null>(null);
   const [showMatch, setShowMatch] = useState(false);
   const [matchedUser, setMatchedUser] = useState<any>(null);
-  
+  const [nextTop, setNextTop] = useState<any>(null);
+
   const loadingTopRef = useRef(false);
   const meRef = useRef<any>(null);
   const lastUpdateCoordsRef = useRef<{lat: number, lon: number} | null>(null);
@@ -103,29 +104,31 @@ const saveLocation = useCallback(async (uid: string) => {
     return row;
   }, [router]);
 
-  const loadTop = useCallback(async (myProfile: any) => {
-    if (loadingTopRef.current) return;
-    loadingTopRef.current = true;
-    const myId = myProfile.user_id;
-    const seeking = myProfile.seeking ?? "everyone";
-    const myGender = myProfile.gender ?? null;
-    const { data: swiped } = await supabase.from("swipes").select("to_id").eq("from_id", myId);
-    const excludedIds = swiped?.map((s: any) => s.to_id) ?? [];
+const loadTop = useCallback(async (myProfile: any) => {
+  if (loadingTopRef.current) return;
+  loadingTopRef.current = true;
+  const myId = myProfile.user_id;
+  const seeking = myProfile.seeking ?? "everyone";
+  const myGender = myProfile.gender ?? null;
+  const { data: swiped } = await supabase.from("swipes").select("to_id").eq("from_id", myId);
+  const excludedIds = swiped?.map((s: any) => s.to_id) ?? [];
+  
+  let query = supabase.from("profiles")
+    .select("user_id,first_name,nickname,age,city,photo1_url,last_seen,latitude,longitude,seeking,gender,onboarding_completed")
+    .eq("onboarding_completed", true)
+    .neq("user_id", myId)
+    .not("photo1_url", "is", null);
     
-    let query = supabase.from("profiles")
-      .select("user_id,first_name,nickname,age,city,photo1_url,last_seen,latitude,longitude,seeking,gender,onboarding_completed")
-      .eq("onboarding_completed", true)
-      .neq("user_id", myId)
-      .not("photo1_url", "is", null);
-      
-    if (seeking !== "everyone") query = query.eq("gender", seeking);
-    if (myGender) query = query.or(`seeking.eq.everyone,seeking.eq.${myGender}`);
-    if (excludedIds.length > 0) query = query.not("user_id", "in", `(${excludedIds.join(",")})`);
-    
-    const { data } = await query.order("created_at", { ascending: false }).limit(1).maybeSingle();
-    setTop(data ?? null);
-    loadingTopRef.current = false;
-  }, []);
+  if (seeking !== "everyone") query = query.eq("gender", seeking);
+  if (myGender) query = query.or(`seeking.eq.everyone,seeking.eq.${myGender}`);
+  if (excludedIds.length > 0) query = query.not("user_id", "in", `(${excludedIds.join(",")})`);
+  
+  // 2 პროფილი ერთდროულად
+  const { data } = await query.order("created_at", { ascending: false }).limit(2);
+  setTop(data?.[0] ?? null);
+  setNextTop(data?.[1] ?? null);
+  loadingTopRef.current = false;
+}, []);
 
   // იტვირთება პროფილი და იწყებს ლოკაციის თრექინგს
   useEffect(() => {
@@ -176,27 +179,43 @@ const saveLocation = useCallback(async (uid: string) => {
     const { data: created } = await supabase.from("matches").insert({ user_a: myId, user_b: otherId }).select("id").single();
     return created?.id ? String(created.id) : null;
   }
-
-  const onLike = async () => {
-    if (!me || !top) return;
-    const currentTop = { ...top };
-    await supabase.from("swipes").insert({ from_id: me.user_id, to_id: top.user_id, action: "like" });
-    const mid = await checkAndCreateMatch(me.user_id, top.user_id);
-    if (mid) {
-      setMatchedUser(currentTop);
-      setMatchId(mid);
-      setShowMatch(true);
-    }
+const onLike = async () => {
+  if (!me || !top) return;
+  const currentTop = { ...top };
+  
+  if (nextTop) {
+    setTop(nextTop);
+    setNextTop(null);
+  } else {
     setTop(null);
-    await loadTop(me);
-  };
+  }
+  
+  await supabase.from("swipes").insert({ from_id: me.user_id, to_id: currentTop.user_id, action: "like" });
+  const mid = await checkAndCreateMatch(me.user_id, currentTop.user_id);
+  if (mid) {
+    setMatchedUser(currentTop);
+    setMatchId(mid);
+    setShowMatch(true);
+  }
+  
+  loadTop(me);
+};
 
-  const onSkip = async () => {
-    if (!me || !top) return;
-    await supabase.from("swipes").insert({ from_id: me.user_id, to_id: top.user_id, action: "skip" });
+const onSkip = async () => {
+  if (!me || !top) return;
+  const currentTop = { ...top };
+  
+  if (nextTop) {
+    setTop(nextTop);
+    setNextTop(null);
+  } else {
     setTop(null);
-    await loadTop(me);
-  };
+  }
+  
+  await supabase.from("swipes").insert({ from_id: me.user_id, to_id: currentTop.user_id, action: "skip" });
+  
+  loadTop(me);
+};
 
   const distanceKm = useMemo(() => {
     if (!me?.latitude || !me?.longitude) return undefined;
