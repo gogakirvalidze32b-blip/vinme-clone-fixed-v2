@@ -1,4 +1,4 @@
-
+"use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import TinderCard from "@/components/TinderCard";
