@@ -1,6 +1,7 @@
 {
   "name": "შეხვდი",
   "short_name": "შეხვდი",
+  "description": "Dating App",
   "display": "standalone",
   "background_color": "#0a0a0a",
   "theme_color": "#0a0a0a",
