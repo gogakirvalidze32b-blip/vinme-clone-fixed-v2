@@ -446,6 +446,7 @@ const [matchCreatedAt, setMatchCreatedAt] = useState<string|null>(null);
 const [meRes, matchRes] = await Promise.all([
   supabase.from("profiles").select("anon_id").eq("user_id", user.id).maybeSingle(),
   supabase.from("matches").select("user_a,user_b,created_at").eq("id", matchId).maybeSingle(),
+  
 ]);
       const anonId = meRes.data?.anon_id ?? ctxAnonId ?? null;
       setMyAnonId(anonId);
@@ -733,9 +734,18 @@ setMsgs((msgsRes.data ?? []).reverse());
         </div>
 
         {/* MESSAGES */}
+
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 scrollbar-hide"
           style={{ overscrollBehavior: "none" }}>
           <div className="flex flex-col justify-end min-h-full space-y-0.5 pb-2">
+                    {matchCreatedAt && (
+  <div className="text-center text-xs text-white/30 py-3">
+    {ka ? `${otherName}-თან შეხვედრა შედგა` : `You matched with ${otherName} on`}{" "}
+    {new Date(matchCreatedAt).toLocaleDateString(ka ? "ka-GE" : "en-US", { day: "numeric", month: "long", year: "numeric" })}
+    {" · "}
+    {new Date(matchCreatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+  </div>
+)}
             {msgs.map((m, i) => {
               if (!myAnonId) return null;
               const mine = m.sender_anon === myAnonId;
