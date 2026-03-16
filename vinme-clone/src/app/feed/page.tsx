@@ -227,7 +227,7 @@ const onSkip = async () => {
     if (!top) return null;
     return {
       id: top.user_id, user_id: top.user_id,
-      nickname: top.first_name ?? top.nickname ?? "Anonymous",
+nickname: top.first_name ?? (top.nickname?.startsWith("User_") ? "Anonymous" : top.nickname) ?? "Anonymous",
       age: top.age ?? 18,
       city: top.city || undefined,
       distanceKm,

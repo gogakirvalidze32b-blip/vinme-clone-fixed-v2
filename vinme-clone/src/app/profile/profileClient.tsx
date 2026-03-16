@@ -83,7 +83,7 @@ export default function ProfileClient() {
   // თუ ქეშიც ცარიელია და ბაზაც იტვირთება
   if (!me) return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-white/20 animate-pulse">Loading...</div>;
 
-  const name = me?.nickname ?? me?.first_name ?? "";
+const name = me?.first_name ?? (me?.nickname?.startsWith("User_") ? "" : me?.nickname) ?? "";
   const age = me?.age ?? null;
   const avatarUrl = me?.photo1_url ? photoSrc(me.photo1_url) : null;
   const pct = calcProgress(me);
