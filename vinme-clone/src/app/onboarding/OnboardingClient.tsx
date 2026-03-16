@@ -381,7 +381,13 @@ export default function OnboardingClient() {
   const canNext = useMemo(() => {
     if (step === "rules") return true;
 
-    if (step === "name") return (p.first_name?.trim().length ?? 0) >= 2;
+if (step === "name") {
+  const name = p.first_name?.trim() ?? "";
+  if (name.length < 2) return false;
+  // მხოლოდ ასოები (ქართული, ინგლისური, space)
+  if (!/^[\u10D0-\u10FF a-zA-Z\s\-]+$/.test(name)) return false;
+  return true;
+}
 
     if (step === "birth") {
       const iso = formatBirthInputToISO(birthInput);
@@ -481,17 +487,21 @@ export default function OnboardingClient() {
       return;
     }
 
-    if (step === "name") {
-      const first_name = (p.first_name ?? "").trim();
-      if (first_name.length < 2) return;
+if (step === "name") {
+  const first_name = (p.first_name ?? "").trim();
+  if (first_name.length < 2) return;
+  if (!/^[\u10D0-\u10FF a-zA-Z\s\-]+$/.test(first_name)) {
+    setMsg(lang === "ka" ? "სახელი მხოლოდ ასოებით უნდა იყოს" : "Name must contain only letters");
+    return;
+  }
 
-      const nick = (p.nickname ?? "").trim() || first_name;
-      setP((prev) => ({ ...prev, first_name, nickname: nick }));
-      await savePartial({ first_name, nickname: nick, onboarding_step: 2 } as any);
+  const nick = (p.nickname ?? "").trim() || first_name;
+  setP((prev) => ({ ...prev, first_name, nickname: nick }));
+  await savePartial({ first_name, nickname: nick, onboarding_step: 2 } as any);
 
-      setStep("birth");
-      return;
-    }
+  setStep("birth");
+  return;
+}
 
     if (step === "birth") {
       const iso = formatBirthInputToISO(birthInput);
