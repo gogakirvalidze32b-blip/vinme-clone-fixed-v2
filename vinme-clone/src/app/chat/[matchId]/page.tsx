@@ -24,6 +24,16 @@ type Reaction = {
 function fmtTimer(sec: number) { const m = Math.floor(sec/60), s = sec%60; return `${m}:${s<10?"0":""}${s}`; }
 function fmtTime(iso: string) { return new Date(iso).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); }
 
+function formatDetailedDate(iso: string, ka: boolean) {
+  const d = new Date(iso);
+  const monthsKa =["იანვარი","თებერვალი","მარტი","აპრილი","მაისი","ივნისი","ივლისი","აგვისტო","სექტემბერი","ოქტომბერი","ნოემბერი","დეკემბერი"];
+  const monthsEn =["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const month = ka ? monthsKa[d.getMonth()] : monthsEn[d.getMonth()];
+  const min = d.getMinutes().toString().padStart(2, '0');
+  const hr = d.getHours().toString().padStart(2, '0');
+  return `${d.getDate()} ${month} ${d.getFullYear()}, ${hr}:${min}`;
+}
+
 function formatLastSeen(lastSeen: string|null, ka: boolean): string {
   if (!lastSeen) return ka ? "ოფლაინ" : "Offline";
   const diff = Date.now() - new Date(lastSeen).getTime();
@@ -175,7 +185,6 @@ function ThemeModal({ current, currentBg, onClose, onSelect, ka }: {
   );
 }
 
-// 💥 შეცვლილი: ახალი Action Menu (Reactions, Copy, Reply, Unsend)
 function ReactionBar({ msg, myAnonId, reactions, onReact, onClose, mine, onDelete, onReply, ka }: {
   msg: MsgRow; myAnonId: string; reactions: Reaction[];
   onReact: (msgId: string, emoji: string) => void; onClose: () => void; mine: boolean;
@@ -195,7 +204,6 @@ function ReactionBar({ msg, myAnonId, reactions, onReact, onClose, mine, onDelet
       style={{ bottom: "calc(100% + 8px)" }}
       onClick={e => e.stopPropagation()}>
       
-      {/* ემოჯიების პანელი */}
       <div className="flex items-center gap-1 bg-zinc-800 rounded-full px-3 py-2 shadow-2xl ring-1 ring-white/10">
         {emojis.map(e => {
           const active = reactions.some(r => r.message_id === msg.id && r.sender_anon === myAnonId && r.emoji === e);
@@ -209,7 +217,6 @@ function ReactionBar({ msg, myAnonId, reactions, onReact, onClose, mine, onDelet
         })}
       </div>
 
-      {/* მოქმედებების მენიუ (Copy, Reply, Unsend) */}
       <div className="flex flex-col bg-zinc-800 rounded-2xl shadow-2xl ring-1 ring-white/10 overflow-hidden w-40 text-sm font-medium">
         {msg.type === "text" && (
           <button onClick={handleCopy} className="flex items-center justify-between px-4 py-3 text-white hover:bg-white/10 transition text-left">
@@ -449,10 +456,19 @@ export default function ChatThreadPage() {
   const { anonId: ctxAnonId } = useUser();
 
   const[matchCreatedAt, setMatchCreatedAt] = useState<string|null>(null);
-  const [chatTheme, setChatTheme] = useState("#7C3AED");
+  const[chatTheme, setChatTheme] = useState("#7C3AED");
   const[chatBg, setChatBg] = useState("#111111");  
   const[showThemeModal, setShowThemeModal] = useState(false);
   const [msgToDelete, setMsgToDelete] = useState<string | null>(null);
+
+  // SEARCH AND DATE REVEAL STATES
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showTimeFor, setShowTimeFor] = useState<string | null>(null);
+  
+  // PAGINATION STATES
+  const[hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem(`chat-theme-${matchId}`);
@@ -474,7 +490,7 @@ export default function ChatThreadPage() {
   const headerRef = useRef<HTMLDivElement>(null);
   const[keyboardHeight, setKeyboardHeight] = useState(0);
   const[headerTop, setHeaderTop] = useState(0);
-  const [msgs, setMsgs] = useState<MsgRow[]>([]);
+  const[msgs, setMsgs] = useState<MsgRow[]>([]);
   const[reactions, setReactions] = useState<Reaction[]>([]);
   const[text, setText] = useState("");
   const[myAnonId, setMyAnonId] = useState<string|null>(null);
@@ -492,8 +508,8 @@ export default function ChatThreadPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const[recording, setRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob|null>(null);
-  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string|null>(null);
-  const [recordTime, setRecordTime] = useState(0);
+  const[audioPreviewUrl, setAudioPreviewUrl] = useState<string|null>(null);
+  const[recordTime, setRecordTime] = useState(0);
   const[uploadingVoice, setUploadingVoice] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder|null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -509,11 +525,8 @@ export default function ChatThreadPage() {
   const msgReactionIds = useMemo(() => new Set(reactions.map(r => r.message_id)), [reactions]);
   const bgStyle = useMemo(() => ({ background: chatBg || "#111111" }),[chatBg]);
 
-  // ტაიმერი ხანგრძლივი დაჭერისთვის (long press) ტექსტზე
-  const msgLongPressTimer = useRef<NodeJS.Timeout|null>(null);
-
   useEffect(() => { if (ctxAnonId && !myAnonId) setMyAnonId(ctxAnonId); },[ctxAnonId]);
-  useEffect(() => { return () => { setReactionMsgId(null); }; },[]);
+  useEffect(() => { return () => { setReactionMsgId(null); setShowTimeFor(null); }; },[]);
   useEffect(() => { if (headerRef.current) setHeaderTop(headerRef.current.getBoundingClientRect().top); }, [isLoaded]);
 
   useEffect(() => {
@@ -530,8 +543,6 @@ export default function ChatThreadPage() {
     vv.addEventListener("resize", onResize);
     return () => vv.removeEventListener("resize", onResize);
   },[]);
-
-  useEffect(() => { if (keyboardHeight > 0) bottomRef.current?.scrollIntoView({ behavior: "instant" }); },[keyboardHeight]);
 
   useEffect(() => {
     function onFocus() {
@@ -576,23 +587,10 @@ export default function ChatThreadPage() {
     if (!anonId) return;
     await supabase.from("messages").update({ delivered_at: new Date().toISOString() })
       .eq("match_id", matchId).neq("sender_anon", anonId).is("delivered_at", null);
-  }, [matchId]);
+  },[matchId]);
 
   useEffect(() => {
     if (!matchId) return;
-
-    const cachedData = localStorage.getItem(`chat_cache_${matchId}`);
-    if (cachedData) {
-      try {
-        const { cachedMsgs, cachedProfile, cachedAnonId, cachedUserId } = JSON.parse(cachedData);
-        setMsgs(cachedMsgs);
-        setOtherProfile(cachedProfile);
-        setMyAnonId(cachedAnonId);
-        setMyUserId(cachedUserId);
-        setIsLoaded(true); 
-      } catch(e) {}
-    }
-
     (async () => {
       const { data: session } = await supabase.auth.getSession();
       const user = session?.session?.user;
@@ -602,7 +600,7 @@ export default function ChatThreadPage() {
       const[meRes, matchRes, msgsRes] = await Promise.all([
         supabase.from("profiles").select("anon_id").eq("user_id", user.id).maybeSingle(),
         supabase.from("matches").select("user_a,user_b,created_at").eq("id", matchId).maybeSingle(),
-        supabase.from("messages").select("*").eq("match_id", matchId).order("created_at", { ascending: false }).limit(40),
+        supabase.from("messages").select("*").eq("match_id", matchId).order("created_at", { ascending: false }).limit(60), // გავზარდეთ 60-მდე
       ]);
 
       const anonId = meRes.data?.anon_id ?? ctxAnonId ?? null;
@@ -617,6 +615,8 @@ export default function ChatThreadPage() {
       setOtherUserId(otherId);
 
       const msgsData = msgsRes.data ??[];
+      if (msgsData.length < 60) setHasMore(false);
+
       const msgIds = msgsData.map((m: any) => m.id);
 
       const[profileRes, reactionsRes] = await Promise.all([
@@ -626,7 +626,6 @@ export default function ChatThreadPage() {
           : Promise.resolve({ data: [] }),
       ]);
 
-      // 🗑️ ვფილტრავთ "ჩემთვის წაშლილ" მესიჯებს ლოკალურად
       const hiddenMsgs = JSON.parse(localStorage.getItem(`hidden_msgs`) || "[]");
       const finalMsgs = msgsData.filter((m: any) => !hiddenMsgs.includes(m.id)).reverse();
       
@@ -637,13 +636,6 @@ export default function ChatThreadPage() {
       setReactions(reactionsRes.data ??[]);
       setIsLoaded(true);
 
-      localStorage.setItem(`chat_cache_${matchId}`, JSON.stringify({
-        cachedMsgs: finalMsgs,
-        cachedProfile: finalProfile,
-        cachedAnonId: anonId,
-        cachedUserId: user.id
-      }));
-
       Promise.all([
         markRead(anonId, user.id),
         markDelivered(anonId),
@@ -652,6 +644,39 @@ export default function ChatThreadPage() {
 
     })();
   },[matchId, router, markRead, markDelivered, ctxAnonId]);
+
+  // PAGINATION SCROLL HANDLER
+  const handleScroll = async (e: any) => {
+    if (e.target.scrollTop < 100) {
+      if (hasMore && !loadingMore && msgs.length > 0) {
+        setLoadingMore(true);
+        const minCreatedAt = msgs[0].created_at; 
+        const { data } = await supabase.from("messages")
+          .select("*").eq("match_id", matchId)
+          .lt("created_at", minCreatedAt)
+          .order("created_at", { ascending: false }).limit(50);
+
+        if (data && data.length > 0) {
+          const hiddenMsgs = JSON.parse(localStorage.getItem(`hidden_msgs`) || "[]");
+          const newMsgs = data.filter((m:any) => !hiddenMsgs.includes(m.id)).reverse();
+          const scrollContainer = e.target;
+          const oldScrollHeight = scrollContainer.scrollHeight;
+          
+          setMsgs(prev =>[...newMsgs, ...prev]);
+          
+          setTimeout(() => {
+            if (scrollRef.current) {
+              scrollRef.current.scrollTop = scrollRef.current.scrollHeight - oldScrollHeight;
+            }
+          }, 0);
+          if (data.length < 50) setHasMore(false);
+        } else {
+          setHasMore(false);
+        }
+        setLoadingMore(false);
+      }
+    }
+  };
 
   useEffect(() => {
     if (!matchId) return;
@@ -697,15 +722,12 @@ export default function ChatThreadPage() {
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [matchId, markRead]);
+  },[matchId, markRead]);
 
   useEffect(() => {
     if (!isLoaded) return;
-    // ინსტანტ გადასვლა ბოლოში ყოველი განახლებისას
-    setTimeout(() => {
-      bottomRef.current?.scrollIntoView({ behavior: "instant" });
-    }, 10);
-  }, [msgs.length, isLoaded]);
+    setTimeout(() => { bottomRef.current?.scrollIntoView({ behavior: "instant" }); }, 10);
+  },[msgs.length, isLoaded]);
 
   async function handleReact(msgId: string, emoji: string) {
     if (!myAnonId) return;
@@ -733,7 +755,6 @@ export default function ChatThreadPage() {
     }
   }
 
-  // 🗑️ მესიჯის წაშლის საბოლოო ლოგიკა (ყველასთვის ან ჩემთვის)
   async function confirmDeleteMessage(type: 'me' | 'everyone') {
     if (!msgToDelete) return;
     const msgId = msgToDelete;
@@ -873,6 +894,13 @@ export default function ChatThreadPage() {
   const effectiveAnonId = myAnonId ?? myAnonIdRef.current;
   const otherName = otherProfile?.nickname ?? otherProfile?.first_name ?? "...";
 
+  // Visible Messages (Filtered for search)
+  const visibleMsgs = useMemo(() => {
+    if (!searchQuery.trim()) return msgs;
+    const lowerQ = searchQuery.toLowerCase();
+    return msgs.filter(m => m.type === "text" && m.content.toLowerCase().includes(lowerQ));
+  }, [msgs, searchQuery]);
+
   if (!isLoaded) return (
     <div className="fixed inset-0 h-[100dvh] flex justify-center select-none" style={{ ...bgStyle, willChange: "background", WebkitTouchCallout: "none" }}>
       <div className="w-full max-w-lg flex flex-col h-full bg-black/40">
@@ -917,51 +945,89 @@ export default function ChatThreadPage() {
           {/* HEADER (Transparent) */}
           <div ref={headerRef} className="flex items-center gap-3 px-4 py-3 bg-transparent shrink-0"
             style={{ position: "sticky", top: headerTop, zIndex: 50 }}>
-            <button onClick={() => { setReactionMsgId(null); router.push("/chat"); }}
-              className="rounded-full bg-black/20 backdrop-blur-md w-9 h-9 flex items-center justify-center text-white shrink-0 transition">←</button>
-            <div className="flex items-center gap-3 flex-1 cursor-pointer bg-black/20 backdrop-blur-md px-3 py-1.5 rounded-full"
-              onClick={() => otherUserId && router.push(`/profile/${otherUserId}`)}>
-              <div className="relative shrink-0">
-                <SafeImg src={avatar} className="w-8 h-8 rounded-full object-cover ring-1 ring-white/20"
-                  fallback={<div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center text-xs">👤</div>} />
-                {isOnline && <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-green-400 border border-zinc-950" />}
+            
+            {isSearching ? (
+              <div className="flex w-full items-center gap-2 bg-black/40 backdrop-blur-md px-4 py-2 rounded-full ring-1 ring-white/20">
+                <button onClick={() => { setIsSearching(false); setSearchQuery(""); }} className="text-white shrink-0 text-xl font-bold transition">←</button>
+                <input autoFocus value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                  placeholder={ka ? "ძებნა..." : "Search..."}
+                  className="flex-1 bg-transparent text-white text-[15px] outline-none placeholder:text-white/50" />
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="font-bold text-[13px] truncate drop-shadow-md">{otherName}</div>
-              </div>
-            </div>
-            <button onClick={e => { e.stopPropagation(); setShowMenu(true); }}
-              className="w-9 h-9 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white transition shrink-0 text-lg font-bold tracking-widest">···</button>
+            ) : (
+              <>
+                <button onClick={() => { setReactionMsgId(null); router.push("/chat"); }}
+                  className="rounded-full bg-black/20 backdrop-blur-md w-9 h-9 flex items-center justify-center text-white shrink-0 transition">←</button>
+                <div className="flex items-center gap-3 flex-1 cursor-pointer bg-black/20 backdrop-blur-md px-3 py-1.5 rounded-full"
+                  onClick={() => otherUserId && router.push(`/profile/${otherUserId}`)}>
+                  <div className="relative shrink-0">
+                    <SafeImg src={avatar} className="w-8 h-8 rounded-full object-cover ring-1 ring-white/20"
+                      fallback={<div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center text-xs">👤</div>} />
+                    {isOnline && <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-green-400 border border-zinc-950" />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-bold text-[13px] truncate drop-shadow-md">{otherName}</div>
+                  </div>
+                </div>
+                
+                {/* Search Button */}
+                <button onClick={() => setIsSearching(true)}
+                  className="w-9 h-9 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white transition shrink-0 text-[16px]">
+                  🔍
+                </button>
+                
+                <button onClick={e => { e.stopPropagation(); setShowMenu(true); }}
+                  className="w-9 h-9 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white transition shrink-0 text-lg font-bold tracking-widest">···</button>
+              </>
+            )}
           </div>
 
           {/* MESSAGES */}
-          <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 scrollbar-hide relative"
+          <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 scrollbar-hide relative"
             style={{ overscrollBehavior: "none" }}
-            onClick={() => setReactionMsgId(null)}
+            onClick={() => { setReactionMsgId(null); setShowTimeFor(null); }}
             onContextMenu={e => e.preventDefault()}>
             
             <div className="flex flex-col justify-end min-h-full pt-24 pb-8 space-y-0.5">
-              {matchCreatedAt && (
+              
+              {/* Pagination Loader Spinner */}
+              {loadingMore && (
+                <div className="flex justify-center mb-4">
+                  <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                </div>
+              )}
+
+              {matchCreatedAt && !isSearching && (
                 <div className="text-center text-xs text-white/50 bg-black/20 backdrop-blur-md px-4 py-1.5 rounded-full mx-auto mb-4 w-max">
                   {ka ? `${otherName}-თან შეხვედრა შედგა` : `Matched with ${otherName} on`}{" "}
-                  {new Date(matchCreatedAt).toLocaleDateString(ka ? "ka-GE" : "en-US", { day: "numeric", month: "short" })}
+                  <span className="font-bold">{formatDetailedDate(matchCreatedAt, ka)}</span>
                 </div>
               )}
               
-              {msgs.map((m, i) => {
+              {visibleMsgs.map((m, i) => {
                 if (!myAnonId) return null;
                 const mine = m.sender_anon === myAnonId;
                 const isTemp = m.id.startsWith("temp");
                 const isRead = !!m.read_at;
                 const isDelivered = !!m.delivered_at;
-                const prevSame = i > 0 && msgs[i-1].sender_anon === m.sender_anon;
+                const prevSame = i > 0 && visibleMsgs[i-1].sender_anon === m.sender_anon;
                 const showReactionBar = reactionMsgId === m.id;
+                const showingTime = showTimeFor === m.id;
 
-                // Swipe logic variables
-                let touchStartX = 0;
+                let pressTimer: NodeJS.Timeout | null = null;
+                let startX = 0;
+                let startY = 0;
+                let isLong = false;
 
                 return (
                   <div key={m.id} className={`flex flex-col w-full ${mine?"items-end":"items-start"} ${prevSame?"mt-0.5":"mt-3"}`}>
+                    
+                    {/* Detailed Date Reveal (On Tap) */}
+                    {showingTime && (
+                       <div className={`text-[11px] font-medium text-white/50 mb-1 mt-1 drop-shadow-sm ${mine ? "mr-1" : "ml-1"}`}>
+                          {formatDetailedDate(m.created_at, ka)}
+                       </div>
+                    )}
+
                     <div className="relative flex w-full"
                       style={{ justifyContent: mine ? "flex-end" : "flex-start" }}>
 
@@ -971,23 +1037,38 @@ export default function ChatThreadPage() {
                       )}
 
                       <div className={`msg-box relative flex flex-col cursor-pointer max-w-[75vw] sm:max-w-[320px]`}
-                           onTouchStart={e => { touchStartX = e.touches[0].clientX; }}
+                           onTouchStart={e => {
+                             startX = e.touches[0].clientX;
+                             startY = e.touches[0].clientY;
+                             isLong = false;
+                             pressTimer = setTimeout(() => {
+                               isLong = true;
+                               setReactionMsgId(m.id);
+                               setShowTimeFor(null);
+                               if (navigator.vibrate) navigator.vibrate(50);
+                             }, 800);
+                           }}
+                           onTouchMove={e => {
+                             if(pressTimer) {
+                               const dx = Math.abs(e.touches[0].clientX - startX);
+                               const dy = Math.abs(e.touches[0].clientY - startY);
+                               if (dx > 10 || dy > 10) clearTimeout(pressTimer);
+                             }
+                           }}
                            onTouchEnd={e => {
-                              const touchEndX = e.changedTouches[0].clientX;
-                              const diff = touchStartX - touchEndX;
-                              if (Math.abs(diff) > 50) { // თუ 50px-ზე მეტით გაასრიალა
-                                setReplyTo(m);
-                                setTimeout(() => inputRef.current?.focus(), 50);
-                              }
-                           }}
-                           onPointerDown={e => {
-                             e.stopPropagation();
-                             // ზუსტად 1 წამიანი (1000ms) delay
-                             msgLongPressTimer.current = setTimeout(() => setReactionMsgId(m.id), 1000);
-                           }}
-                           onPointerMove={() => { if (msgLongPressTimer.current) clearTimeout(msgLongPressTimer.current); }}
-                           onPointerUp={() => { if (msgLongPressTimer.current) clearTimeout(msgLongPressTimer.current); }}
-                           onPointerLeave={() => { if (msgLongPressTimer.current) clearTimeout(msgLongPressTimer.current); }}>
+                             if(pressTimer) clearTimeout(pressTimer);
+                             if(!isLong) {
+                               const dx = e.changedTouches[0].clientX - startX;
+                               if(Math.abs(dx) > 50) {
+                                  // Swipe for Reply
+                                  setReplyTo(m); setTimeout(() => inputRef.current?.focus(), 50);
+                               } else {
+                                  // Simple Tap (Toggle Date)
+                                  setShowTimeFor(prev => prev === m.id ? null : m.id);
+                                  setReactionMsgId(null);
+                               }
+                             }
+                           }}>
                         
                         <div>
                           {m.reply_preview && (
@@ -1043,7 +1124,7 @@ export default function ChatThreadPage() {
             </div>
           </div>
 
-          {/* INPUT BAR (Transparent Tinder Style) */}
+          {/* INPUT BAR */}
           <div className="shrink-0 bg-transparent z-10 px-3 pt-2"
             style={{ paddingBottom: keyboardHeight > 0 ? `${keyboardHeight + 8}px` : "calc(env(safe-area-inset-bottom, 0px) + 8px)" }}>
 
