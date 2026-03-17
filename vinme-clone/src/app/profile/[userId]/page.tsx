@@ -50,33 +50,48 @@ export default function UserProfilePage() {
     (async () => {
       const { data: sess } = await supabase.auth.getSession();
       const uid = sess.session?.user?.id;
-      const[{ data: other }, { data: me }] = await Promise.all([
+      const [{ data: other }, { data: me }] = await Promise.all([
         supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
         uid ? supabase.from("profiles").select("*").eq("user_id", uid).maybeSingle() : Promise.resolve({ data: null }),
       ]);
-      setProfile(other); setMyProfile(me); setLoading(false);
+      setProfile(other);
+      setMyProfile(me);
+      setLoading(false);
+
+      // ✅ შენი GPS-ის განახლება — რათა კილომეტრი სწორად გამოჩნდეს
+      if (uid && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            // state-ი განვაახლოთ მყისიერად — UI-ში კილომეტრი გამოჩნდება
+            setMyProfile((prev: any) => prev ? { ...prev, latitude: lat, longitude: lon } : prev);
+            // ბაზაშიც შეინახოს
+            await supabase.from("profiles")
+              .update({ latitude: lat, longitude: lon })
+              .eq("user_id", uid);
+          },
+          () => {
+            // GPS permission denied — ძველი კოორდინატები დარჩება
+          }
+        );
+      }
     })();
   }, [userId]);
 
   const photos = useMemo(() => {
     if (!profile) return [];
-    return[1,2,3,4,5,6,7,8,9].map(i => profile[`photo${i}_url`]).filter(Boolean).map((p:string) => photoSrc(p));
+    return [1,2,3,4,5,6,7,8,9].map(i => profile[`photo${i}_url`]).filter(Boolean).map((p: string) => photoSrc(p));
   }, [profile]);
 
   const age = useMemo(() => profile?.age ?? calcAge(profile?.birthdate ?? null), [profile]);
-  
+
   const distanceKm = useMemo(() => {
     if (!profile?.latitude || !profile?.longitude || !myProfile?.latitude || !myProfile?.longitude) return null;
-    
-    // დამცავი 1: თუ რომელიმეს კოორდინატები ზუსტად 0,0 არის (ანუ ბაზის ცარიელი მონაცემი)
     if (profile.latitude === 0 && profile.longitude === 0) return null;
     if (myProfile.latitude === 0 && myProfile.longitude === 0) return null;
-
     const dist = haversineKm(myProfile.latitude, myProfile.longitude, profile.latitude, profile.longitude);
-    
-    // დამცავი 2: თუ მანძილი 5000 კმ-ზე მეტია (ემულატორის ან VPN-ის ბაგი) - დავმალოთ
     if (dist > 5000) return null;
-
     return dist;
   }, [profile, myProfile]);
 
@@ -97,13 +112,11 @@ export default function UserProfilePage() {
   return (
     <div className="min-h-[100dvh] bg-black text-white">
 
-      {/* ── CARD ── centered, max 430px wide like Tinder on desktop */}
       <div className="mx-auto" style={{ maxWidth: 430 }}>
 
-        {/* PHOTO SECTION — ~80dvh like Tinder */}
+        {/* PHOTO SECTION */}
         <div className="relative w-full bg-black overflow-hidden" style={{ height: "80dvh" }}>
 
-          {/* Photo — object-cover, centered */}
           {photos.length > 0 ? (
             <img
               src={photos[activePhoto]}
@@ -117,10 +130,8 @@ export default function UserProfilePage() {
             </div>
           )}
 
-          {/* gradient */}
           <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/75 pointer-events-none" />
 
-          {/* photo progress bars */}
           {photos.length > 1 && (
             <div className="absolute top-3 left-0 right-0 flex gap-1 px-12 z-20">
               {photos.map((_, i) => (
@@ -131,7 +142,6 @@ export default function UserProfilePage() {
             </div>
           )}
 
-          {/* tap zones */}
           {photos.length > 1 && (
             <>
               <button className="absolute left-0 top-0 bottom-0 w-1/3 z-10" onClick={() => setActivePhoto(p => Math.max(0, p-1))} />
@@ -139,14 +149,12 @@ export default function UserProfilePage() {
             </>
           )}
 
-          {/* back button */}
           <button onClick={() => router.back()}
             className="absolute top-4 left-4 z-20 w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white shadow"
             style={{ marginTop: "env(safe-area-inset-top, 0px)" }}>
             ←
           </button>
 
-          {/* name + age + arrow at photo bottom */}
           <div className="absolute bottom-0 left-0 right-0 z-20 px-4 pb-4">
             <div className="flex items-end justify-between">
               <div>
@@ -154,8 +162,7 @@ export default function UserProfilePage() {
                   <span className="text-3xl font-black drop-shadow">{name}</span>
                   {age && <span className="text-3xl font-light text-white/85 drop-shadow">{age}</span>}
                 </div>
-                
-                {/* 📍 ლოკაცია და მანძილი ახალი დიზაინით და დაცვით */}
+
                 {(profile.city || distanceKm != null) && (
                   <div className="flex items-center gap-1 text-sm text-white/80 mt-1 font-medium drop-shadow-md">
                     <span>📍</span>
@@ -167,8 +174,7 @@ export default function UserProfilePage() {
                   </div>
                 )}
               </div>
-              
-              {/* ↑ arrow — Tinder style */}
+
               <button
                 onClick={() => { setShowDetails(v => !v); setTimeout(() => detailsRef.current?.scrollIntoView({ behavior: "smooth" }), 60); }}
                 className="w-11 h-11 rounded-full bg-white flex items-center justify-center shadow-xl transition-transform"
@@ -179,7 +185,6 @@ export default function UserProfilePage() {
               </button>
             </div>
 
-            {/* quick chips */}
             <div className="flex flex-wrap gap-2 mt-2.5">
               {profile.intent && (
                 <span className="rounded-full bg-white/15 backdrop-blur-sm px-3 py-1 text-xs font-medium">
@@ -195,7 +200,7 @@ export default function UserProfilePage() {
           </div>
         </div>
 
-        {/* DETAILS — slides in below photo */}
+        {/* DETAILS */}
         <div ref={detailsRef} className={`overflow-hidden transition-all duration-300 ${showDetails ? "opacity-100" : "opacity-0 h-0"}`}>
           <div className="px-4 py-4 space-y-3" style={{ paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))" }}>
 
