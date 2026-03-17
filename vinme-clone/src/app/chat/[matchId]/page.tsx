@@ -66,7 +66,7 @@ function ThemeModal({ current, currentBg, onClose, onSelect, ka }: {
   current: string; currentBg: string; onClose: () => void; 
   onSelect: (color: string, bg: string) => void; ka: boolean;
 }) {
-  const [selectedColor, setSelectedColor] = useState(current);
+  const[selectedColor, setSelectedColor] = useState(current);
   const[selectedBg, setSelectedBg] = useState(currentBg);
   const [tab, setTab] = useState<"color" | "bg">("color");
 
@@ -159,9 +159,7 @@ function ThemeModal({ current, currentBg, onClose, onSelect, ka }: {
   );
 }
 
-// ----------------------------------------------------
-// 1. მცურავი ემოჯების პანელი (რჩება მესიჯის თავზე)
-// ----------------------------------------------------
+// მცურავი ემოჯების პანელი (რჩება მესიჯის თავზე)
 function EmojiPopup({ msg, myAnonId, reactions, onReact, onClose, mine }: {
   msg: MsgRow; myAnonId: string; reactions: Reaction[];
   onReact: (msgId: string, emoji: string) => void; onClose: () => void; mine: boolean;
@@ -185,9 +183,7 @@ function EmojiPopup({ msg, myAnonId, reactions, onReact, onClose, mine }: {
   );
 }
 
-// ----------------------------------------------------
-// 2. ახალი: ქვედა მოქმედებების პანელი (როგორც Messenger-ში)
-// ----------------------------------------------------
+// ქვედა მოქმედებების პანელი (განახლებული Unsend ლოგიკით)
 function BottomActionMenu({ msg, mine, onClose, onReply, onCopy, onDelete, ka }: {
   msg: MsgRow; mine: boolean; onClose: () => void;
   onReply: () => void; onCopy: () => void; onDelete: () => void; ka: boolean;
@@ -212,29 +208,34 @@ function BottomActionMenu({ msg, mine, onClose, onReply, onCopy, onDelete, ka }:
         </button>
       )}
 
-      {mine && (
-        <button onClick={onDelete} className="flex flex-col items-center gap-2 w-16 opacity-80 hover:opacity-100 transition active:scale-95">
-          <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center text-white">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-          </div>
-          <span className="text-[12px] font-medium text-white">{ka ? "წაშლა" : "Unsend"}</span>
-        </button>
-      )}
+      {/* წაშლის ღილაკი ახლა ყველა მესიჯზე ჩანს (Mine-ის მიუხედავად) */}
+      <button onClick={onDelete} className="flex flex-col items-center gap-2 w-16 opacity-80 hover:opacity-100 transition active:scale-95">
+        <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center text-white">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        </div>
+        <span className="text-[12px] font-medium text-white">{ka ? "წაშლა" : "Unsend"}</span>
+      </button>
     </div>
   );
 }
 
-function DeleteMessageModal({ onClose, onConfirm, ka }: { onClose: ()=>void, onConfirm: (type: 'me'|'everyone')=>void, ka: boolean }) {
+// წაშლის მოდალი (ამოწმებს შენი მესიჯია თუ არა)
+function DeleteMessageModal({ onClose, onConfirm, ka, isMine }: { onClose: ()=>void, onConfirm: (type: 'me'|'everyone')=>void, ka: boolean, isMine: boolean }) {
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div className="relative w-full max-w-lg bg-zinc-900 rounded-t-3xl overflow-hidden p-5" onClick={e => e.stopPropagation()}>
         <div className="w-12 h-1 bg-white/20 rounded-full mx-auto mb-5" />
         <h3 className="text-white font-bold text-center text-lg mb-4">{ka ? "მესიჯის წაშლა" : "Delete Message"}</h3>
+        
         <div className="flex flex-col gap-2">
-          <button onClick={() => onConfirm('everyone')} className="w-full py-4 rounded-2xl bg-red-500/10 text-red-500 font-bold active:scale-95 transition ring-1 ring-red-500/30">
-            {ka ? "წაშლა ყველასთვის" : "Unsend for everyone"}
-          </button>
+          {/* ყველასთვის წაშლა გამოჩნდება მხოლოდ შენს მესიჯებზე */}
+          {isMine && (
+            <button onClick={() => onConfirm('everyone')} className="w-full py-4 rounded-2xl bg-red-500/10 text-red-500 font-bold active:scale-95 transition ring-1 ring-red-500/30">
+              {ka ? "წაშლა ყველასთვის" : "Unsend for everyone"}
+            </button>
+          )}
+          {/* შენთვის წაშლა ყველა შემთხვევაში */}
           <button onClick={() => onConfirm('me')} className="w-full py-4 rounded-2xl bg-white/10 text-white font-bold active:scale-95 transition">
             {ka ? "წაშლა ჩემთვის" : "Delete for you"}
           </button>
@@ -445,7 +446,7 @@ export default function ChatThreadPage() {
   const [msgs, setMsgs] = useState<MsgRow[]>(() => {
     if (typeof window !== "undefined") {
       const c = localStorage.getItem(`chat_cache_${matchId}`);
-      if (c) return JSON.parse(c).cachedMsgs || [];
+      if (c) return JSON.parse(c).cachedMsgs ||[];
     }
     return[];
   });
@@ -540,7 +541,6 @@ export default function ChatThreadPage() {
   const msgReactionIds = useMemo(() => new Set(reactions.map(r => r.message_id)), [reactions]);
   const bgStyle = useMemo(() => ({ background: chatBg || "#111111" }),[chatBg]);
 
-  // დამატებულია isSwipe მდგომარეობა
   const touchState = useRef({ id: null as string | null, startX: 0, startY: 0, timer: null as any, isLong: false, isSwipe: false });
 
   useEffect(() => { if (ctxAnonId && !myAnonId) setMyAnonId(ctxAnonId); },[ctxAnonId]);
@@ -812,7 +812,7 @@ export default function ChatThreadPage() {
         setMsgs(prev => {
           const withoutTemp = prev.filter(m => m.id !== tempId);
           if (withoutTemp.some(m => m.id === data.id)) return withoutTemp;
-          return [...withoutTemp, data as MsgRow];
+          return[...withoutTemp, data as MsgRow];
         });
       }
       await supabase.from("matches").update({ has_unread: true }).eq("id", matchId);
@@ -914,7 +914,7 @@ export default function ChatThreadPage() {
     router.replace("/chat");
   }
 
-  const avatar = useMemo(() => { const src = photoSrc(otherProfile?.photo1_url ?? null); return src || null; }, [otherProfile]);
+  const avatar = useMemo(() => { const src = photoSrc(otherProfile?.photo1_url ?? null); return src || null; },[otherProfile]);
   const effectiveAnonId = myAnonId ?? myAnonIdRef.current;
   const otherName = otherProfile?.nickname ?? otherProfile?.first_name ?? "...";
 
@@ -1053,7 +1053,6 @@ export default function ChatThreadPage() {
                       <div className={`msg-box relative flex flex-col cursor-pointer max-w-[75vw] sm:max-w-[320px] select-none ${showReactionBar ? 'z-[60] scale-[1.02] transition-transform' : 'z-10'}`}
                            onClick={(e) => {
                              e.stopPropagation();
-                             // თუ თითი არ გაუსრიალებია და არც Long press ყოფილა, მაშინ ვაჩვენებთ თარიღს (Tap)
                              if (!touchState.current.isLong && !touchState.current.isSwipe) {
                                setShowTimeFor(prev => prev === m.id ? null : m.id);
                                setReactionMsgId(null);
@@ -1072,7 +1071,7 @@ export default function ChatThreadPage() {
                                  setReactionMsgId(m.id);
                                  setShowTimeFor(null);
                                  if (navigator.vibrate) navigator.vibrate(50);
-                               }, 400) // 400ms უფრო სწრაფი რეაგირებისთვის Long Press-ზე
+                               }, 400)
                              };
                            }}
                            onTouchMove={e => {
@@ -1096,13 +1095,11 @@ export default function ChatThreadPage() {
                              if (!touchState.current.isLong) {
                                const dx = e.changedTouches[0].clientX - touchState.current.startX;
                                const dy = Math.abs(e.changedTouches[0].clientY - touchState.current.startY);
-                               // Swipe to reply
                                if (Math.abs(dx) > 60 && dy < 40) {
                                   setReplyTo(m); 
                                   setTimeout(() => inputRef.current?.focus(), 50);
                                } 
                              }
-                             // reset touch state after a small delay
                              setTimeout(() => { touchState.current.id = null; }, 50);
                            }}>
                         
@@ -1240,7 +1237,6 @@ export default function ChatThreadPage() {
 
         {/* MODALS & OVERLAYS */}
         
-        {/* Long Press Background Overlay & Bottom Menu */}
         {reactionMsgId && (
           <>
             <div className="fixed inset-0 z-[55] bg-black/50 backdrop-blur-[2px] transition-all" onClick={() => setReactionMsgId(null)} />
@@ -1304,7 +1300,12 @@ export default function ChatThreadPage() {
         )}
 
         {msgToDelete && (
-          <DeleteMessageModal ka={ka} onClose={() => setMsgToDelete(null)} onConfirm={confirmDeleteMessage} />
+          <DeleteMessageModal 
+            ka={ka} 
+            isMine={msgs.find(m => m.id === msgToDelete)?.sender_anon === myAnonId}
+            onClose={() => setMsgToDelete(null)} 
+            onConfirm={confirmDeleteMessage} 
+          />
         )}
       </div>
     </>
