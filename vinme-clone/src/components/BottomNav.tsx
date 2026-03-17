@@ -1,19 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getLang } from "@/lib/i18n";
 
 export default function BottomNav({ chatBadge }: { chatBadge?: number } = {}) {
   const pathname = usePathname() || "";
+  const router = useRouter();
 
   if (pathname.match(/^\/chat\/.+/)) return null;
 
   const [unreadPeople, setUnreadPeople] = useState(0);
   const [lang, setLang] = useState<"ka"|"en">("ka");
   const pathname2 = usePathname();
+
+  useEffect(() => {
+    router.prefetch("/profile");
+    router.prefetch("/feed");
+    router.prefetch("/chat");
+    router.prefetch("/likes");
+  }, []);
 
   useEffect(() => {
     setLang(getLang());
