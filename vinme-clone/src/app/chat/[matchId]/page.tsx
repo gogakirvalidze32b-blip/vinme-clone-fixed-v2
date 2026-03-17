@@ -243,12 +243,10 @@ function ActionMenu({ msg, mine, theme, onReply, onCopy, onUnsend, onClose }: {
           <span>📋</span> Copy
         </button>
       )}
-      {mine && (
-        <button onClick={() => { onUnsend(); }}
-          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:bg-white/8 transition border-t border-white/5 active:scale-95">
-          <span>🗑</span> Unsend
-        </button>
-      )}
+      <button onClick={() => { onUnsend(); }}
+        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:bg-white/8 transition border-t border-white/5 active:scale-95">
+        <span>🗑</span> Unsend
+      </button>
     </div>
   );
 }
