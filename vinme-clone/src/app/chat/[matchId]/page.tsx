@@ -934,16 +934,22 @@ export default function ChatThreadPage() {
         {/* MESSAGES */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 scrollbar-hide"
           style={{ overscrollBehavior: "none", userSelect: "none", WebkitUserSelect: "none" }}
-          // ფონის long press — მხოლოდ როცა პირდაპ scrollRef-ზეა (message-ზე არა)
           onPointerDown={e => {
-            // თუ message bubble-ზე დაეჭირა, ეს არ გაეშვება (message-ის handler გაეშვება)
             if ((e.target as HTMLElement).closest("[data-msg]")) return;
-            bgLongPressTimer.current = setTimeout(() => setShowThemeModal(true), 700);
+            if (e.pointerType === "mouse" && e.button !== 0) return;
+            const startX = e.clientX;
+            const startY = e.clientY;
+            bgLongPressTimer.current = setTimeout(() => setShowThemeModal(true), 600);
+            const onMove = (ev: PointerEvent) => {
+              if (Math.abs(ev.clientX - startX) > 8 || Math.abs(ev.clientY - startY) > 8) {
+                if (bgLongPressTimer.current) { clearTimeout(bgLongPressTimer.current); bgLongPressTimer.current = null; }
+                window.removeEventListener("pointermove", onMove);
+              }
+            };
+            window.addEventListener("pointermove", onMove, { passive: true });
           }}
           onPointerUp={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer.current); }}
           onPointerLeave={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer.current); }}
-          onPointerMove={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer.current); }}
-          // ჩვეულებრივი tap ფონზე — მენიუების დახურვა (theme modal-ის გახსნა არა)
           onClick={e => {
             if ((e.target as HTMLElement).closest("[data-msg]")) return;
             closeAllMenus();
