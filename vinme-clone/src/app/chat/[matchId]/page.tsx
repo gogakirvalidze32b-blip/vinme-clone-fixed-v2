@@ -471,6 +471,9 @@ export default function ChatThreadPage() {
   const[showThemeModal, setShowThemeModal] = useState(false);
   const[msgToDelete, setMsgToDelete] = useState<string | null>(null);
 
+    const [viewingImage, setViewingImage] = useState<string | null>(null);
+
+
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const[showTimeFor, setShowTimeFor] = useState<string | null>(null);
@@ -1073,7 +1076,7 @@ export default function ChatThreadPage() {
                                }
                              }
                            }}
-                           onTouchEnd={e => {
+onTouchEnd={e => {
                              if (touchState.current.id !== m.id) return;
                              if (touchState.current.timer) {
                                clearTimeout(touchState.current.timer);
@@ -1086,6 +1089,15 @@ export default function ChatThreadPage() {
                                   setReplyTo(m); 
                                   setTimeout(() => inputRef.current?.focus(), 50);
                                } 
+                               // ⚡️ წამიერი დაჭერა (Tap) - თუ სურათია გადიდდება, თუ ტექსტია თარიღს აჩვენებს
+                               else if (Math.abs(dx) < 10 && dy < 10 && !touchState.current.isSwipe) {
+                                  if (m.type === "image") {
+                                    setViewingImage(m.content);
+                                  } else {
+                                    setShowTimeFor(prev => prev === m.id ? null : m.id);
+                                  }
+                                  setReactionMsgId(null);
+                               }
                              }
                              setTimeout(() => { touchState.current.id = null; }, 50);
                            }}>
@@ -1109,11 +1121,17 @@ export default function ChatThreadPage() {
                               </div>
                             </div>
                           ) : m.type === "image" ? (
-                            <div className={`rounded-2xl overflow-hidden w-full select-none ${mine?"rounded-tr-sm":"rounded-tl-sm"} ${isTemp?"opacity-60":""}`}>
-                              <img src={m.content} className="max-w-full max-h-[280px] object-cover block" alt=""
-                                onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
+                            // 🖼 დაცული სურათი ჩატში (არ ინახება)
+                            <div className={`relative rounded-2xl overflow-hidden w-full select-none ${mine?"rounded-tr-sm":"rounded-tl-sm"} ${isTemp?"opacity-60":""}`}>
+                              <img src={m.content} className="max-w-full max-h-[280px] object-cover block select-none" 
+                                   style={{ WebkitTouchCallout: "none", pointerEvents: "none" }}
+                                   draggable="false" alt="" onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
+                              
+                              {/* 🛡 უხილავი ფენა, რომელიც კრძალავს Long Press-ს შენახვაზე */}
+                              <div className="absolute inset-0 z-10 bg-transparent" onContextMenu={e => e.preventDefault()} />
+                              
                               {mine && (
-                                <div className="flex justify-end px-2 py-1 bg-black/20">
+                                <div className="absolute bottom-1.5 right-1.5 flex justify-end px-2 py-0.5 bg-black/30 backdrop-blur-md rounded-full z-20 pointer-events-none">
                                   <Ticks isTemp={isTemp} delivered={isDelivered} read={isRead} mine={mine} />
                                 </div>
                               )}
@@ -1286,14 +1304,29 @@ export default function ChatThreadPage() {
             onSelect={(color, bg) => applyTheme(color, bg)} />
         )}
 
-        {msgToDelete && (
-          <DeleteMessageModal 
-            ka={ka} 
-            isMine={msgs.find(m => m.id === msgToDelete)?.sender_anon === myAnonId}
-            onClose={() => setMsgToDelete(null)} 
-            onConfirm={confirmDeleteMessage} 
-          />
+         {/* 👇 აი ზუსტად აქ, ბოლო </div>-ების წინ ჩასვი ეს გადიდების კოდი 👇 */}
+        {viewingImage && (
+          <div className="fixed inset-0 z-[80] bg-black/95 backdrop-blur-xl flex flex-col"
+               onClick={() => setViewingImage(null)}
+               onContextMenu={e => e.preventDefault()}>
+            
+            <div className="flex justify-end px-4 py-4" style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 16px)" }}>
+              <button className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white text-lg active:scale-90 transition">✕</button>
+            </div>
+            
+            <div className="flex-1 relative flex items-center justify-center p-2 overflow-hidden">
+              <img src={viewingImage} 
+                   className="max-w-full max-h-full object-contain select-none" 
+                   draggable="false" 
+                   style={{ WebkitTouchCallout: "none", pointerEvents: "none" }} 
+                   alt="fullscreen" />
+              
+              {/* 🛡 უხილავი დამცავი ფენა (ბლოკავს სურათის შენახვას/ჩამოტვირთვას) */}
+              <div className="absolute inset-0 z-10 bg-transparent" onContextMenu={e => e.preventDefault()} />
+            </div>
+          </div>
         )}
+
       </div>
     </>
   );
