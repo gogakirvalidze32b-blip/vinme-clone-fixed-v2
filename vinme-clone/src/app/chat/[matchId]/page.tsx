@@ -68,7 +68,6 @@ function ThemeModal({ current, currentBg, onClose, onSelect, ka }: {
 }) {
   const [selectedColor, setSelectedColor] = useState(current);
   const[selectedBg, setSelectedBg] = useState(currentBg);
-  const [custom, setCustom] = useState(current);
   const [tab, setTab] = useState<"color" | "bg">("color");
 
   const themes =[
@@ -122,18 +121,16 @@ function ThemeModal({ current, currentBg, onClose, onSelect, ka }: {
         </div>
 
         {tab === "color" && (
-          <>
-            <div className="grid grid-cols-6 gap-3 mb-5">
-              {themes.map(t => (
-                <button key={t.color} onClick={() => setSelectedColor(t.color)}
-                  className="flex flex-col items-center gap-1.5">
-                  <div className="w-11 h-11 rounded-full transition-transform active:scale-90"
-                    style={{ background: t.color, outline: selectedColor === t.color ? "3px solid white" : "3px solid transparent", outlineOffset: "2px" }} />
-                  <span className="text-[10px] text-white/50">{t.label}</span>
-                </button>
-              ))}
-            </div>
-          </>
+          <div className="grid grid-cols-6 gap-3 mb-5">
+            {themes.map(t => (
+              <button key={t.color} onClick={() => setSelectedColor(t.color)}
+                className="flex flex-col items-center gap-1.5">
+                <div className="w-11 h-11 rounded-full transition-transform active:scale-90"
+                  style={{ background: t.color, outline: selectedColor === t.color ? "3px solid white" : "3px solid transparent", outlineOffset: "2px" }} />
+                <span className="text-[10px] text-white/50">{t.label}</span>
+              </button>
+            ))}
+          </div>
         )}
 
         {tab === "bg" && (
@@ -142,10 +139,7 @@ function ThemeModal({ current, currentBg, onClose, onSelect, ka }: {
               <button key={b.label} onClick={() => setSelectedBg(b.bg)}
                 className="flex flex-col items-center gap-1.5">
                 <div className="w-full h-16 rounded-2xl border-2 transition-transform active:scale-95"
-                  style={{
-                    background: b.bg,
-                    borderColor: selectedBg === b.bg ? "white" : "transparent"
-                  }} />
+                  style={{ background: b.bg, borderColor: selectedBg === b.bg ? "white" : "transparent" }} />
                 <span className="text-[10px] text-white/50">{b.label}</span>
               </button>
             ))}
@@ -165,53 +159,67 @@ function ThemeModal({ current, currentBg, onClose, onSelect, ka }: {
   );
 }
 
-function ReactionBar({ msg, myAnonId, reactions, onReact, onClose, mine, onDelete, onReply, ka }: {
+// ----------------------------------------------------
+// 1. მცურავი ემოჯების პანელი (რჩება მესიჯის თავზე)
+// ----------------------------------------------------
+function EmojiPopup({ msg, myAnonId, reactions, onReact, onClose, mine }: {
   msg: MsgRow; myAnonId: string; reactions: Reaction[];
   onReact: (msgId: string, emoji: string) => void; onClose: () => void; mine: boolean;
-  onDelete: (msgId: string) => void; onReply: () => void; ka: boolean;
 }) {
-  const emojis = ["❤️", "😂", "😮", "😢", "😡", "👍"];
-
-  const handleCopy = async () => {
-    if (msg.type === "text" && msg.content) {
-      try { await navigator.clipboard.writeText(msg.content); } catch (err) {}
-    }
-    onClose();
-  };
-
+  const emojis =["❤️", "😂", "😮", "😢", "😡", "👍"];
   return (
-    <div className={`absolute z-50 flex flex-col gap-2 ${mine ? "right-0 items-end" : "left-0 items-start"}`}
+    <div className={`absolute z-[60] flex items-center gap-1 bg-zinc-800 rounded-full px-3 py-2 shadow-2xl ring-1 ring-white/10 ${mine ? "right-0" : "left-0"}`}
       style={{ bottom: "calc(100% + 8px)" }}
       onClick={e => e.stopPropagation()}>
-      
-      <div className="flex items-center gap-1 bg-zinc-800 rounded-full px-3 py-2 shadow-2xl ring-1 ring-white/10">
-        {emojis.map(e => {
-          const active = reactions.some(r => r.message_id === msg.id && r.sender_anon === myAnonId && r.emoji === e);
-          return (
-            <button key={e} onClick={() => { onReact(msg.id, e); onClose(); }}
-              className={`text-2xl transition active:scale-75 hover:scale-125 ${active ? "scale-110" : "opacity-80"}`}
-              style={{ lineHeight: 1 }}>
-              {e}
-            </button>
-          );
-        })}
-      </div>
+      {emojis.map(e => {
+        const active = reactions.some(r => r.message_id === msg.id && r.sender_anon === myAnonId && r.emoji === e);
+        return (
+          <button key={e} onClick={() => { onReact(msg.id, e); onClose(); }}
+            className={`text-2xl transition active:scale-75 hover:scale-125 ${active ? "scale-110" : "opacity-80"}`}
+            style={{ lineHeight: 1 }}>
+            {e}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
-      <div className="flex flex-col bg-zinc-800 rounded-2xl shadow-2xl ring-1 ring-white/10 overflow-hidden w-40 text-sm font-medium">
-        {msg.type === "text" && (
-          <button onClick={handleCopy} className="flex items-center justify-between px-4 py-3 text-white hover:bg-white/10 transition text-left">
-            {ka ? "დაკოპირება" : "Copy"} <span>📋</span>
-          </button>
-        )}
-        <button onClick={() => { onReply(); onClose(); }} className="flex items-center justify-between px-4 py-3 text-white border-t border-white/5 hover:bg-white/10 transition text-left">
-          {ka ? "პასუხი" : "Reply"} <span>↩️</span>
+// ----------------------------------------------------
+// 2. ახალი: ქვედა მოქმედებების პანელი (როგორც Messenger-ში)
+// ----------------------------------------------------
+function BottomActionMenu({ msg, mine, onClose, onReply, onCopy, onDelete, ka }: {
+  msg: MsgRow; mine: boolean; onClose: () => void;
+  onReply: () => void; onCopy: () => void; onDelete: () => void; ka: boolean;
+}) {
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-[60] bg-[#1a1a1a] border-t border-white/5 pb-8 pt-5 px-4 flex justify-around items-center rounded-t-2xl shadow-[0_-10px_40px_rgba(0,0,0,0.5)]"
+      onClick={e => e.stopPropagation()}>
+      
+      <button onClick={onReply} className="flex flex-col items-center gap-2 w-16 opacity-80 hover:opacity-100 transition active:scale-95">
+        <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center text-white">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+        </div>
+        <span className="text-[12px] font-medium text-white">{ka ? "პასუხი" : "Reply"}</span>
+      </button>
+
+      {msg.type === "text" && (
+        <button onClick={onCopy} className="flex flex-col items-center gap-2 w-16 opacity-80 hover:opacity-100 transition active:scale-95">
+          <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center text-white">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </div>
+          <span className="text-[12px] font-medium text-white">{ka ? "კოპირება" : "Copy"}</span>
         </button>
-        {mine && (
-          <button onClick={() => { onDelete(msg.id); onClose(); }} className="flex items-center justify-between px-4 py-3 text-red-400 border-t border-white/5 hover:bg-white/10 transition text-left">
-            {ka ? "წაშლა" : "Unsend"} <span>🗑️</span>
-          </button>
-        )}
-      </div>
+      )}
+
+      {mine && (
+        <button onClick={onDelete} className="flex flex-col items-center gap-2 w-16 opacity-80 hover:opacity-100 transition active:scale-95">
+          <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center text-white">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+          </div>
+          <span className="text-[12px] font-medium text-white">{ka ? "წაშლა" : "Unsend"}</span>
+        </button>
+      )}
     </div>
   );
 }
@@ -223,7 +231,6 @@ function DeleteMessageModal({ onClose, onConfirm, ka }: { onClose: ()=>void, onC
       <div className="relative w-full max-w-lg bg-zinc-900 rounded-t-3xl overflow-hidden p-5" onClick={e => e.stopPropagation()}>
         <div className="w-12 h-1 bg-white/20 rounded-full mx-auto mb-5" />
         <h3 className="text-white font-bold text-center text-lg mb-4">{ka ? "მესიჯის წაშლა" : "Delete Message"}</h3>
-        
         <div className="flex flex-col gap-2">
           <button onClick={() => onConfirm('everyone')} className="w-full py-4 rounded-2xl bg-red-500/10 text-red-500 font-bold active:scale-95 transition ring-1 ring-red-500/30">
             {ka ? "წაშლა ყველასთვის" : "Unsend for everyone"}
@@ -435,7 +442,6 @@ export default function ChatThreadPage() {
   const ka = lang !== "en";
   const { anonId: ctxAnonId } = useUser();
 
-  // SPEED FIX: Init state instantly from cache to avoid visual delay
   const [msgs, setMsgs] = useState<MsgRow[]>(() => {
     if (typeof window !== "undefined") {
       const c = localStorage.getItem(`chat_cache_${matchId}`);
@@ -450,7 +456,7 @@ export default function ChatThreadPage() {
     }
     return null;
   });
-  const [myAnonId, setMyAnonId] = useState<string|null>(() => {
+  const[myAnonId, setMyAnonId] = useState<string|null>(() => {
     if (typeof window !== "undefined") {
       const c = localStorage.getItem(`chat_cache_${matchId}`);
       if (c) return JSON.parse(c).cachedAnonId || null;
@@ -475,14 +481,12 @@ export default function ChatThreadPage() {
   const [chatTheme, setChatTheme] = useState("#7C3AED");
   const[chatBg, setChatBg] = useState("#111111");  
   const[showThemeModal, setShowThemeModal] = useState(false);
-  const [msgToDelete, setMsgToDelete] = useState<string | null>(null);
+  const[msgToDelete, setMsgToDelete] = useState<string | null>(null);
 
-  // SEARCH AND DATE REVEAL STATES
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const[showTimeFor, setShowTimeFor] = useState<string | null>(null);
   
-  // PAGINATION STATES
   const [hasMore, setHasMore] = useState(true);
   const[loadingMore, setLoadingMore] = useState(false);
 
@@ -506,21 +510,21 @@ export default function ChatThreadPage() {
   const headerRef = useRef<HTMLDivElement>(null);
   const[keyboardHeight, setKeyboardHeight] = useState(0);
   const [headerTop, setHeaderTop] = useState(0);
-  const [reactions, setReactions] = useState<Reaction[]>([]);
+  const[reactions, setReactions] = useState<Reaction[]>([]);
   const[text, setText] = useState("");
   const [otherUserId, setOtherUserId] = useState<string|null>(null);
-  const [sending, setSending] = useState(false);
+  const[sending, setSending] = useState(false);
   const[showEmoji, setShowEmoji] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
-  const [showUnmatchModal, setShowUnmatchModal] = useState(false);
+  const[showUnmatchModal, setShowUnmatchModal] = useState(false);
   const[showAttachSheet, setShowAttachSheet] = useState(false);
   const [reactionMsgId, setReactionMsgId] = useState<string|null>(null);
   const [replyTo, setReplyTo] = useState<MsgRow|null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const[recording, setRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob|null>(null);
-  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string|null>(null);
-  const [recordTime, setRecordTime] = useState(0);
+  const[audioPreviewUrl, setAudioPreviewUrl] = useState<string|null>(null);
+  const[recordTime, setRecordTime] = useState(0);
   const[uploadingVoice, setUploadingVoice] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder|null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -536,8 +540,8 @@ export default function ChatThreadPage() {
   const msgReactionIds = useMemo(() => new Set(reactions.map(r => r.message_id)), [reactions]);
   const bgStyle = useMemo(() => ({ background: chatBg || "#111111" }),[chatBg]);
 
-  // Touch Tracker Ref for precision
-  const touchState = useRef({ id: null as string | null, startX: 0, startY: 0, timer: null as any, isLong: false });
+  // დამატებულია isSwipe მდგომარეობა
+  const touchState = useRef({ id: null as string | null, startX: 0, startY: 0, timer: null as any, isLong: false, isSwipe: false });
 
   useEffect(() => { if (ctxAnonId && !myAnonId) setMyAnonId(ctxAnonId); },[ctxAnonId]);
   useEffect(() => { return () => { setReactionMsgId(null); setShowTimeFor(null); }; },[]);
@@ -665,7 +669,6 @@ export default function ChatThreadPage() {
     })();
   },[matchId, router, markRead, markDelivered, ctxAnonId]);
 
-  // PAGINATION SCROLL HANDLER
   const handleScroll = async (e: any) => {
     if (e.target.scrollTop < 100) {
       if (hasMore && !loadingMore && msgs.length > 0) {
@@ -915,7 +918,6 @@ export default function ChatThreadPage() {
   const effectiveAnonId = myAnonId ?? myAnonIdRef.current;
   const otherName = otherProfile?.nickname ?? otherProfile?.first_name ?? "...";
 
-  // Visible Messages (Filtered for search)
   const visibleMsgs = useMemo(() => {
     if (!searchQuery.trim()) return msgs;
     const lowerQ = searchQuery.toLowerCase();
@@ -963,7 +965,6 @@ export default function ChatThreadPage() {
       <div className="fixed inset-0 h-[100dvh] flex justify-center select-none" style={{ ...bgStyle, willChange: "auto", WebkitTouchCallout: "none" }}>
         <div className="w-full max-w-lg flex flex-col h-full" style={{ background: "transparent" }}>
           
-          {/* HEADER (Transparent) */}
           <div ref={headerRef} className="flex items-center gap-3 px-4 py-3 bg-transparent shrink-0"
             style={{ position: "sticky", top: headerTop, zIndex: 50 }}>
             
@@ -990,7 +991,6 @@ export default function ChatThreadPage() {
                   </div>
                 </div>
                 
-                {/* Search Button */}
                 <button onClick={() => setIsSearching(true)}
                   className="w-9 h-9 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white transition shrink-0 text-[16px]">
                   🔍
@@ -1002,7 +1002,6 @@ export default function ChatThreadPage() {
             )}
           </div>
 
-          {/* MESSAGES */}
           <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 scrollbar-hide relative"
             style={{ overscrollBehavior: "none" }}
             onClick={() => { setReactionMsgId(null); setShowTimeFor(null); }}
@@ -1010,7 +1009,6 @@ export default function ChatThreadPage() {
             
             <div className="flex flex-col justify-end min-h-full pt-24 pb-8 space-y-0.5">
               
-              {/* Pagination Loader Spinner */}
               {loadingMore && (
                 <div className="flex justify-center mb-4">
                   <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
@@ -1037,7 +1035,6 @@ export default function ChatThreadPage() {
                 return (
                   <div key={m.id} className={`flex flex-col w-full ${mine?"items-end":"items-start"} ${prevSame?"mt-0.5":"mt-3"}`}>
                     
-                    {/* Detailed Date Reveal (On Tap) */}
                     {showingTime && (
                        <div className={`text-[11px] font-medium text-white/50 mb-1 mt-1 drop-shadow-sm ${mine ? "mr-1" : "ml-1"}`}>
                           {formatDetailedDate(m.created_at, ka)}
@@ -1047,12 +1044,21 @@ export default function ChatThreadPage() {
                     <div className="relative flex w-full"
                       style={{ justifyContent: mine ? "flex-end" : "flex-start" }}>
 
+                      {/* ემოჯების პანელი (რჩება მესიჯზე) */}
                       {showReactionBar && (
-                        <ReactionBar msg={m} myAnonId={myAnonId} reactions={reactions} mine={mine} ka={ka}
-                          onReact={handleReact} onClose={() => setReactionMsgId(null)} onDelete={() => setMsgToDelete(m.id)} onReply={() => { setReplyTo(m); setTimeout(()=>inputRef.current?.focus(), 50); }} />
+                        <EmojiPopup msg={m} myAnonId={myAnonId} reactions={reactions} mine={mine}
+                          onReact={handleReact} onClose={() => setReactionMsgId(null)} />
                       )}
 
-                      <div className={`msg-box relative flex flex-col cursor-pointer max-w-[75vw] sm:max-w-[320px]`}
+                      <div className={`msg-box relative flex flex-col cursor-pointer max-w-[75vw] sm:max-w-[320px] select-none ${showReactionBar ? 'z-[60] scale-[1.02] transition-transform' : 'z-10'}`}
+                           onClick={(e) => {
+                             e.stopPropagation();
+                             // თუ თითი არ გაუსრიალებია და არც Long press ყოფილა, მაშინ ვაჩვენებთ თარიღს (Tap)
+                             if (!touchState.current.isLong && !touchState.current.isSwipe) {
+                               setShowTimeFor(prev => prev === m.id ? null : m.id);
+                               setReactionMsgId(null);
+                             }
+                           }}
                            onTouchStart={e => {
                              if (touchState.current.timer) clearTimeout(touchState.current.timer);
                              touchState.current = {
@@ -1060,21 +1066,22 @@ export default function ChatThreadPage() {
                                startX: e.touches[0].clientX,
                                startY: e.touches[0].clientY,
                                isLong: false,
+                               isSwipe: false,
                                timer: setTimeout(() => {
                                  touchState.current.isLong = true;
                                  setReactionMsgId(m.id);
                                  setShowTimeFor(null);
                                  if (navigator.vibrate) navigator.vibrate(50);
-                               }, 600) // ზუსტად 600ms (1 წამზე ნაკლები) ლოდინი სწრაფი ეფექტისთვის
+                               }, 400) // 400ms უფრო სწრაფი რეაგირებისთვის Long Press-ზე
                              };
                            }}
                            onTouchMove={e => {
                              if (touchState.current.id !== m.id) return;
-                             if (touchState.current.timer) {
-                               const dx = Math.abs(e.touches[0].clientX - touchState.current.startX);
-                               const dy = Math.abs(e.touches[0].clientY - touchState.current.startY);
-                               // თუ თითი გაანძრია 15px-ზე მეტით, ვაუქმებთ Long Press-ს
-                               if (dx > 15 || dy > 15) {
+                             const dx = Math.abs(e.touches[0].clientX - touchState.current.startX);
+                             const dy = Math.abs(e.touches[0].clientY - touchState.current.startY);
+                             if (dx > 10 || dy > 10) {
+                               touchState.current.isSwipe = true;
+                               if (touchState.current.timer) {
                                  clearTimeout(touchState.current.timer);
                                  touchState.current.timer = null;
                                }
@@ -1089,31 +1096,26 @@ export default function ChatThreadPage() {
                              if (!touchState.current.isLong) {
                                const dx = e.changedTouches[0].clientX - touchState.current.startX;
                                const dy = Math.abs(e.changedTouches[0].clientY - touchState.current.startY);
-                               
-                               // თუ მარცხნივ/მარჯვნივ გაასრიალა ძალიან ძლიერად (90px) დიაგონალის გარეშე
-                               if (Math.abs(dx) > 90 && dy < 40) {
+                               // Swipe to reply
+                               if (Math.abs(dx) > 60 && dy < 40) {
                                   setReplyTo(m); 
                                   setTimeout(() => inputRef.current?.focus(), 50);
                                } 
-                               // თუ საერთოდ არ გაუსრიალებია, ესეიგი უბრალოდ თითი დააჭირა ტექსტს (Tap)
-                               else if (Math.abs(dx) < 10 && dy < 10) {
-                                  setShowTimeFor(prev => prev === m.id ? null : m.id);
-                                  setReactionMsgId(null);
-                               }
                              }
-                             touchState.current.id = null;
+                             // reset touch state after a small delay
+                             setTimeout(() => { touchState.current.id = null; }, 50);
                            }}>
                         
                         <div>
                           {m.reply_preview && (
-                            <div className={`mb-1 px-3 py-1.5 rounded-xl text-xs border-l-2 bg-black/40 backdrop-blur-sm truncate text-white/80 ${mine?"ml-auto":""}`}
+                            <div className={`mb-1 px-3 py-1.5 rounded-xl text-xs border-l-2 bg-black/40 backdrop-blur-sm truncate text-white/80 select-none ${mine?"ml-auto":""}`}
                               style={{ borderColor: chatTheme, maxWidth: "100%" }}>
                               ↩ {m.reply_preview}
                             </div>
                           )}
 
                           {m.type === "voice" ? (
-                            <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl w-full ${mine?"rounded-tr-sm":"bg-zinc-800/90 backdrop-blur-md rounded-tl-sm"} ${isTemp?"opacity-60":""}`}
+                            <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl w-full select-none ${mine?"rounded-tr-sm":"bg-zinc-800/90 backdrop-blur-md rounded-tl-sm"} ${isTemp?"opacity-60":""}`}
                               style={mine ? { background: chatTheme } : {}}>
                               <span className="text-lg shrink-0">🎤</span>
                               <audio controls src={m.content} className="h-8 w-[140px] shrink-0" preload="metadata" />
@@ -1123,7 +1125,7 @@ export default function ChatThreadPage() {
                               </div>
                             </div>
                           ) : m.type === "image" ? (
-                            <div className={`rounded-2xl overflow-hidden w-full ${mine?"rounded-tr-sm":"rounded-tl-sm"} ${isTemp?"opacity-60":""}`}>
+                            <div className={`rounded-2xl overflow-hidden w-full select-none ${mine?"rounded-tr-sm":"rounded-tl-sm"} ${isTemp?"opacity-60":""}`}>
                               <img src={m.content} className="max-w-full max-h-[280px] object-cover block" alt=""
                                 onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
                               {mine && (
@@ -1133,7 +1135,7 @@ export default function ChatThreadPage() {
                               )}
                             </div>
                           ) : (
-                            <div className={`px-4 py-2.5 text-[15px] leading-relaxed break-words shadow-sm ${mine?"rounded-2xl rounded-tr-sm text-white":"bg-zinc-800/95 backdrop-blur-md rounded-2xl rounded-tl-sm text-white"} ${isTemp?"opacity-60":""}`}
+                            <div className={`px-4 py-2.5 text-[15px] leading-relaxed break-words shadow-sm select-none ${mine?"rounded-2xl rounded-tr-sm text-white":"bg-zinc-800/95 backdrop-blur-md rounded-2xl rounded-tl-sm text-white"} ${isTemp?"opacity-60":""}`}
                               style={mine ? { background: chatTheme } : {}}>
                               <span>{m.content}</span>
                               <span className="inline-flex items-center gap-0.5 ml-2 float-right mt-1.5">
@@ -1145,7 +1147,7 @@ export default function ChatThreadPage() {
                         </div>
 
                         {msgReactionIds.has(m.id) && (
-                          <div className={`flex mt-[-10px] z-10 ${mine ? "mr-1 justify-end" : "ml-auto mr-[-10px]"}`}>
+                          <div className={`flex mt-[-10px] z-10 select-none ${mine ? "mr-1 justify-end" : "ml-auto mr-[-10px]"}`}>
                             <ReactionsDisplay msgId={m.id} reactions={reactions} myAnonId={effectiveAnonId ?? ""} onReact={handleReact} theme={chatTheme} />
                           </div>
                         )}
@@ -1158,7 +1160,6 @@ export default function ChatThreadPage() {
             </div>
           </div>
 
-          {/* INPUT BAR */}
           <div className="shrink-0 bg-transparent z-10 px-3 pt-2"
             style={{ paddingBottom: keyboardHeight > 0 ? `${keyboardHeight + 8}px` : "calc(env(safe-area-inset-bottom, 0px) + 8px)" }}>
 
@@ -1237,9 +1238,41 @@ export default function ChatThreadPage() {
           </div>
         </div>
 
-        {/* MODALS */}
+        {/* MODALS & OVERLAYS */}
+        
+        {/* Long Press Background Overlay & Bottom Menu */}
+        {reactionMsgId && (
+          <>
+            <div className="fixed inset-0 z-[55] bg-black/50 backdrop-blur-[2px] transition-all" onClick={() => setReactionMsgId(null)} />
+            {msgs.find(m => m.id === reactionMsgId) && (
+              <BottomActionMenu
+                msg={msgs.find(m => m.id === reactionMsgId)!}
+                mine={msgs.find(m => m.id === reactionMsgId)?.sender_anon === myAnonId}
+                ka={ka}
+                onClose={() => setReactionMsgId(null)}
+                onReply={() => {
+                  setReplyTo(msgs.find(m => m.id === reactionMsgId)!);
+                  setReactionMsgId(null);
+                  setTimeout(()=>inputRef.current?.focus(), 50);
+                }}
+                onCopy={() => {
+                  const selectedMsg = msgs.find(m => m.id === reactionMsgId);
+                  if (selectedMsg?.type === "text") {
+                    navigator.clipboard.writeText(selectedMsg.content).catch(()=>{});
+                  }
+                  setReactionMsgId(null);
+                }}
+                onDelete={() => {
+                  setMsgToDelete(reactionMsgId);
+                  setReactionMsgId(null);
+                }}
+              />
+            )}
+          </>
+        )}
+
         {imagePreview && (
-          <div className="fixed inset-0 z-50 bg-black flex flex-col">
+          <div className="fixed inset-0 z-[70] bg-black flex flex-col">
             <div className="flex items-center justify-between px-4 py-3" style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 12px)" }}>
               <button onClick={() => setImagePreview(null)} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white text-lg">✕</button>
               <button onClick={async () => { const f = imagePreview.file; setImagePreview(null); await uploadImage(f); }} disabled={uploadingImg}
@@ -1272,10 +1305,6 @@ export default function ChatThreadPage() {
 
         {msgToDelete && (
           <DeleteMessageModal ka={ka} onClose={() => setMsgToDelete(null)} onConfirm={confirmDeleteMessage} />
-        )}
-
-        {reactionMsgId && (
-          <div className="fixed inset-0 z-30" onClick={() => setReactionMsgId(null)} />
         )}
       </div>
     </>
