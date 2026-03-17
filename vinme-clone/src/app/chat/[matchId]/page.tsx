@@ -478,8 +478,42 @@ export default function ChatThreadPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const[showTimeFor, setShowTimeFor] = useState<string | null>(null);
   
-  const [hasMore, setHasMore] = useState(true);
+const [hasMore, setHasMore] = useState(true);
   const[loadingMore, setLoadingMore] = useState(false);
+
+
+  const hasOverlay = isSearching  || !!viewingImage  || showThemeModal ||  !!msgToDelete;
+
+
+    // 👇 👇 👇 აქედან იწყება Swipe Back-ის კოდი 
+
+  useEffect(() => {
+    if (hasOverlay) {
+      window.history.pushState(null, "", window.location.href);
+    }
+  }, [hasOverlay]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (hasOverlay) {
+        setIsSearching(false);
+        setShowEmoji(false);
+        setViewingImage(null);
+        setReactionMsgId(null);
+        setShowMenu(false);
+        setShowAttachSheet(false);
+        setShowThemeModal(false);
+        setShowUnmatchModal(false);
+        setMsgToDelete(null);
+      }
+    };
+    
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [hasOverlay]);
+  // 👆 👆 👆 აქ მთავრდება Swipe Back-ის კოდი
+
+  
 
   useEffect(() => {
     const saved = localStorage.getItem(`chat-theme-${matchId}`);
