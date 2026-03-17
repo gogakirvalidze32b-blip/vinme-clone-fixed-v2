@@ -69,7 +69,7 @@ function ThemeModal({ current, currentBg, onClose, onSelect }: {
   const [custom, setCustom] = useState(current);
   const [tab, setTab] = useState<"color" | "bg">("color");
 
-  const themes =[
+  const themes = [
     { color: "#7C3AED", label: "Purple" },
     { color: "#EC4899", label: "Pink" },
     { color: "#3B82F6", label: "Blue" },
@@ -84,7 +84,7 @@ function ThemeModal({ current, currentBg, onClose, onSelect }: {
     { color: "#84CC16", label: "Lime" },
   ];
 
-  const backgrounds =[
+  const backgrounds = [
     { label: "შავი", bg: "" },
     { label: "ღამე", bg: "linear-gradient(160deg, #0a0a0a 0%, #1a1a2e 100%)" },
     { label: "ოკეანე", bg: "linear-gradient(160deg, #0f0c29, #302b63, #24243e)" },
@@ -108,6 +108,7 @@ function ThemeModal({ current, currentBg, onClose, onSelect }: {
           <button onClick={onClose} className="text-white/40 hover:text-white text-xl">✕</button>
         </div>
 
+        {/* TABS */}
         <div className="flex rounded-full bg-white/8 p-0.5 mb-4">
           <button onClick={() => setTab("color")}
             className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${tab === "color" ? "bg-white text-black" : "text-white/50"}`}>
@@ -164,18 +165,18 @@ function ThemeModal({ current, currentBg, onClose, onSelect }: {
             ))}
           </div>
         )}
+
         <div className="h-4" />
       </div>
     </div>
   );
 }
 
-function ReactionBar({ msgId, myAnonId, reactions, onReact, onClose, mine, onDelete }: {
+function ReactionBar({ msgId, myAnonId, reactions, onReact, onClose, mine }: {
   msgId: string; myAnonId: string; reactions: Reaction[];
   onReact: (msgId: string, emoji: string) => void; onClose: () => void; mine: boolean;
-  onDelete: (msgId: string) => void;
 }) {
-  const emojis =["❤️", "😂", "😮", "😢", "😡", "👍"];
+  const emojis = ["❤️", "😂", "😮", "😢", "😡", "👍"];
   return (
     <div className={`absolute bottom-full mb-2 z-50 flex items-center gap-1 bg-zinc-800 rounded-full px-3 py-2 shadow-2xl ring-1 ring-white/10 ${mine ? "right-0" : "left-0"}`}
       onClick={e => e.stopPropagation()}>
@@ -189,17 +190,6 @@ function ReactionBar({ msgId, myAnonId, reactions, onReact, onClose, mine, onDel
           </button>
         );
       })}
-      
-      {mine && (
-        <>
-          <div className="w-px h-5 bg-white/20 mx-1" />
-          <button onClick={() => { onDelete(msgId); onClose(); }} 
-            className="text-xl transition active:scale-75 hover:scale-125 opacity-80 ml-1 hover:text-red-400"
-            style={{ lineHeight: 1 }}>
-            🗑️
-          </button>
-        </>
-      )}
     </div>
   );
 }
@@ -233,6 +223,56 @@ function ReactionsDisplay({ msgId, reactions, myAnonId, onReact, theme }: {
   );
 }
 
+// ახალი: Action Menu (Reply / Copy / Unsend)
+function ActionMenu({ msg, mine, theme, onReply, onCopy, onUnsend, onClose }: {
+  msg: MsgRow; mine: boolean; theme: string;
+  onReply: () => void; onCopy: () => void; onUnsend: () => void; onClose: () => void;
+}) {
+  return (
+    <div
+      className={`absolute top-full mt-1 z-50 bg-zinc-800 rounded-2xl shadow-2xl ring-1 ring-white/10 overflow-hidden ${mine ? "right-0" : "left-0"}`}
+      style={{ minWidth: 160 }}
+      onClick={e => e.stopPropagation()}>
+      <button onClick={() => { onReply(); onClose(); }}
+        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-white/8 transition active:scale-95">
+        <span>↩</span> Reply
+      </button>
+      {msg.type === "text" && (
+        <button onClick={() => { onCopy(); onClose(); }}
+          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-white/8 transition border-t border-white/5 active:scale-95">
+          <span>📋</span> Copy
+        </button>
+      )}
+      <button onClick={() => { onUnsend(); }}
+        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:bg-white/8 transition border-t border-white/5 active:scale-95">
+        <span>🗑</span> Unsend
+      </button>
+    </div>
+  );
+}
+
+// ახალი: Unsend submenu
+function UnsendMenu({ mine, onForYou, onForEveryone, onClose }: {
+  mine: boolean; onForYou: () => void; onForEveryone: () => void; onClose: () => void;
+}) {
+  return (
+    <div
+      className={`absolute top-full mt-1 z-50 bg-zinc-800 rounded-2xl shadow-2xl ring-1 ring-white/10 overflow-hidden ${mine ? "right-0" : "left-0"}`}
+      style={{ minWidth: 180 }}
+      onClick={e => e.stopPropagation()}>
+      <div className="px-4 py-2 text-xs text-white/40 border-b border-white/5">Unsend</div>
+      <button onClick={() => { onForYou(); onClose(); }}
+        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-white/8 transition active:scale-95">
+        <span>👤</span> For You
+      </button>
+      <button onClick={() => { onForEveryone(); onClose(); }}
+        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:bg-white/8 transition border-t border-white/5 active:scale-95">
+        <span>🗑</span> For Everyone
+      </button>
+    </div>
+  );
+}
+
 function UnmatchModal({ onClose, onConfirm, ka }: {
   onClose: () => void; onConfirm: (reason: string) => void; ka: boolean;
 }) {
@@ -248,7 +288,7 @@ function UnmatchModal({ onClose, onConfirm, ka }: {
     return new Set(words.map(w => w.toLowerCase())).size >= 2;
   }
   const canConfirm = selected !== null || isRealText(feedback);
-  const reasons =[
+  const reasons = [
     ka ? "არ ვართ თავსებადი" : "Not compatible",
     ka ? "შეურაცხმყოფელი ქცევა" : "Offensive behavior",
     ka ? "სპამი ან ყალბი პროფილი" : "Spam or fake profile",
@@ -274,6 +314,9 @@ function UnmatchModal({ onClose, onConfirm, ka }: {
             placeholder={ka ? "ან დაწერე უკუკავშირი (მინ. 10 სიმბოლო)..." : "Or write feedback (min. 10 chars)..."}
             rows={3}
             className="w-full rounded-2xl bg-white/8 border border-white/10 px-4 py-3 text-sm text-white placeholder-white/30 outline-none resize-none focus:border-white/30" />
+          {feedback.length >= 3 && !isRealText(feedback) && !selected && (
+            <p className="text-xs text-red-400 px-1">{ka ? "გთხოვ ნამდვილი ტექსტი დაწერო" : "Please write meaningful feedback"}</p>
+          )}
         </div>
         <div className="px-4 pb-8 pt-2 flex gap-3">
           <button onClick={onClose} className="flex-1 rounded-2xl bg-white/8 py-3.5 text-sm font-semibold text-white/70">
@@ -398,10 +441,10 @@ export default function ChatThreadPage() {
   const ka = lang !== "en";
   const { anonId: ctxAnonId } = useUser();
 
-  const[matchCreatedAt, setMatchCreatedAt] = useState<string|null>(null);
-  const[chatTheme, setChatTheme] = useState("#7C3AED");
+  const [matchCreatedAt, setMatchCreatedAt] = useState<string|null>(null);
+  const [chatTheme, setChatTheme] = useState("#7C3AED");
   const [chatBg, setChatBg] = useState("");  
-  const[showThemeModal, setShowThemeModal] = useState(false);
+  const [showThemeModal, setShowThemeModal] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem(`chat-theme-${matchId}`);
@@ -410,7 +453,7 @@ export default function ChatThreadPage() {
       setChatTheme(color);
       setChatBg(bg);
     }
-  },[matchId]);
+  }, [matchId]);
 
   const applyTheme = useCallback((color: string, bg: string) => {
     setChatTheme(color);
@@ -423,31 +466,37 @@ export default function ChatThreadPage() {
   const swipeStartX = useRef<number>(0);
   const swipeStartY = useRef<number>(0);
   const headerRef = useRef<HTMLDivElement>(null);
-  const[keyboardHeight, setKeyboardHeight] = useState(0);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [headerTop, setHeaderTop] = useState(0);
   const [msgs, setMsgs] = useState<MsgRow[]>([]);
-  const[reactions, setReactions] = useState<Reaction[]>([]);
+  const [reactions, setReactions] = useState<Reaction[]>([]);
   const [text, setText] = useState("");
-  const[myAnonId, setMyAnonId] = useState<string|null>(null);
-  const[myUserId, setMyUserId] = useState<string|null>(null);
+  const [myAnonId, setMyAnonId] = useState<string|null>(null);
+  const [myUserId, setMyUserId] = useState<string|null>(null);
   const [otherProfile, setOtherProfile] = useState<any>(null);
-  const[otherUserId, setOtherUserId] = useState<string|null>(null);
+  const [otherUserId, setOtherUserId] = useState<string|null>(null);
   const [sending, setSending] = useState(false);
-  const[showEmoji, setShowEmoji] = useState(false);
-  const[isLoaded, setIsLoaded] = useState(false);
+  const [showEmoji, setShowEmoji] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
-  const[showUnmatchModal, setShowUnmatchModal] = useState(false);
-  const[showAttachSheet, setShowAttachSheet] = useState(false);
+  const [showUnmatchModal, setShowUnmatchModal] = useState(false);
+  const [showAttachSheet, setShowAttachSheet] = useState(false);
   const [reactionMsgId, setReactionMsgId] = useState<string|null>(null);
-  const[selectedMsgId, setSelectedMsgId] = useState<string|null>(null);
-  const[replyTo, setReplyTo] = useState<MsgRow|null>(null);
-  const[hoveredMsgId, setHoveredMsgId] = useState<string|null>(null);
+  const [selectedMsgId, setSelectedMsgId] = useState<string|null>(null);
+  // ახალი state-ები
+  const [actionMenuMsgId, setActionMenuMsgId] = useState<string|null>(null);
+  const [unsendMenuMsgId, setUnsendMenuMsgId] = useState<string|null>(null);
+  const [fullscreenImg, setFullscreenImg] = useState<string|null>(null);
+  const pointerDownTime = useRef<number>(0);
+  const longPressTimer = useRef<NodeJS.Timeout|null>(null);
+  const [replyTo, setReplyTo] = useState<MsgRow|null>(null);
+  const [hoveredMsgId, setHoveredMsgId] = useState<string|null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const[recording, setRecording] = useState(false);
-  const[audioBlob, setAudioBlob] = useState<Blob|null>(null);
-  const[audioPreviewUrl, setAudioPreviewUrl] = useState<string|null>(null);
+  const [recording, setRecording] = useState(false);
+  const [audioBlob, setAudioBlob] = useState<Blob|null>(null);
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string|null>(null);
   const [recordTime, setRecordTime] = useState(0);
-  const[uploadingVoice, setUploadingVoice] = useState(false);
+  const [uploadingVoice, setUploadingVoice] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder|null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout|null>(null);
@@ -460,10 +509,13 @@ export default function ChatThreadPage() {
   const [uploadingImg, setUploadingImg] = useState(false);
   const [imagePreview, setImagePreview] = useState<{file: File, url: string} | null>(null);
   const msgReactionIds = useMemo(() => new Set(reactions.map(r => r.message_id)), [reactions]);
-  const bgStyle = useMemo(() => ({ background: chatBg || "#111111" }),[chatBg]);
+  const bgStyle = useMemo(() => ({ background: chatBg || "#111111" }), [chatBg]);
+
+  // ფონის long press timer (ცალკე, message-ის long press-ისგან განცალკევებული)
+  const bgLongPressTimer = useRef<NodeJS.Timeout|null>(null);
 
   useEffect(() => { if (ctxAnonId && !myAnonId) setMyAnonId(ctxAnonId); }, [ctxAnonId]);
-  useEffect(() => { return () => { setReactionMsgId(null); setSelectedMsgId(null); }; },[]);
+  useEffect(() => { return () => { setReactionMsgId(null); setSelectedMsgId(null); setActionMenuMsgId(null); setUnsendMenuMsgId(null); }; }, []);
   useEffect(() => { if (headerRef.current) setHeaderTop(headerRef.current.getBoundingClientRect().top); }, [isLoaded]);
 
   useEffect(() => {
@@ -479,7 +531,7 @@ export default function ChatThreadPage() {
     }
     vv.addEventListener("resize", onResize);
     return () => vv.removeEventListener("resize", onResize);
-  },[]);
+  }, []);
 
   useEffect(() => { if (keyboardHeight > 0) bottomRef.current?.scrollIntoView({ behavior: "instant" }); }, [keyboardHeight]);
 
@@ -507,7 +559,7 @@ export default function ChatThreadPage() {
     window.addEventListener("focusin", onFocus);
     window.addEventListener("focusout", onBlur);
     return () => { window.removeEventListener("focusin", onFocus); window.removeEventListener("focusout", onBlur); };
-  },[]);
+  }, []);
 
   const isOnline = useMemo(() => {
     if (!otherProfile?.last_seen) return false;
@@ -539,7 +591,7 @@ export default function ChatThreadPage() {
         setOtherProfile(cachedProfile);
         setMyAnonId(cachedAnonId);
         setMyUserId(cachedUserId);
-        setIsLoaded(true); 
+        setIsLoaded(true);
       } catch(e) {}
     }
 
@@ -569,7 +621,7 @@ export default function ChatThreadPage() {
       const msgsData = msgsRes.data ??[];
       const msgIds = msgsData.map((m: any) => m.id);
 
-      const[profileRes, reactionsRes] = await Promise.all([
+      const [profileRes, reactionsRes] = await Promise.all([
         supabase.from("profiles").select("user_id,nickname,first_name,photo1_url,last_seen").eq("user_id", otherId).maybeSingle(),
         msgIds.length > 0
           ? supabase.from("message_reactions").select("*").in("message_id", msgIds)
@@ -606,7 +658,7 @@ export default function ChatThreadPage() {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `match_id=eq.${matchId}` }, (payload) => {
         const row = payload.new as MsgRow;
         if (row.match_id !== matchId) return;
-        setMsgs(prev => prev.some(m => m.id === row.id) ? prev :[...prev, row]);
+        setMsgs(prev => prev.some(m => m.id === row.id) ? prev : [...prev, row]);
         setMyAnonId(anon => {
           if (anon && row.sender_anon !== anon) setMyUserId(uid => { markRead(anon, uid); return uid; });
           return anon;
@@ -615,6 +667,10 @@ export default function ChatThreadPage() {
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages", filter: `match_id=eq.${matchId}` }, (payload) => {
         const updated = payload.new as MsgRow;
         setMsgs(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m));
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages", filter: `match_id=eq.${matchId}` }, (payload) => {
+        const deleted = payload.old as { id: string };
+        if (deleted?.id) setMsgs(prev => prev.filter(m => m.id !== deleted.id));
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, (payload) => {
         if (payload.eventType === "INSERT") {
@@ -641,7 +697,7 @@ export default function ChatThreadPage() {
   useEffect(() => {
     if (!isLoaded) return;
     bottomRef.current?.scrollIntoView({ behavior: "instant" });
-  },[msgs.length, isLoaded]);
+  }, [msgs.length, isLoaded]);
 
   async function handleReact(msgId: string, emoji: string) {
     if (!myAnonId) return;
@@ -657,7 +713,7 @@ export default function ChatThreadPage() {
       }
     } else {
       const tempId = `temp-r-${Date.now()}`;
-      setReactions(prev =>[...prev, { id: tempId, message_id: msgId, sender_anon: myAnonId, emoji }]);
+      setReactions(prev => [...prev, { id: tempId, message_id: msgId, sender_anon: myAnonId, emoji }]);
       const { data } = await supabase.from("message_reactions").insert({ message_id: msgId, sender_anon: myAnonId, emoji }).select().single();
       if (data) {
         setReactions(prev => {
@@ -669,10 +725,38 @@ export default function ChatThreadPage() {
     }
   }
 
-  async function deleteMessage(msgId: string) {
+  // long press → reaction + action menu
+  function onMsgPointerDown(msgId: string, mine: boolean) {
+    pointerDownTime.current = Date.now();
+    longPressTimer.current = setTimeout(() => {
+      setReactionMsgId(msgId);
+      setActionMenuMsgId(msgId);
+      setUnsendMenuMsgId(null);
+    }, 500);
+  }
+
+  function onMsgPointerUp() {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+  }
+
+  function closeAllMenus() {
+    setReactionMsgId(null);
+    setSelectedMsgId(null);
+    setActionMenuMsgId(null);
+    setUnsendMenuMsgId(null);
+  }
+
+  // Unsend for everyone — წაშლა DB-დანაც
+  async function unsendForEveryone(msgId: string) {
     await supabase.from("messages").delete().eq("id", msgId);
     setMsgs(prev => prev.filter(m => m.id !== msgId));
-    setSelectedMsgId(null); setReactionMsgId(null);
+    closeAllMenus();
+  }
+
+  // Unsend for you — მხოლოდ ლოკალურად
+  function unsendForYou(msgId: string) {
+    setMsgs(prev => prev.filter(m => m.id !== msgId));
+    closeAllMenus();
   }
 
   async function uploadImage(file: File) {
@@ -685,7 +769,7 @@ export default function ChatThreadPage() {
       if (upErr) throw upErr;
       const { data: urlData } = supabase.storage.from("photos").getPublicUrl(path);
       const tempId = `tempi-${Date.now()}`;
-      setMsgs(prev =>[...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: urlData.publicUrl, created_at: new Date().toISOString(), read_at: null, type: "image" }]);
+      setMsgs(prev => [...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: urlData.publicUrl, created_at: new Date().toISOString(), read_at: null, type: "image" }]);
       const { data } = await supabase.from("messages").insert({ match_id: matchId, sender_anon: myAnonId, content: urlData.publicUrl, type: "image" }).select().single();
       if (data) {
         setMsgs(prev => {
@@ -709,7 +793,7 @@ export default function ChatThreadPage() {
     const replyPreview = replyTo ? (replyTo.type==="voice"?"🎤 Voice":replyTo.type==="image"?"📷 Photo":replyTo.content.slice(0,60)) : null;
     const replyId = replyTo?.id ?? null;
     setReplyTo(null);
-    setMsgs(prev =>[...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: t2, created_at: new Date().toISOString(), read_at: null, delivered_at: null, type: "text", reply_to_id: replyId, reply_preview: replyPreview }]);
+    setMsgs(prev => [...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: t2, created_at: new Date().toISOString(), read_at: null, delivered_at: null, type: "text", reply_to_id: replyId, reply_preview: replyPreview }]);
     try {
       const { data } = await supabase.from("messages").insert({ match_id: matchId, sender_anon: myAnonId, content: t2, type: "text", reply_to_id: replyId, reply_preview: replyPreview }).select().single();
       if (data) {
@@ -735,7 +819,7 @@ export default function ChatThreadPage() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder; chunksRef.current =[];
+      mediaRecorderRef.current = recorder; chunksRef.current = [];
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       recorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
@@ -748,7 +832,7 @@ export default function ChatThreadPage() {
     } catch { alert(ka ? "მიკროფონი მიუწვდომელია" : "Microphone unavailable"); }
   }
   function stopRecording() { mediaRecorderRef.current?.stop(); setRecording(false); if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } }
-  function cancelRecording() { stopRecording(); setAudioBlob(null); if (audioPreviewUrl) { URL.revokeObjectURL(audioPreviewUrl); setAudioPreviewUrl(null); } setRecordTime(0); chunksRef.current =[]; }
+  function cancelRecording() { stopRecording(); setAudioBlob(null); if (audioPreviewUrl) { URL.revokeObjectURL(audioPreviewUrl); setAudioPreviewUrl(null); } setRecordTime(0); chunksRef.current = []; }
 
   async function sendVoice() {
     if (!audioBlob || !myAnonId || uploadingVoice) return;
@@ -758,13 +842,13 @@ export default function ChatThreadPage() {
     if (error) { console.error(error); setUploadingVoice(false); return; }
     const { data: urlData } = supabase.storage.from("voices").getPublicUrl(fileName);
     const tempId = `tempv-${Date.now()}`;
-    setMsgs(prev =>[...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: urlData.publicUrl, created_at: new Date().toISOString(), read_at: null, type: "voice" }]);
+    setMsgs(prev => [...prev, { id: tempId, match_id: matchId, sender_anon: myAnonId, content: urlData.publicUrl, created_at: new Date().toISOString(), read_at: null, type: "voice" }]);
     const { data } = await supabase.from("messages").insert({ match_id: matchId, sender_anon: myAnonId, content: urlData.publicUrl, type: "voice" }).select().single();
     if (data) {
       setMsgs(prev => {
         const withoutTemp = prev.filter(m => m.id !== tempId);
         if (withoutTemp.some(m => m.id === data.id)) return withoutTemp;
-        return[...withoutTemp, data as MsgRow];
+        return [...withoutTemp, data as MsgRow];
       });
     }
     await supabase.from("matches").update({ has_unread: true }).eq("id", matchId);
@@ -799,8 +883,9 @@ export default function ChatThreadPage() {
   const hasFocusOrText = text.trim().length > 0;
 
   if (!isLoaded) return (
-    <div className="fixed inset-0 h-[100dvh] flex justify-center select-none" style={{ ...bgStyle, willChange: "background", WebkitTouchCallout: "none" }}>
-      <div className="w-full max-w-lg flex flex-col h-full bg-[#111]">
+    <div className="fixed inset-0 flex justify-center" 
+      style={{ ...bgStyle, willChange: "background" }}>
+      <div className="w-full max-w-lg flex flex-col bg-[#111]">
         <div className="flex items-center gap-3 px-4 py-3 bg-zinc-900 border-b border-white/10 shrink-0">
           <div className="w-9 h-9 rounded-full bg-white/10 animate-pulse" />
           <div className="flex items-center gap-3 flex-1">
@@ -821,13 +906,14 @@ export default function ChatThreadPage() {
   );
 
   return (
-    <div className="fixed inset-0 h-[100dvh] flex justify-center select-none" style={{ ...bgStyle, willChange: "auto", WebkitTouchCallout: "none" }}>
-      <div className="w-full max-w-lg flex flex-col h-full" style={{ background: "transparent" }}>
-        
+    <div className="fixed inset-0 flex justify-center"
+      style={{ ...bgStyle, willChange: "auto" }}>
+      <div className="w-full max-w-lg flex flex-col" style={{ background: "transparent" }}>
+
         {/* HEADER */}
         <div ref={headerRef} className="flex items-center gap-3 px-4 py-3 bg-slate-900 border-b border-white/8 shrink-0"
           style={{ position: "sticky", top: headerTop, zIndex: 50 }}>
-          <button onClick={() => { setReactionMsgId(null); setSelectedMsgId(null); router.push("/chat"); }}
+          <button onClick={() => { closeAllMenus(); router.push("/chat"); }}
             className="rounded-full bg-white/8 w-9 h-9 flex items-center justify-center text-white shrink-0 hover:bg-white/12 transition">←</button>
           <div className="flex items-center gap-3 flex-1 cursor-pointer"
             onClick={() => otherUserId && router.push(`/profile/${otherUserId}`)}>
@@ -847,14 +933,27 @@ export default function ChatThreadPage() {
 
         {/* MESSAGES */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 scrollbar-hide"
-          style={{ overscrollBehavior: "none" }}
-          onContextMenu={e => e.preventDefault()}
+          style={{ overscrollBehavior: "none", userSelect: "none", WebkitUserSelect: "none" }}
+          onPointerDown={e => {
+            if ((e.target as HTMLElement).closest("[data-msg]")) return;
+            if (e.pointerType === "mouse" && e.button !== 0) return;
+            const startX = e.clientX;
+            const startY = e.clientY;
+            bgLongPressTimer.current = setTimeout(() => setShowThemeModal(true), 600);
+            const onMove = (ev: PointerEvent) => {
+              if (Math.abs(ev.clientX - startX) > 8 || Math.abs(ev.clientY - startY) > 8) {
+                if (bgLongPressTimer.current) { clearTimeout(bgLongPressTimer.current); bgLongPressTimer.current = null; }
+                window.removeEventListener("pointermove", onMove);
+              }
+            };
+            window.addEventListener("pointermove", onMove, { passive: true });
+          }}
+          onPointerUp={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer.current); }}
+          onPointerLeave={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer.current); }}
           onClick={e => {
-            if (!(e.target as Element).closest('.msg-row')) {
-              setShowThemeModal(true);
-            }
+            if ((e.target as HTMLElement).closest("[data-msg]")) return;
+            closeAllMenus();
           }}>
-          
           <div className="flex flex-col justify-end min-h-full space-y-0.5 pb-2">
             {matchCreatedAt && (
               <div className="text-center text-xs text-white/30 py-3">
@@ -871,46 +970,62 @@ export default function ChatThreadPage() {
               const isRead = !!m.read_at;
               const isDelivered = !!m.delivered_at;
               const prevSame = i > 0 && msgs[i-1].sender_anon === m.sender_anon;
-              const isSelected = selectedMsgId === m.id;
               const showReactionBar = reactionMsgId === m.id;
+              const showActionMenu = actionMenuMsgId === m.id;
+              const showUnsendMenu = unsendMenuMsgId === m.id;
               const isHovered = hoveredMsgId === m.id;
 
               return (
-                <div key={m.id} className={`msg-row flex flex-col w-full ${mine?"items-end":"items-start"} ${prevSame?"mt-0.5":"mt-3"}`}>
+                <div key={m.id} data-msg="1" className={`flex flex-col w-full ${mine?"items-end":"items-start"} ${prevSame?"mt-0.5":"mt-3"}`}>
                   <div className="relative flex w-full px-2"
                     style={{ justifyContent: mine ? "flex-end" : "flex-start" }}
                     onMouseEnter={() => setHoveredMsgId(m.id)}
-                    onMouseLeave={() => setHoveredMsgId(null)}>
+                    onMouseLeave={() => setHoveredMsgId(null)}
+                    onPointerDown={e => {
+                      e.stopPropagation(); // ფონის handler-ს ნუ გაეშვება
+                      onMsgPointerDown(m.id, mine);
+                      swipeStartX.current = e.clientX;
+                      swipeStartY.current = e.clientY;
+                    }}
+                    onPointerUp={e => {
+                      onMsgPointerUp();
+                      const dx = e.clientX - swipeStartX.current;
+                      const dy = Math.abs(e.clientY - swipeStartY.current);
+                      if (Math.abs(dx) > 40 && dy < 40) {
+                        setReplyTo(m);
+                        setTimeout(() => inputRef.current?.focus(), 50);
+                      }
+                    }}
+                    onTouchStart={e => {
+                      swipeStartX.current = e.touches[0].clientX;
+                      swipeStartY.current = e.touches[0].clientY;
+                    }}
+                    onTouchEnd={e => {
+                      const dx = e.changedTouches[0].clientX - swipeStartX.current;
+                      const dy = Math.abs(e.changedTouches[0].clientY - swipeStartY.current);
+                      if (Math.abs(dx) > 40 && dy < 40) {
+                        setReplyTo(m);
+                        setTimeout(() => inputRef.current?.focus(), 50);
+                      }
+                    }}
+                    onPointerLeave={onMsgPointerUp}
+                    onContextMenu={e => e.preventDefault()}>
 
                     {isHovered && !showReactionBar && (
                       <div className={`absolute top-1/2 -translate-y-1/2 flex items-center gap-1 z-20 ${mine ? "right-full pr-2" : "left-full pl-2"}`}>
                         <button onClick={e => { e.stopPropagation(); setReplyTo(m); setTimeout(()=>inputRef.current?.focus(), 50); }}
                           className="w-7 h-7 rounded-full bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center text-white/70 hover:text-white transition text-sm">↩</button>
+                        <button onClick={e => { e.stopPropagation(); setReactionMsgId(m.id); setActionMenuMsgId(m.id); }}
+                          className="w-7 h-7 rounded-full bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center transition text-sm">😊</button>
                       </div>
                     )}
 
                     {showReactionBar && (
                       <ReactionBar msgId={m.id} myAnonId={myAnonId} reactions={reactions} mine={mine}
-                        onReact={handleReact} onClose={() => setReactionMsgId(null)} onDelete={deleteMessage} />
+                        onReact={handleReact} onClose={() => setReactionMsgId(null)} />
                     )}
 
-                    <div className="relative flex flex-col cursor-pointer" style={{ maxWidth: "78%" }}
-                         onClick={(e) => {
-                           e.stopPropagation();
-                           setReactionMsgId(m.id);
-                         }}
-                         onTouchStart={e => {
-                           swipeStartX.current = e.touches[0].clientX;
-                           swipeStartY.current = e.touches[0].clientY;
-                         }}
-                         onTouchEnd={e => {
-                           const dx = e.changedTouches[0].clientX - swipeStartX.current;
-                           const dy = Math.abs(e.changedTouches[0].clientY - swipeStartY.current);
-                           if (Math.abs(dx) > 40 && dy < 40) {
-                             setReplyTo(m);
-                             setTimeout(() => inputRef.current?.focus(), 50);
-                           }
-                         }}>
+                    <div className="relative flex flex-col" style={{ maxWidth: "78%" }}>
                       <div>
                         {m.reply_preview && (
                           <div className={`mb-1 px-3 py-1.5 rounded-xl text-xs border-l-2 bg-white/8 max-w-[240px] truncate text-white/60 ${mine?"ml-auto":""}`}
@@ -920,7 +1035,7 @@ export default function ChatThreadPage() {
                         )}
 
                         {m.type === "voice" ? (
-                          <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl max-w-[270px] ${mine?"rounded-tr-sm":"bg-slate-800 rounded-tl-sm"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}
+                          <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl max-w-[270px] ${mine?"rounded-tr-sm":"bg-slate-800 rounded-tl-sm"} ${isTemp?"opacity-60":""}`}
                             style={mine ? { background: chatTheme } : {}}>
                             <span className="text-lg shrink-0">🎤</span>
                             <audio controls src={m.content} className="h-8 max-w-[160px]" preload="metadata" />
@@ -930,7 +1045,17 @@ export default function ChatThreadPage() {
                             </div>
                           </div>
                         ) : m.type === "image" ? (
-                          <div className={`rounded-2xl overflow-hidden max-w-[260px] ${mine?"rounded-tr-sm":"rounded-tl-sm"} ${isTemp?"opacity-60":""}`}>
+                          // ფოტო — short tap → fullscreen, long press → action menu
+                          <div
+                            className={`rounded-2xl overflow-hidden max-w-[260px] ${mine?"rounded-tr-sm":"rounded-tl-sm"} ${isTemp?"opacity-60":""} cursor-pointer`}
+                            onClick={e => {
+                              // short tap (არა long press) → fullscreen
+                              const elapsed = Date.now() - pointerDownTime.current;
+                              if (elapsed < 400 && !showActionMenu) {
+                                e.stopPropagation();
+                                setFullscreenImg(m.content);
+                              }
+                            }}>
                             <img src={m.content} className="max-w-full max-h-[280px] object-cover block" alt=""
                               onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
                             {mine && (
@@ -940,7 +1065,7 @@ export default function ChatThreadPage() {
                             )}
                           </div>
                         ) : (
-                          <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words ${mine?"rounded-2xl rounded-tr-sm":"bg-zinc-800 rounded-2xl rounded-tl-sm"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}
+                          <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words select-none ${mine?"rounded-2xl rounded-tr-sm":"bg-zinc-800 rounded-2xl rounded-tl-sm"} ${isTemp?"opacity-60":""}`}
                             style={mine ? { background: chatTheme } : {}}>
                             <span>{m.content}</span>
                             <span className="inline-flex items-center gap-0.5 ml-2">
@@ -950,6 +1075,29 @@ export default function ChatThreadPage() {
                           </div>
                         )}
                       </div>
+
+                      {/* Action Menu (Reply / Copy / Unsend) */}
+                      {showActionMenu && !showUnsendMenu && (
+                        <ActionMenu
+                          msg={m}
+                          mine={mine}
+                          theme={chatTheme}
+                          onReply={() => { setReplyTo(m); setTimeout(() => inputRef.current?.focus(), 50); }}
+                          onCopy={() => { navigator.clipboard?.writeText(m.content); }}
+                          onUnsend={() => setUnsendMenuMsgId(m.id)}
+                          onClose={closeAllMenus}
+                        />
+                      )}
+
+                      {/* Unsend submenu */}
+                      {showUnsendMenu && (
+                        <UnsendMenu
+                          mine={mine}
+                          onForYou={() => unsendForYou(m.id)}
+                          onForEveryone={() => unsendForEveryone(m.id)}
+                          onClose={closeAllMenus}
+                        />
+                      )}
 
                       {msgReactionIds.has(m.id) && (
                         <div className={`flex mt-[-10px] z-10 ${mine ? "mr-1 justify-end" : "ml-auto mr-[-10px]"}`}>
@@ -966,8 +1114,8 @@ export default function ChatThreadPage() {
         </div>
 
         {/* INPUT BAR */}
-        <div className="shrink-0 bg-slate-900 border-t border-white/8 z-10"
-          style={{ paddingBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : "calc(env(safe-area-inset-bottom, 0px))" }}>
+        <div className="shrink-0 bg-slate-900 border-t border-white/8"
+          style={{ paddingBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : undefined }}>
 
           {showEmoji && (
             <QuickEmojiPicker onPick={e => setText(p => p + e)} onClose={() => setShowEmoji(false)} />
@@ -1014,7 +1162,7 @@ export default function ChatThreadPage() {
             onChange={e => { const f = e.target.files?.[0]; if (f) setImagePreview({ file: f, url: URL.createObjectURL(f) }); e.target.value=""; }} />
 
           {!recording && (
-            <div className="flex items-center gap-1.5 px-3 py-2">
+            <div className="flex items-center gap-1.5 px-3 py-2" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)" }}>
               <button onClick={() => setShowAttachSheet(true)}
                 className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90 text-xl">+</button>
               {!hasFocusOrText && (
@@ -1038,9 +1186,7 @@ export default function ChatThreadPage() {
                   }}
                   autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
                   onKeyDown={e => { if (e.key==="Enter" && !e.shiftKey && !sending) { e.preventDefault(); send(); } }}
-                  placeholder={ka?"მესიჯი...":"Message..."} 
-                  className="bg-transparent outline-none text-white w-full text-[15px] placeholder:text-white/40 select-text"
-                  style={{ WebkitUserSelect: "auto", WebkitTouchCallout: "default" }} />
+                  placeholder={ka?"მესიჯი...":"Message..."} />
               </div>
               {text.trim() ? (
                 <button onClick={send} disabled={sending} onMouseDown={e => e.preventDefault()}
@@ -1064,6 +1210,7 @@ export default function ChatThreadPage() {
         </div>
       </div>
 
+      {/* IMAGE PREVIEW (გასაგზავნი) */}
       {imagePreview && (
         <div className="fixed inset-0 z-50 bg-black flex flex-col">
           <div className="flex items-center justify-between px-4 py-3" style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 12px)" }}>
@@ -1080,6 +1227,17 @@ export default function ChatThreadPage() {
         </div>
       )}
 
+      {/* FULLSCREEN IMAGE VIEWER */}
+      {fullscreenImg && (
+        <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center"
+          onClick={() => setFullscreenImg(null)}>
+          <button className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white text-lg z-10"
+            onClick={() => setFullscreenImg(null)}>✕</button>
+          <img src={fullscreenImg} className="max-w-full max-h-full object-contain" alt=""
+            onClick={e => e.stopPropagation()} />
+        </div>
+      )}
+
       {showMenu && <ChatMenu lang={lang} onClose={() => setShowMenu(false)}
         onViewProfile={() => { setShowMenu(false); otherUserId && router.push(`/profile/${otherUserId}`); }}
         onUnmatch={() => { setShowMenu(false); setShowUnmatchModal(true); }}
@@ -1089,14 +1247,14 @@ export default function ChatThreadPage() {
 
       {showAttachSheet && <AttachSheet lang={lang} onClose={() => setShowAttachSheet(false)}
         onGallery={() => galleryInputRef.current?.click()} onCamera={() => cameraInputRef.current?.click()} />}
-      
+
       {showThemeModal && (
         <ThemeModal current={chatTheme} currentBg={chatBg} onClose={() => setShowThemeModal(false)}
           onSelect={(color, bg) => applyTheme(color, bg)} />
       )}
 
-      {reactionMsgId && (
-        <div className="fixed inset-0 z-30" onClick={() => setReactionMsgId(null)} />
+      {(reactionMsgId || selectedMsgId || actionMenuMsgId || unsendMenuMsgId) && (
+        <div className="fixed inset-0 z-30" onClick={closeAllMenus} />
       )}
     </div>
   );
