@@ -34,16 +34,6 @@ function formatDetailedDate(iso: string, ka: boolean) {
   return `${d.getDate()} ${month} ${d.getFullYear()}, ${hr}:${min}`;
 }
 
-function formatLastSeen(lastSeen: string|null, ka: boolean): string {
-  if (!lastSeen) return ka ? "ოფლაინ" : "Offline";
-  const diff = Date.now() - new Date(lastSeen).getTime();
-  if (diff < 3*60*1000) return ka ? "ონლაინ" : "Online";
-  const mins = Math.floor(diff/60000), hours = Math.floor(diff/3600000), days = Math.floor(diff/86400000);
-  if (mins < 60) return ka ? `${mins} წუთის წინ` : `${mins}m ago`;
-  if (hours < 24) return ka ? `${hours} საათის წინ` : `${hours}h ago`;
-  return ka ? `${days} დღის წინ` : `${days}d ago`;
-}
-
 function Ticks({ isTemp, delivered, read, mine }: { isTemp: boolean; delivered: boolean; read: boolean; mine: boolean }) {
   if (!mine) return null;
   if (isTemp) return (
@@ -143,16 +133,6 @@ function ThemeModal({ current, currentBg, onClose, onSelect, ka }: {
                 </button>
               ))}
             </div>
-            <div className="border-t border-white/8 pt-4">
-              <div className="text-xs text-white/40 mb-2">{ka ? "ხელით შეყვანა" : "Custom Color"}</div>
-              <div className="flex items-center gap-3">
-                <input type="color" value={custom} onChange={e => { setCustom(e.target.value); setSelectedColor(e.target.value); }}
-                  className="w-10 h-10 rounded-xl cursor-pointer bg-transparent border-0 p-0" />
-                <input value={custom} onChange={e => { setCustom(e.target.value); setSelectedColor(e.target.value); }}
-                  className="flex-1 bg-zinc-800 rounded-xl px-3 py-2 text-sm text-white outline-none font-mono"
-                  placeholder="#7C3AED" />
-              </div>
-            </div>
           </>
         )}
 
@@ -190,7 +170,7 @@ function ReactionBar({ msg, myAnonId, reactions, onReact, onClose, mine, onDelet
   onReact: (msgId: string, emoji: string) => void; onClose: () => void; mine: boolean;
   onDelete: (msgId: string) => void; onReply: () => void; ka: boolean;
 }) {
-  const emojis =["❤️", "😂", "😮", "😢", "😡", "👍"];
+  const emojis = ["❤️", "😂", "😮", "😢", "😡", "👍"];
 
   const handleCopy = async () => {
     if (msg.type === "text" && msg.content) {
@@ -292,7 +272,7 @@ function ReactionsDisplay({ msgId, reactions, myAnonId, onReact, theme }: {
 function UnmatchModal({ onClose, onConfirm, ka }: {
   onClose: () => void; onConfirm: (reason: string) => void; ka: boolean;
 }) {
-  const[selected, setSelected] = useState<string|null>(null);
+  const [selected, setSelected] = useState<string|null>(null);
   const [feedback, setFeedback] = useState("");
   function isRealText(text: string): boolean {
     if (text.length < 10) return false;
@@ -455,8 +435,44 @@ export default function ChatThreadPage() {
   const ka = lang !== "en";
   const { anonId: ctxAnonId } = useUser();
 
-  const[matchCreatedAt, setMatchCreatedAt] = useState<string|null>(null);
-  const[chatTheme, setChatTheme] = useState("#7C3AED");
+  // SPEED FIX: Init state instantly from cache to avoid visual delay
+  const [msgs, setMsgs] = useState<MsgRow[]>(() => {
+    if (typeof window !== "undefined") {
+      const c = localStorage.getItem(`chat_cache_${matchId}`);
+      if (c) return JSON.parse(c).cachedMsgs || [];
+    }
+    return[];
+  });
+  const [otherProfile, setOtherProfile] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      const c = localStorage.getItem(`chat_cache_${matchId}`);
+      if (c) return JSON.parse(c).cachedProfile || null;
+    }
+    return null;
+  });
+  const [myAnonId, setMyAnonId] = useState<string|null>(() => {
+    if (typeof window !== "undefined") {
+      const c = localStorage.getItem(`chat_cache_${matchId}`);
+      if (c) return JSON.parse(c).cachedAnonId || null;
+    }
+    return null;
+  });
+  const[myUserId, setMyUserId] = useState<string|null>(() => {
+    if (typeof window !== "undefined") {
+      const c = localStorage.getItem(`chat_cache_${matchId}`);
+      if (c) return JSON.parse(c).cachedUserId || null;
+    }
+    return null;
+  });
+  const[isLoaded, setIsLoaded] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return !!localStorage.getItem(`chat_cache_${matchId}`);
+    }
+    return false;
+  });
+
+  const [matchCreatedAt, setMatchCreatedAt] = useState<string|null>(null);
+  const [chatTheme, setChatTheme] = useState("#7C3AED");
   const[chatBg, setChatBg] = useState("#111111");  
   const[showThemeModal, setShowThemeModal] = useState(false);
   const [msgToDelete, setMsgToDelete] = useState<string | null>(null);
@@ -464,11 +480,11 @@ export default function ChatThreadPage() {
   // SEARCH AND DATE REVEAL STATES
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [showTimeFor, setShowTimeFor] = useState<string | null>(null);
+  const[showTimeFor, setShowTimeFor] = useState<string | null>(null);
   
   // PAGINATION STATES
-  const[hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const[loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem(`chat-theme-${matchId}`);
@@ -489,27 +505,22 @@ export default function ChatThreadPage() {
 
   const headerRef = useRef<HTMLDivElement>(null);
   const[keyboardHeight, setKeyboardHeight] = useState(0);
-  const[headerTop, setHeaderTop] = useState(0);
-  const[msgs, setMsgs] = useState<MsgRow[]>([]);
-  const[reactions, setReactions] = useState<Reaction[]>([]);
+  const [headerTop, setHeaderTop] = useState(0);
+  const [reactions, setReactions] = useState<Reaction[]>([]);
   const[text, setText] = useState("");
-  const[myAnonId, setMyAnonId] = useState<string|null>(null);
-  const[myUserId, setMyUserId] = useState<string|null>(null);
-  const [otherProfile, setOtherProfile] = useState<any>(null);
-  const[otherUserId, setOtherUserId] = useState<string|null>(null);
-  const[sending, setSending] = useState(false);
+  const [otherUserId, setOtherUserId] = useState<string|null>(null);
+  const [sending, setSending] = useState(false);
   const[showEmoji, setShowEmoji] = useState(false);
-  const[isLoaded, setIsLoaded] = useState(false);
-  const[showMenu, setShowMenu] = useState(false);
-  const[showUnmatchModal, setShowUnmatchModal] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [showUnmatchModal, setShowUnmatchModal] = useState(false);
   const[showAttachSheet, setShowAttachSheet] = useState(false);
-  const[reactionMsgId, setReactionMsgId] = useState<string|null>(null);
-  const[replyTo, setReplyTo] = useState<MsgRow|null>(null);
+  const [reactionMsgId, setReactionMsgId] = useState<string|null>(null);
+  const [replyTo, setReplyTo] = useState<MsgRow|null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const[recording, setRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob|null>(null);
-  const[audioPreviewUrl, setAudioPreviewUrl] = useState<string|null>(null);
-  const[recordTime, setRecordTime] = useState(0);
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string|null>(null);
+  const [recordTime, setRecordTime] = useState(0);
   const[uploadingVoice, setUploadingVoice] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder|null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -524,6 +535,9 @@ export default function ChatThreadPage() {
   const [imagePreview, setImagePreview] = useState<{file: File, url: string} | null>(null);
   const msgReactionIds = useMemo(() => new Set(reactions.map(r => r.message_id)), [reactions]);
   const bgStyle = useMemo(() => ({ background: chatBg || "#111111" }),[chatBg]);
+
+  // Touch Tracker Ref for precision
+  const touchState = useRef({ id: null as string | null, startX: 0, startY: 0, timer: null as any, isLong: false });
 
   useEffect(() => { if (ctxAnonId && !myAnonId) setMyAnonId(ctxAnonId); },[ctxAnonId]);
   useEffect(() => { return () => { setReactionMsgId(null); setShowTimeFor(null); }; },[]);
@@ -595,16 +609,16 @@ export default function ChatThreadPage() {
       const { data: session } = await supabase.auth.getSession();
       const user = session?.session?.user;
       if (!user) { router.replace("/login"); return; }
-      setMyUserId(user.id);
+      if (!myUserId) setMyUserId(user.id);
 
       const[meRes, matchRes, msgsRes] = await Promise.all([
         supabase.from("profiles").select("anon_id").eq("user_id", user.id).maybeSingle(),
         supabase.from("matches").select("user_a,user_b,created_at").eq("id", matchId).maybeSingle(),
-        supabase.from("messages").select("*").eq("match_id", matchId).order("created_at", { ascending: false }).limit(60), // გავზარდეთ 60-მდე
+        supabase.from("messages").select("*").eq("match_id", matchId).order("created_at", { ascending: false }).limit(40),
       ]);
 
       const anonId = meRes.data?.anon_id ?? ctxAnonId ?? null;
-      setMyAnonId(anonId);
+      if (anonId !== myAnonId) setMyAnonId(anonId);
       myAnonIdRef.current = anonId;
 
       const matchRow = matchRes.data;
@@ -615,11 +629,11 @@ export default function ChatThreadPage() {
       setOtherUserId(otherId);
 
       const msgsData = msgsRes.data ??[];
-      if (msgsData.length < 60) setHasMore(false);
+      if (msgsData.length < 40) setHasMore(false);
 
       const msgIds = msgsData.map((m: any) => m.id);
 
-      const[profileRes, reactionsRes] = await Promise.all([
+      const [profileRes, reactionsRes] = await Promise.all([
         supabase.from("profiles").select("user_id,nickname,first_name,photo1_url,last_seen").eq("user_id", otherId).maybeSingle(),
         msgIds.length > 0
           ? supabase.from("message_reactions").select("*").in("message_id", msgIds)
@@ -628,13 +642,19 @@ export default function ChatThreadPage() {
 
       const hiddenMsgs = JSON.parse(localStorage.getItem(`hidden_msgs`) || "[]");
       const finalMsgs = msgsData.filter((m: any) => !hiddenMsgs.includes(m.id)).reverse();
-      
       const finalProfile = profileRes.data ?? null;
 
       setOtherProfile(finalProfile);
       setMsgs(finalMsgs);
       setReactions(reactionsRes.data ??[]);
       setIsLoaded(true);
+
+      localStorage.setItem(`chat_cache_${matchId}`, JSON.stringify({
+        cachedMsgs: finalMsgs,
+        cachedProfile: finalProfile,
+        cachedAnonId: anonId,
+        cachedUserId: user.id
+      }));
 
       Promise.all([
         markRead(anonId, user.id),
@@ -662,7 +682,7 @@ export default function ChatThreadPage() {
           const scrollContainer = e.target;
           const oldScrollHeight = scrollContainer.scrollHeight;
           
-          setMsgs(prev =>[...newMsgs, ...prev]);
+          setMsgs(prev => [...newMsgs, ...prev]);
           
           setTimeout(() => {
             if (scrollRef.current) {
@@ -688,7 +708,7 @@ export default function ChatThreadPage() {
         const hiddenMsgs = JSON.parse(localStorage.getItem(`hidden_msgs`) || "[]");
         if (hiddenMsgs.includes(row.id)) return;
 
-        setMsgs(prev => prev.some(m => m.id === row.id) ? prev :[...prev, row]);
+        setMsgs(prev => prev.some(m => m.id === row.id) ? prev : [...prev, row]);
         setMyAnonId(anon => {
           if (anon && row.sender_anon !== anon) setMyUserId(uid => { markRead(anon, uid); return uid; });
           return anon;
@@ -725,9 +745,10 @@ export default function ChatThreadPage() {
   },[matchId, markRead]);
 
   useEffect(() => {
-    if (!isLoaded) return;
-    setTimeout(() => { bottomRef.current?.scrollIntoView({ behavior: "instant" }); }, 10);
-  },[msgs.length, isLoaded]);
+    if (isLoaded) {
+      bottomRef.current?.scrollIntoView({ behavior: "instant" });
+    }
+  }, [isLoaded, msgs.length]);
 
   async function handleReact(msgId: string, emoji: string) {
     if (!myAnonId) return;
@@ -788,7 +809,7 @@ export default function ChatThreadPage() {
         setMsgs(prev => {
           const withoutTemp = prev.filter(m => m.id !== tempId);
           if (withoutTemp.some(m => m.id === data.id)) return withoutTemp;
-          return[...withoutTemp, data as MsgRow];
+          return [...withoutTemp, data as MsgRow];
         });
       }
       await supabase.from("matches").update({ has_unread: true }).eq("id", matchId);
@@ -813,7 +834,7 @@ export default function ChatThreadPage() {
         setMsgs(prev => {
           const withoutTemp = prev.filter(m => m.id !== tempId);
           if (withoutTemp.some(m => m.id === data.id)) return withoutTemp;
-          return[...withoutTemp, data as MsgRow];
+          return [...withoutTemp, data as MsgRow];
         });
       }
       await supabase.from("matches").update({ has_unread: true }).eq("id", matchId);
@@ -899,7 +920,7 @@ export default function ChatThreadPage() {
     if (!searchQuery.trim()) return msgs;
     const lowerQ = searchQuery.toLowerCase();
     return msgs.filter(m => m.type === "text" && m.content.toLowerCase().includes(lowerQ));
-  }, [msgs, searchQuery]);
+  },[msgs, searchQuery]);
 
   if (!isLoaded) return (
     <div className="fixed inset-0 h-[100dvh] flex justify-center select-none" style={{ ...bgStyle, willChange: "background", WebkitTouchCallout: "none" }}>
@@ -1013,11 +1034,6 @@ export default function ChatThreadPage() {
                 const showReactionBar = reactionMsgId === m.id;
                 const showingTime = showTimeFor === m.id;
 
-                let pressTimer: NodeJS.Timeout | null = null;
-                let startX = 0;
-                let startY = 0;
-                let isLong = false;
-
                 return (
                   <div key={m.id} className={`flex flex-col w-full ${mine?"items-end":"items-start"} ${prevSame?"mt-0.5":"mt-3"}`}>
                     
@@ -1038,36 +1054,54 @@ export default function ChatThreadPage() {
 
                       <div className={`msg-box relative flex flex-col cursor-pointer max-w-[75vw] sm:max-w-[320px]`}
                            onTouchStart={e => {
-                             startX = e.touches[0].clientX;
-                             startY = e.touches[0].clientY;
-                             isLong = false;
-                             pressTimer = setTimeout(() => {
-                               isLong = true;
-                               setReactionMsgId(m.id);
-                               setShowTimeFor(null);
-                               if (navigator.vibrate) navigator.vibrate(50);
-                             }, 800);
+                             if (touchState.current.timer) clearTimeout(touchState.current.timer);
+                             touchState.current = {
+                               id: m.id,
+                               startX: e.touches[0].clientX,
+                               startY: e.touches[0].clientY,
+                               isLong: false,
+                               timer: setTimeout(() => {
+                                 touchState.current.isLong = true;
+                                 setReactionMsgId(m.id);
+                                 setShowTimeFor(null);
+                                 if (navigator.vibrate) navigator.vibrate(50);
+                               }, 600) // ზუსტად 600ms (1 წამზე ნაკლები) ლოდინი სწრაფი ეფექტისთვის
+                             };
                            }}
                            onTouchMove={e => {
-                             if(pressTimer) {
-                               const dx = Math.abs(e.touches[0].clientX - startX);
-                               const dy = Math.abs(e.touches[0].clientY - startY);
-                               if (dx > 10 || dy > 10) clearTimeout(pressTimer);
+                             if (touchState.current.id !== m.id) return;
+                             if (touchState.current.timer) {
+                               const dx = Math.abs(e.touches[0].clientX - touchState.current.startX);
+                               const dy = Math.abs(e.touches[0].clientY - touchState.current.startY);
+                               // თუ თითი გაანძრია 15px-ზე მეტით, ვაუქმებთ Long Press-ს
+                               if (dx > 15 || dy > 15) {
+                                 clearTimeout(touchState.current.timer);
+                                 touchState.current.timer = null;
+                               }
                              }
                            }}
                            onTouchEnd={e => {
-                             if(pressTimer) clearTimeout(pressTimer);
-                             if(!isLong) {
-                               const dx = e.changedTouches[0].clientX - startX;
-                               if(Math.abs(dx) > 50) {
-                                  // Swipe for Reply
-                                  setReplyTo(m); setTimeout(() => inputRef.current?.focus(), 50);
-                               } else {
-                                  // Simple Tap (Toggle Date)
+                             if (touchState.current.id !== m.id) return;
+                             if (touchState.current.timer) {
+                               clearTimeout(touchState.current.timer);
+                               touchState.current.timer = null;
+                             }
+                             if (!touchState.current.isLong) {
+                               const dx = e.changedTouches[0].clientX - touchState.current.startX;
+                               const dy = Math.abs(e.changedTouches[0].clientY - touchState.current.startY);
+                               
+                               // თუ მარცხნივ/მარჯვნივ გაასრიალა ძალიან ძლიერად (90px) დიაგონალის გარეშე
+                               if (Math.abs(dx) > 90 && dy < 40) {
+                                  setReplyTo(m); 
+                                  setTimeout(() => inputRef.current?.focus(), 50);
+                               } 
+                               // თუ საერთოდ არ გაუსრიალებია, ესეიგი უბრალოდ თითი დააჭირა ტექსტს (Tap)
+                               else if (Math.abs(dx) < 10 && dy < 10) {
                                   setShowTimeFor(prev => prev === m.id ? null : m.id);
                                   setReactionMsgId(null);
                                }
                              }
+                             touchState.current.id = null;
                            }}>
                         
                         <div>
