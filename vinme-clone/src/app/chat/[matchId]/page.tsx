@@ -190,7 +190,6 @@ function ReactionBar({ msgId, myAnonId, reactions, onReact, onClose, mine, onDel
         );
       })}
       
-      {/* 🗑️ Unsend ღილაკი მხოლოდ შენს მესიჯებზე */}
       {mine && (
         <>
           <div className="w-px h-5 bg-white/20 mx-1" />
@@ -400,9 +399,9 @@ export default function ChatThreadPage() {
   const { anonId: ctxAnonId } = useUser();
 
   const[matchCreatedAt, setMatchCreatedAt] = useState<string|null>(null);
-  const [chatTheme, setChatTheme] = useState("#7C3AED");
+  const[chatTheme, setChatTheme] = useState("#7C3AED");
   const [chatBg, setChatBg] = useState("");  
-  const [showThemeModal, setShowThemeModal] = useState(false);
+  const[showThemeModal, setShowThemeModal] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem(`chat-theme-${matchId}`);
@@ -432,22 +431,21 @@ export default function ChatThreadPage() {
   const[myAnonId, setMyAnonId] = useState<string|null>(null);
   const[myUserId, setMyUserId] = useState<string|null>(null);
   const [otherProfile, setOtherProfile] = useState<any>(null);
-  const [otherUserId, setOtherUserId] = useState<string|null>(null);
+  const[otherUserId, setOtherUserId] = useState<string|null>(null);
   const [sending, setSending] = useState(false);
   const[showEmoji, setShowEmoji] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const[isLoaded, setIsLoaded] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const[showUnmatchModal, setShowUnmatchModal] = useState(false);
-  const [showAttachSheet, setShowAttachSheet] = useState(false);
+  const[showAttachSheet, setShowAttachSheet] = useState(false);
   const [reactionMsgId, setReactionMsgId] = useState<string|null>(null);
   const[selectedMsgId, setSelectedMsgId] = useState<string|null>(null);
-  const bgLongPressTimer = useRef<NodeJS.Timeout|null>(null);
-  const [replyTo, setReplyTo] = useState<MsgRow|null>(null);
-  const [hoveredMsgId, setHoveredMsgId] = useState<string|null>(null);
+  const[replyTo, setReplyTo] = useState<MsgRow|null>(null);
+  const[hoveredMsgId, setHoveredMsgId] = useState<string|null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const[recording, setRecording] = useState(false);
-  const [audioBlob, setAudioBlob] = useState<Blob|null>(null);
-  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string|null>(null);
+  const[audioBlob, setAudioBlob] = useState<Blob|null>(null);
+  const[audioPreviewUrl, setAudioPreviewUrl] = useState<string|null>(null);
   const [recordTime, setRecordTime] = useState(0);
   const[uploadingVoice, setUploadingVoice] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder|null>(null);
@@ -462,7 +460,7 @@ export default function ChatThreadPage() {
   const [uploadingImg, setUploadingImg] = useState(false);
   const [imagePreview, setImagePreview] = useState<{file: File, url: string} | null>(null);
   const msgReactionIds = useMemo(() => new Set(reactions.map(r => r.message_id)), [reactions]);
-  const bgStyle = useMemo(() => ({ background: chatBg || "#111111" }), [chatBg]);
+  const bgStyle = useMemo(() => ({ background: chatBg || "#111111" }),[chatBg]);
 
   useEffect(() => { if (ctxAnonId && !myAnonId) setMyAnonId(ctxAnonId); }, [ctxAnonId]);
   useEffect(() => { return () => { setReactionMsgId(null); setSelectedMsgId(null); }; },[]);
@@ -643,7 +641,7 @@ export default function ChatThreadPage() {
   useEffect(() => {
     if (!isLoaded) return;
     bottomRef.current?.scrollIntoView({ behavior: "instant" });
-  }, [msgs.length, isLoaded]);
+  },[msgs.length, isLoaded]);
 
   async function handleReact(msgId: string, emoji: string) {
     if (!myAnonId) return;
@@ -795,17 +793,14 @@ export default function ChatThreadPage() {
     router.replace("/chat");
   }
 
-  const avatar = useMemo(() => { const src = photoSrc(otherProfile?.photo1_url ?? null); return src || null; },[otherProfile]);
+  const avatar = useMemo(() => { const src = photoSrc(otherProfile?.photo1_url ?? null); return src || null; }, [otherProfile]);
   const effectiveAnonId = myAnonId ?? myAnonIdRef.current;
   const otherName = otherProfile?.nickname ?? otherProfile?.first_name ?? "...";
   const hasFocusOrText = text.trim().length > 0;
 
-  let bgStartX = 0; 
-  let bgStartY = 0;
-
   if (!isLoaded) return (
-    <div className="fixed inset-0 flex justify-center" style={{ ...bgStyle, willChange: "background" }}>
-      <div className="w-full max-w-lg flex flex-col bg-[#111]">
+    <div className="fixed inset-0 h-[100dvh] flex justify-center select-none" style={{ ...bgStyle, willChange: "background", WebkitTouchCallout: "none" }}>
+      <div className="w-full max-w-lg flex flex-col h-full bg-[#111]">
         <div className="flex items-center gap-3 px-4 py-3 bg-zinc-900 border-b border-white/10 shrink-0">
           <div className="w-9 h-9 rounded-full bg-white/10 animate-pulse" />
           <div className="flex items-center gap-3 flex-1">
@@ -826,304 +821,283 @@ export default function ChatThreadPage() {
   );
 
   return (
-    <>
-      {/* 🚀 სტილები: კოპირების და ლურჯი მონიშვნის სამუდამოდ გათიშვა */}
-      <style dangerouslySetInnerHTML={{ __html: `
-        * {
-          -webkit-touch-callout: none !important;
-          -webkit-user-select: none !important;
-          -khtml-user-select: none !important;
-          -moz-user-select: none !important;
-          -ms-user-select: none !important;
-          user-select: none !important;
-        }
-        input, textarea {
-          -webkit-touch-callout: default !important;
-          -webkit-user-select: auto !important;
-          -khtml-user-select: auto !important;
-          -moz-user-select: auto !important;
-          -ms-user-select: auto !important;
-          user-select: auto !important;
-        }
-      `}} />
-
-      <div className="fixed inset-0 h-[100dvh] flex justify-center" style={{ ...bgStyle, willChange: "auto" }}>
-        <div className="w-full max-w-lg flex flex-col h-full" style={{ background: "transparent" }}>
-          
-          {/* HEADER */}
-          <div ref={headerRef} className="flex items-center gap-3 px-4 py-3 bg-slate-900 border-b border-white/8 shrink-0"
-            style={{ position: "sticky", top: headerTop, zIndex: 50 }}>
-            <button onClick={() => { setReactionMsgId(null); setSelectedMsgId(null); router.push("/chat"); }}
-              className="rounded-full bg-white/8 w-9 h-9 flex items-center justify-center text-white shrink-0 hover:bg-white/12 transition">←</button>
-            <div className="flex items-center gap-3 flex-1 cursor-pointer"
-              onClick={() => otherUserId && router.push(`/profile/${otherUserId}`)}>
-              <div className="relative shrink-0">
-                <SafeImg src={avatar} className="w-10 h-10 rounded-full object-cover ring-2 ring-white/10"
-                  fallback={<div className="w-10 h-10 rounded-full bg-zinc-700 flex items-center justify-center text-sm">👤</div>} />
-                {isOnline && <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-400 border-2 border-zinc-950" />}
-              </div>
-              <div className="min-w-0">
-                <div className="font-semibold text-sm truncate">{otherName}</div>
-                <div className={`text-[11px] ${isOnline?"text-green-400":"text-white/40"}`}>{formatLastSeen(otherProfile?.last_seen ?? null, ka)}</div>
-              </div>
+    <div className="fixed inset-0 h-[100dvh] flex justify-center select-none" style={{ ...bgStyle, willChange: "auto", WebkitTouchCallout: "none" }}>
+      <div className="w-full max-w-lg flex flex-col h-full" style={{ background: "transparent" }}>
+        
+        {/* HEADER */}
+        <div ref={headerRef} className="flex items-center gap-3 px-4 py-3 bg-slate-900 border-b border-white/8 shrink-0"
+          style={{ position: "sticky", top: headerTop, zIndex: 50 }}>
+          <button onClick={() => { setReactionMsgId(null); setSelectedMsgId(null); router.push("/chat"); }}
+            className="rounded-full bg-white/8 w-9 h-9 flex items-center justify-center text-white shrink-0 hover:bg-white/12 transition">←</button>
+          <div className="flex items-center gap-3 flex-1 cursor-pointer"
+            onClick={() => otherUserId && router.push(`/profile/${otherUserId}`)}>
+            <div className="relative shrink-0">
+              <SafeImg src={avatar} className="w-10 h-10 rounded-full object-cover ring-2 ring-white/10"
+                fallback={<div className="w-10 h-10 rounded-full bg-zinc-700 flex items-center justify-center text-sm">👤</div>} />
+              {isOnline && <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-400 border-2 border-zinc-950" />}
             </div>
-            <button onClick={e => { e.stopPropagation(); setShowMenu(true); }}
-              className="w-9 h-9 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/8 transition shrink-0 text-lg font-bold tracking-widest">···</button>
+            <div className="min-w-0">
+              <div className="font-semibold text-sm truncate">{otherName}</div>
+              <div className={`text-[11px] ${isOnline?"text-green-400":"text-white/40"}`}>{formatLastSeen(otherProfile?.last_seen ?? null, ka)}</div>
+            </div>
           </div>
+          <button onClick={e => { e.stopPropagation(); setShowMenu(true); }}
+            className="w-9 h-9 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/8 transition shrink-0 text-lg font-bold tracking-widest">···</button>
+        </div>
 
-          {/* MESSAGES */}
-          <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 scrollbar-hide"
-            style={{ overscrollBehavior: "none" }}
-            onPointerDown={e => {
-              if ((e.target as Element).closest('.msg-row')) return;
-              bgStartX = e.clientX; bgStartY = e.clientY;
-              bgLongPressTimer.current = setTimeout(() => setShowThemeModal(true), 600);
-            }}
-            onPointerMove={e => {
-              if (Math.abs(e.clientX - bgStartX) > 10 || Math.abs(e.clientY - bgStartY) > 10) {
-                if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer.current);
-              }
-            }}
-            onPointerUp={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer.current); }}
-            onPointerLeave={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer.current); }}
-            onContextMenu={e => {
-              if (!(e.target as Element).closest('.msg-row')) {
-                e.preventDefault();
-                setShowThemeModal(true);
-              }
-            }}>
-            
-            <div className="flex flex-col justify-end min-h-full space-y-0.5 pb-2">
-              {matchCreatedAt && (
-                <div className="text-center text-xs text-white/30 py-3">
-                  {ka ? `${otherName}-თან შეხვედრა შედგა` : `You matched with ${otherName} on`}{" "}
-                  {new Date(matchCreatedAt).toLocaleDateString(ka ? "ka-GE" : "en-US", { day: "numeric", month: "long", year: "numeric" })}
-                  {" · "}
-                  {new Date(matchCreatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                </div>
-              )}
-              {msgs.map((m, i) => {
-                if (!myAnonId) return null;
-                const mine = m.sender_anon === myAnonId;
-                const isTemp = m.id.startsWith("temp");
-                const isRead = !!m.read_at;
-                const isDelivered = !!m.delivered_at;
-                const prevSame = i > 0 && msgs[i-1].sender_anon === m.sender_anon;
-                const isSelected = selectedMsgId === m.id;
-                const showReactionBar = reactionMsgId === m.id;
-                const isHovered = hoveredMsgId === m.id;
+        {/* MESSAGES */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 scrollbar-hide"
+          style={{ overscrollBehavior: "none" }}
+          onContextMenu={e => e.preventDefault()}
+          onClick={e => {
+            if (!(e.target as Element).closest('.msg-row')) {
+              setShowThemeModal(true);
+            }
+          }}>
+          
+          <div className="flex flex-col justify-end min-h-full space-y-0.5 pb-2">
+            {matchCreatedAt && (
+              <div className="text-center text-xs text-white/30 py-3">
+                {ka ? `${otherName}-თან შეხვედრა შედგა` : `You matched with ${otherName} on`}{" "}
+                {new Date(matchCreatedAt).toLocaleDateString(ka ? "ka-GE" : "en-US", { day: "numeric", month: "long", year: "numeric" })}
+                {" · "}
+                {new Date(matchCreatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </div>
+            )}
+            {msgs.map((m, i) => {
+              if (!myAnonId) return null;
+              const mine = m.sender_anon === myAnonId;
+              const isTemp = m.id.startsWith("temp");
+              const isRead = !!m.read_at;
+              const isDelivered = !!m.delivered_at;
+              const prevSame = i > 0 && msgs[i-1].sender_anon === m.sender_anon;
+              const isSelected = selectedMsgId === m.id;
+              const showReactionBar = reactionMsgId === m.id;
+              const isHovered = hoveredMsgId === m.id;
 
-                return (
-                  <div key={m.id} className={`msg-row flex flex-col w-full ${mine?"items-end":"items-start"} ${prevSame?"mt-0.5":"mt-3"}`}>
-                    <div className="relative flex w-full px-2"
-                      style={{ justifyContent: mine ? "flex-end" : "flex-start" }}
-                      onMouseEnter={() => setHoveredMsgId(m.id)}
-                      onMouseLeave={() => setHoveredMsgId(null)}>
+              return (
+                <div key={m.id} className={`msg-row flex flex-col w-full ${mine?"items-end":"items-start"} ${prevSame?"mt-0.5":"mt-3"}`}>
+                  <div className="relative flex w-full px-2"
+                    style={{ justifyContent: mine ? "flex-end" : "flex-start" }}
+                    onMouseEnter={() => setHoveredMsgId(m.id)}
+                    onMouseLeave={() => setHoveredMsgId(null)}>
 
-                      {isHovered && !showReactionBar && (
-                        <div className={`absolute top-1/2 -translate-y-1/2 flex items-center gap-1 z-20 ${mine ? "right-full pr-2" : "left-full pl-2"}`}>
-                          <button onClick={e => { e.stopPropagation(); setReplyTo(m); setTimeout(()=>inputRef.current?.focus(), 50); }}
-                            className="w-7 h-7 rounded-full bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center text-white/70 hover:text-white transition text-sm">↩</button>
-                        </div>
-                      )}
+                    {isHovered && !showReactionBar && (
+                      <div className={`absolute top-1/2 -translate-y-1/2 flex items-center gap-1 z-20 ${mine ? "right-full pr-2" : "left-full pl-2"}`}>
+                        <button onClick={e => { e.stopPropagation(); setReplyTo(m); setTimeout(()=>inputRef.current?.focus(), 50); }}
+                          className="w-7 h-7 rounded-full bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center text-white/70 hover:text-white transition text-sm">↩</button>
+                      </div>
+                    )}
 
-                      {showReactionBar && (
-                        <ReactionBar msgId={m.id} myAnonId={myAnonId} reactions={reactions} mine={mine}
-                          onReact={handleReact} onClose={() => setReactionMsgId(null)} onDelete={deleteMessage} />
-                      )}
+                    {showReactionBar && (
+                      <ReactionBar msgId={m.id} myAnonId={myAnonId} reactions={reactions} mine={mine}
+                        onReact={handleReact} onClose={() => setReactionMsgId(null)} onDelete={deleteMessage} />
+                    )}
 
-                      <div className="relative flex flex-col cursor-pointer" style={{ maxWidth: "78%" }}
-                           onClick={(e) => {
-                             e.stopPropagation();
-                             setReactionMsgId(m.id);
-                           }}>
-                        <div>
-                          {m.reply_preview && (
-                            <div className={`mb-1 px-3 py-1.5 rounded-xl text-xs border-l-2 bg-white/8 max-w-[240px] truncate text-white/60 ${mine?"ml-auto":""}`}
-                              style={{ borderColor: chatTheme }}>
-                              ↩ {m.reply_preview}
+                    <div className="relative flex flex-col cursor-pointer" style={{ maxWidth: "78%" }}
+                         onClick={(e) => {
+                           e.stopPropagation();
+                           setReactionMsgId(m.id);
+                         }}
+                         onTouchStart={e => {
+                           swipeStartX.current = e.touches[0].clientX;
+                           swipeStartY.current = e.touches[0].clientY;
+                         }}
+                         onTouchEnd={e => {
+                           const dx = e.changedTouches[0].clientX - swipeStartX.current;
+                           const dy = Math.abs(e.changedTouches[0].clientY - swipeStartY.current);
+                           if (Math.abs(dx) > 40 && dy < 40) {
+                             setReplyTo(m);
+                             setTimeout(() => inputRef.current?.focus(), 50);
+                           }
+                         }}>
+                      <div>
+                        {m.reply_preview && (
+                          <div className={`mb-1 px-3 py-1.5 rounded-xl text-xs border-l-2 bg-white/8 max-w-[240px] truncate text-white/60 ${mine?"ml-auto":""}`}
+                            style={{ borderColor: chatTheme }}>
+                            ↩ {m.reply_preview}
+                          </div>
+                        )}
+
+                        {m.type === "voice" ? (
+                          <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl max-w-[270px] ${mine?"rounded-tr-sm":"bg-slate-800 rounded-tl-sm"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}
+                            style={mine ? { background: chatTheme } : {}}>
+                            <span className="text-lg shrink-0">🎤</span>
+                            <audio controls src={m.content} className="h-8 max-w-[160px]" preload="metadata" />
+                            <div className="flex items-center gap-0.5 shrink-0">
+                              <span className="text-[10px] text-white/40">{fmtTime(m.created_at)}</span>
+                              <Ticks isTemp={isTemp} delivered={isDelivered} read={isRead} mine={mine} />
                             </div>
-                          )}
-
-                          {m.type === "voice" ? (
-                            <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl max-w-[270px] ${mine?"rounded-tr-sm":"bg-slate-800 rounded-tl-sm"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}
-                              style={mine ? { background: chatTheme } : {}}>
-                              <span className="text-lg shrink-0">🎤</span>
-                              <audio controls src={m.content} className="h-8 max-w-[160px]" preload="metadata" />
-                              <div className="flex items-center gap-0.5 shrink-0">
-                                <span className="text-[10px] text-white/40">{fmtTime(m.created_at)}</span>
+                          </div>
+                        ) : m.type === "image" ? (
+                          <div className={`rounded-2xl overflow-hidden max-w-[260px] ${mine?"rounded-tr-sm":"rounded-tl-sm"} ${isTemp?"opacity-60":""}`}>
+                            <img src={m.content} className="max-w-full max-h-[280px] object-cover block" alt=""
+                              onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
+                            {mine && (
+                              <div className="flex justify-end px-2 py-1 bg-black/20">
                                 <Ticks isTemp={isTemp} delivered={isDelivered} read={isRead} mine={mine} />
                               </div>
-                            </div>
-                          ) : m.type === "image" ? (
-                            <div className={`rounded-2xl overflow-hidden max-w-[260px] ${mine?"rounded-tr-sm":"rounded-tl-sm"} ${isTemp?"opacity-60":""}`}>
-                              <img src={m.content} className="max-w-full max-h-[280px] object-cover block" alt=""
-                                onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
-                              {mine && (
-                                <div className="flex justify-end px-2 py-1 bg-black/20">
-                                  <Ticks isTemp={isTemp} delivered={isDelivered} read={isRead} mine={mine} />
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words select-none ${mine?"rounded-2xl rounded-tr-sm":"bg-zinc-800 rounded-2xl rounded-tl-sm"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}
-                              style={mine ? { background: chatTheme } : {}}>
-                              <span>{m.content}</span>
-                              <span className="inline-flex items-center gap-0.5 ml-2">
-                                <span className={`text-[10px] ${mine?"text-white/50":"text-white/25"}`}>{fmtTime(m.created_at)}</span>
-                                <Ticks isTemp={isTemp} delivered={isDelivered} read={isRead} mine={mine} />
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        {msgReactionIds.has(m.id) && (
-                          <div className={`flex mt-[-10px] z-10 ${mine ? "mr-1 justify-end" : "ml-auto mr-[-10px]"}`}>
-                            <ReactionsDisplay msgId={m.id} reactions={reactions} myAnonId={effectiveAnonId ?? ""} onReact={handleReact} theme={chatTheme} />
+                            )}
+                          </div>
+                        ) : (
+                          <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words ${mine?"rounded-2xl rounded-tr-sm":"bg-zinc-800 rounded-2xl rounded-tl-sm"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}
+                            style={mine ? { background: chatTheme } : {}}>
+                            <span>{m.content}</span>
+                            <span className="inline-flex items-center gap-0.5 ml-2">
+                              <span className={`text-[10px] ${mine?"text-white/50":"text-white/25"}`}>{fmtTime(m.created_at)}</span>
+                              <Ticks isTemp={isTemp} delivered={isDelivered} read={isRead} mine={mine} />
+                            </span>
                           </div>
                         )}
                       </div>
+
+                      {msgReactionIds.has(m.id) && (
+                        <div className={`flex mt-[-10px] z-10 ${mine ? "mr-1 justify-end" : "ml-auto mr-[-10px]"}`}>
+                          <ReactionsDisplay msgId={m.id} reactions={reactions} myAnonId={effectiveAnonId ?? ""} onReact={handleReact} theme={chatTheme} />
+                        </div>
+                      )}
                     </div>
                   </div>
-                );
-              })}
-              <div ref={bottomRef} />
-            </div>
-          </div>
-
-          {/* INPUT BAR */}
-          <div className="shrink-0 bg-slate-900 border-t border-white/8 z-10"
-            style={{ paddingBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : "calc(env(safe-area-inset-bottom, 0px))" }}>
-
-            {showEmoji && (
-              <QuickEmojiPicker onPick={e => setText(p => p + e)} onClose={() => setShowEmoji(false)} />
-            )}
-
-            {replyTo && (
-              <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2 rounded-2xl bg-zinc-800"
-                style={{ borderLeft: `2px solid ${chatTheme}` }}>
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold mb-0.5" style={{ color: chatTheme }}>↩ {ka?"პასუხი":"Reply"}</div>
-                  <div className="text-xs text-white/60 truncate">
-                    {replyTo.type==="voice"?"🎤 Voice":replyTo.type==="image"?"📷 Photo":replyTo.content.slice(0,60)}
-                  </div>
                 </div>
-                <button onClick={() => setReplyTo(null)} className="text-white/40 hover:text-white text-lg shrink-0">✕</button>
-              </div>
-            )}
-
-            {recording && (
-              <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2.5 rounded-2xl bg-red-500/10 border border-red-500/20">
-                <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse shrink-0" />
-                <span className="text-red-400 font-bold text-sm tabular-nums shrink-0">{fmtTimer(recordTime)}</span>
-                <div className="flex-1 flex items-end gap-[2px] h-6 overflow-hidden">
-                  {Array.from({length:28}).map((_,i) => (
-                    <div key={i} className="bg-red-400/60 rounded-full shrink-0" style={{width:"2px",height:`${5+((i*7+recordTime*13)%16)}px`}} />
-                  ))}
-                </div>
-                <button onClick={cancelRecording} className="text-white/40 hover:text-red-400 shrink-0 px-1">🗑</button>
-                <button onClick={stopRecording} className="rounded-full bg-red-500 px-3 py-1.5 text-xs font-bold text-white shrink-0">{ka?"გაჩერება":"Stop"}</button>
-              </div>
-            )}
-
-            {!recording && audioBlob && audioPreviewUrl && (
-              <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2 rounded-2xl bg-zinc-800 border border-white/10">
-                <span className="text-white/70 text-xs shrink-0">🎤</span>
-                <audio controls src={audioPreviewUrl} className="flex-1 h-8" preload="auto" />
-                <button onClick={cancelRecording} className="text-white/40 hover:text-white shrink-0 text-lg leading-none">✕</button>
-              </div>
-            )}
-
-            <input ref={galleryInputRef} type="file" accept="image/*" className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) setImagePreview({ file: f, url: URL.createObjectURL(f) }); e.target.value=""; }} />
-            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) setImagePreview({ file: f, url: URL.createObjectURL(f) }); e.target.value=""; }} />
-
-            {!recording && (
-              <div className="flex items-center gap-1.5 px-3 py-2">
-                <button onClick={() => setShowAttachSheet(true)}
-                  className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90 text-xl">+</button>
-                {!hasFocusOrText && (
-                  <button onPointerDown={e => { e.preventDefault(); startRecording(); }}
-                    className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                      <line x1="12" y1="19" x2="12" y2="23"/>
-                      <line x1="8" y1="23" x2="16" y2="23"/>
-                    </svg>
-                  </button>
-                )}
-                <div className="flex-1 flex items-center bg-zinc-800 rounded-full px-4 py-1.5 gap-2 min-w-0">
-                  <input ref={inputRef} value={text}
-                    onChange={e => setText(e.target.value)}
-                    onFocus={() => {
-                      setShowEmoji(false);
-                      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
-                      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 300);
-                    }}
-                    autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
-                    onKeyDown={e => { if (e.key==="Enter" && !e.shiftKey && !sending) { e.preventDefault(); send(); } }}
-                    placeholder={ka?"მესიჯი...":"Message..."} 
-                    className="bg-transparent outline-none text-white w-full text-[15px] placeholder:text-white/40" />
-                </div>
-                {text.trim() ? (
-                  <button onClick={send} disabled={sending} onMouseDown={e => e.preventDefault()}
-                    className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg"
-                    style={{ background: chatTheme }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
-                  </button>
-                ) : audioBlob ? (
-                  <button onClick={sendVoice} disabled={uploadingVoice}
-                    className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg"
-                    style={{ background: chatTheme }}>
-                    {uploadingVoice ? <span className="text-xs text-white">⏳</span>
-                      : <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>}
-                  </button>
-                ) : (
-                  <button onClick={e => { e.stopPropagation(); setShowEmoji(p => !p); }}
-                    className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition text-xl">🙂</button>
-                )}
-              </div>
-            )}
+              );
+            })}
+            <div ref={bottomRef} />
           </div>
         </div>
 
-        {imagePreview && (
-          <div className="fixed inset-0 z-50 bg-black flex flex-col">
-            <div className="flex items-center justify-between px-4 py-3" style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 12px)" }}>
-              <button onClick={() => setImagePreview(null)} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white text-lg">✕</button>
-              <button onClick={async () => { const f = imagePreview.file; setImagePreview(null); await uploadImage(f); }} disabled={uploadingImg}
-                className="w-12 h-12 rounded-full flex items-center justify-center shadow-xl disabled:opacity-50 active:scale-90 transition"
-                style={{ background: chatTheme }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
-              </button>
+        {/* INPUT BAR */}
+        <div className="shrink-0 bg-slate-900 border-t border-white/8 z-10"
+          style={{ paddingBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : "calc(env(safe-area-inset-bottom, 0px))" }}>
+
+          {showEmoji && (
+            <QuickEmojiPicker onPick={e => setText(p => p + e)} onClose={() => setShowEmoji(false)} />
+          )}
+
+          {replyTo && (
+            <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2 rounded-2xl bg-zinc-800"
+              style={{ borderLeft: `2px solid ${chatTheme}` }}>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-semibold mb-0.5" style={{ color: chatTheme }}>↩ {ka?"პასუხი":"Reply"}</div>
+                <div className="text-xs text-white/60 truncate">
+                  {replyTo.type==="voice"?"🎤 Voice":replyTo.type==="image"?"📷 Photo":replyTo.content.slice(0,60)}
+                </div>
+              </div>
+              <button onClick={() => setReplyTo(null)} className="text-white/40 hover:text-white text-lg shrink-0">✕</button>
             </div>
-            <div className="flex-1 flex items-center justify-center p-4">
-              <img src={imagePreview.url} className="max-w-full max-h-full object-contain rounded-2xl" alt="" />
+          )}
+
+          {recording && (
+            <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2.5 rounded-2xl bg-red-500/10 border border-red-500/20">
+              <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+              <span className="text-red-400 font-bold text-sm tabular-nums shrink-0">{fmtTimer(recordTime)}</span>
+              <div className="flex-1 flex items-end gap-[2px] h-6 overflow-hidden">
+                {Array.from({length:28}).map((_,i) => (
+                  <div key={i} className="bg-red-400/60 rounded-full shrink-0" style={{width:"2px",height:`${5+((i*7+recordTime*13)%16)}px`}} />
+                ))}
+              </div>
+              <button onClick={cancelRecording} className="text-white/40 hover:text-red-400 shrink-0 px-1">🗑</button>
+              <button onClick={stopRecording} className="rounded-full bg-red-500 px-3 py-1.5 text-xs font-bold text-white shrink-0">{ka?"გაჩერება":"Stop"}</button>
             </div>
-          </div>
-        )}
+          )}
 
-        {showMenu && <ChatMenu lang={lang} onClose={() => setShowMenu(false)}
-          onViewProfile={() => { setShowMenu(false); otherUserId && router.push(`/profile/${otherUserId}`); }}
-          onUnmatch={() => { setShowMenu(false); setShowUnmatchModal(true); }}
-          onBlock={() => { setShowMenu(false); handleBlock(); }} />}
+          {!recording && audioBlob && audioPreviewUrl && (
+            <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2 rounded-2xl bg-zinc-800 border border-white/10">
+              <span className="text-white/70 text-xs shrink-0">🎤</span>
+              <audio controls src={audioPreviewUrl} className="flex-1 h-8" preload="auto" />
+              <button onClick={cancelRecording} className="text-white/40 hover:text-white shrink-0 text-lg leading-none">✕</button>
+            </div>
+          )}
 
-        {showUnmatchModal && <UnmatchModal ka={ka} onClose={() => setShowUnmatchModal(false)} onConfirm={handleUnmatchConfirm} />}
+          <input ref={galleryInputRef} type="file" accept="image/*" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) setImagePreview({ file: f, url: URL.createObjectURL(f) }); e.target.value=""; }} />
+          <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) setImagePreview({ file: f, url: URL.createObjectURL(f) }); e.target.value=""; }} />
 
-        {showAttachSheet && <AttachSheet lang={lang} onClose={() => setShowAttachSheet(false)}
-          onGallery={() => galleryInputRef.current?.click()} onCamera={() => cameraInputRef.current?.click()} />}
-        
-        {showThemeModal && (
-          <ThemeModal current={chatTheme} currentBg={chatBg} onClose={() => setShowThemeModal(false)}
-            onSelect={(color, bg) => applyTheme(color, bg)} />
-        )}
-
-        {reactionMsgId && (
-          <div className="fixed inset-0 z-30" onClick={() => setReactionMsgId(null)} />
-        )}
+          {!recording && (
+            <div className="flex items-center gap-1.5 px-3 py-2">
+              <button onClick={() => setShowAttachSheet(true)}
+                className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90 text-xl">+</button>
+              {!hasFocusOrText && (
+                <button onPointerDown={e => { e.preventDefault(); startRecording(); }}
+                  className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/>
+                    <line x1="8" y1="23" x2="16" y2="23"/>
+                  </svg>
+                </button>
+              )}
+              <div className="flex-1 flex items-center bg-zinc-800 rounded-full px-4 py-1.5 gap-2 min-w-0">
+                <input ref={inputRef} value={text}
+                  onChange={e => setText(e.target.value)}
+                  onFocus={() => {
+                    setShowEmoji(false);
+                    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+                    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 300);
+                  }}
+                  autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
+                  onKeyDown={e => { if (e.key==="Enter" && !e.shiftKey && !sending) { e.preventDefault(); send(); } }}
+                  placeholder={ka?"მესიჯი...":"Message..."} 
+                  className="bg-transparent outline-none text-white w-full text-[15px] placeholder:text-white/40 select-text"
+                  style={{ WebkitUserSelect: "auto", WebkitTouchCallout: "default" }} />
+              </div>
+              {text.trim() ? (
+                <button onClick={send} disabled={sending} onMouseDown={e => e.preventDefault()}
+                  className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg"
+                  style={{ background: chatTheme }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+                </button>
+              ) : audioBlob ? (
+                <button onClick={sendVoice} disabled={uploadingVoice}
+                  className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg"
+                  style={{ background: chatTheme }}>
+                  {uploadingVoice ? <span className="text-xs text-white">⏳</span>
+                    : <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>}
+                </button>
+              ) : (
+                <button onClick={e => { e.stopPropagation(); setShowEmoji(p => !p); }}
+                  className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition text-xl">🙂</button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
-    </>
+
+      {imagePreview && (
+        <div className="fixed inset-0 z-50 bg-black flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3" style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 12px)" }}>
+            <button onClick={() => setImagePreview(null)} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white text-lg">✕</button>
+            <button onClick={async () => { const f = imagePreview.file; setImagePreview(null); await uploadImage(f); }} disabled={uploadingImg}
+              className="w-12 h-12 rounded-full flex items-center justify-center shadow-xl disabled:opacity-50 active:scale-90 transition"
+              style={{ background: chatTheme }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+            </button>
+          </div>
+          <div className="flex-1 flex items-center justify-center p-4">
+            <img src={imagePreview.url} className="max-w-full max-h-full object-contain rounded-2xl" alt="" />
+          </div>
+        </div>
+      )}
+
+      {showMenu && <ChatMenu lang={lang} onClose={() => setShowMenu(false)}
+        onViewProfile={() => { setShowMenu(false); otherUserId && router.push(`/profile/${otherUserId}`); }}
+        onUnmatch={() => { setShowMenu(false); setShowUnmatchModal(true); }}
+        onBlock={() => { setShowMenu(false); handleBlock(); }} />}
+
+      {showUnmatchModal && <UnmatchModal ka={ka} onClose={() => setShowUnmatchModal(false)} onConfirm={handleUnmatchConfirm} />}
+
+      {showAttachSheet && <AttachSheet lang={lang} onClose={() => setShowAttachSheet(false)}
+        onGallery={() => galleryInputRef.current?.click()} onCamera={() => cameraInputRef.current?.click()} />}
+      
+      {showThemeModal && (
+        <ThemeModal current={chatTheme} currentBg={chatBg} onClose={() => setShowThemeModal(false)}
+          onSelect={(color, bg) => applyTheme(color, bg)} />
+      )}
+
+      {reactionMsgId && (
+        <div className="fixed inset-0 z-30" onClick={() => setReactionMsgId(null)} />
+      )}
+    </div>
   );
 }
