@@ -670,6 +670,10 @@ export default function ChatThreadPage() {
         const updated = payload.new as MsgRow;
         setMsgs(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m));
       })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages", filter: `match_id=eq.${matchId}` }, (payload) => {
+        const deleted = payload.old as { id: string };
+        if (deleted?.id) setMsgs(prev => prev.filter(m => m.id !== deleted.id));
+      })
       .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, (payload) => {
         if (payload.eventType === "INSERT") {
           const r = payload.new as Reaction;
