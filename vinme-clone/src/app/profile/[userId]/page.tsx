@@ -65,11 +65,12 @@ export default function UserProfilePage() {
             const lat = pos.coords.latitude;
             const lon = pos.coords.longitude;
             // state-ი განვაახლოთ მყისიერად — UI-ში კილომეტრი გამოჩნდება
-            setMyProfile((prev: any) => prev ? { ...prev, latitude: lat, longitude: lon } : prev);
-            // ბაზაშიც შეინახოს
-            await supabase.from("profiles")
-              .update({ latitude: lat, longitude: lon })
-              .eq("user_id", uid);
+           // ძველი კოდი:
+        // შეცვლილი კოდი:
+          setMyProfile((prev: any) => prev ? { ...prev, lat: lat, lng: lon } : prev);
+          await supabase.from("profiles")
+            .update({ lat: lat, lng: lon })
+            .eq("user_id", uid);
           },
           () => {
             // GPS permission denied — ძველი კოორდინატები დარჩება
@@ -113,7 +114,7 @@ export default function UserProfilePage() {
     return dist;
   },[profile, myProfile]);
 
-  
+
   async function goToChat() {
     if (!myProfile) return;
     const myId = myProfile.user_id;
