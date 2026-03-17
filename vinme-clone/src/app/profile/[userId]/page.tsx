@@ -87,22 +87,30 @@ export default function UserProfilePage() {
 
   const age = useMemo(() => profile?.age ?? calcAge(profile?.birthdate ?? null), [profile]);
 
+
+   console.log("DEBUG LOCATION:", { 
+    myLat: myProfile?.latitude, 
+    myLon: myProfile?.longitude, 
+    otherLat: profile?.latitude, // ან top?.latitude Feed-ში
+    otherLon: profile?.longitude // ან top?.longitude Feed-ში
+  });
+
 const distanceKm = useMemo(() => {
-    const lat1 = Number(myProfile?.lat);
-    const lon1 = Number(myProfile?.lng);
-    const lat2 = Number(profile?.lat);
-    const lon2 = Number(profile?.lng);
-
-    if (!lat1 || !lon1 || !lat2 || !lon2) {
-      return null;
-    }
-
-    const dist = haversineKm(lat1, lon1, lat2, lon2);
+    // 1. ვამოწმებთ, საერთოდ გვაქვს თუ არა ოთხივე რიცხვი
+    if (!profile?.latitude || !profile?.longitude || !myProfile?.latitude || !myProfile?.longitude) return null;
     
+    // 2. ვამოწმებთ, ხომ არ არის რომელიმე 0 (ნულოვანი კოორდინატები)
+    if (profile.latitude === 0 && profile.longitude === 0) return null;
+    if (myProfile.latitude === 0 && myProfile.longitude === 0) return null;
+
+    // 3. ვითვლით მანძილს
+    const dist = haversineKm(myProfile.latitude, myProfile.longitude, profile.latitude, profile.longitude);
+    
+    // 4. ვამოწმებთ, ხომ არ არის 5000 კმ-ზე მეტი (დამცავი)
     if (dist > 5000) return null;
-    
+
     return dist;
-  }, [profile, myProfile]);
+  },[profile, myProfile]);
 
 
   async function goToChat() {
