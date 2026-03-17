@@ -223,6 +223,58 @@ function ReactionsDisplay({ msgId, reactions, myAnonId, onReact, theme }: {
   );
 }
 
+// ახალი: Action Menu (Reply / Copy / Unsend)
+function ActionMenu({ msg, mine, theme, onReply, onCopy, onUnsend, onClose }: {
+  msg: MsgRow; mine: boolean; theme: string;
+  onReply: () => void; onCopy: () => void; onUnsend: () => void; onClose: () => void;
+}) {
+  return (
+    <div
+      className={`absolute top-full mt-1 z-50 bg-zinc-800 rounded-2xl shadow-2xl ring-1 ring-white/10 overflow-hidden ${mine ? "right-0" : "left-0"}`}
+      style={{ minWidth: 160 }}
+      onClick={e => e.stopPropagation()}>
+      <button onClick={() => { onReply(); onClose(); }}
+        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-white/8 transition active:scale-95">
+        <span>↩</span> Reply
+      </button>
+      {msg.type === "text" && (
+        <button onClick={() => { onCopy(); onClose(); }}
+          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-white/8 transition border-t border-white/5 active:scale-95">
+          <span>📋</span> Copy
+        </button>
+      )}
+      {mine && (
+        <button onClick={() => { onUnsend(); }}
+          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:bg-white/8 transition border-t border-white/5 active:scale-95">
+          <span>🗑</span> Unsend
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ახალი: Unsend submenu
+function UnsendMenu({ mine, onForYou, onForEveryone, onClose }: {
+  mine: boolean; onForYou: () => void; onForEveryone: () => void; onClose: () => void;
+}) {
+  return (
+    <div
+      className={`absolute top-full mt-1 z-50 bg-zinc-800 rounded-2xl shadow-2xl ring-1 ring-white/10 overflow-hidden ${mine ? "right-0" : "left-0"}`}
+      style={{ minWidth: 180 }}
+      onClick={e => e.stopPropagation()}>
+      <div className="px-4 py-2 text-xs text-white/40 border-b border-white/5">Unsend</div>
+      <button onClick={() => { onForYou(); onClose(); }}
+        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-white/8 transition active:scale-95">
+        <span>👤</span> For You
+      </button>
+      <button onClick={() => { onForEveryone(); onClose(); }}
+        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:bg-white/8 transition border-t border-white/5 active:scale-95">
+        <span>🗑</span> For Everyone
+      </button>
+    </div>
+  );
+}
+
 function UnmatchModal({ onClose, onConfirm, ka }: {
   onClose: () => void; onConfirm: (reason: string) => void; ka: boolean;
 }) {
@@ -392,27 +444,26 @@ export default function ChatThreadPage() {
   const { anonId: ctxAnonId } = useUser();
 
   const [matchCreatedAt, setMatchCreatedAt] = useState<string|null>(null);
-const [chatTheme, setChatTheme] = useState("#7C3AED");
-const [chatBg, setChatBg] = useState("");  
+  const [chatTheme, setChatTheme] = useState("#7C3AED");
+  const [chatBg, setChatBg] = useState("");  
   const [showThemeModal, setShowThemeModal] = useState(false);
 
   useEffect(() => {
-  const saved = localStorage.getItem(`chat-theme-${matchId}`);
-  if (saved) {
-    const { color, bg } = JSON.parse(saved);
+    const saved = localStorage.getItem(`chat-theme-${matchId}`);
+    if (saved) {
+      const { color, bg } = JSON.parse(saved);
+      setChatTheme(color);
+      setChatBg(bg);
+    }
+  }, [matchId]);
+
+  const applyTheme = useCallback((color: string, bg: string) => {
     setChatTheme(color);
     setChatBg(bg);
-  }
-}, [matchId]);
-
-
-const applyTheme = useCallback((color: string, bg: string) => {
-  setChatTheme(color);
-  setChatBg(bg);
-  setTimeout(() => {
-    localStorage.setItem(`chat-theme-${matchId}`, JSON.stringify({ color, bg }));
-  }, 0);
-}, [matchId]);
+    setTimeout(() => {
+      localStorage.setItem(`chat-theme-${matchId}`, JSON.stringify({ color, bg }));
+    }, 0);
+  }, [matchId]);
 
   const swipeStartX = useRef<number>(0);
   const swipeStartY = useRef<number>(0);
@@ -434,6 +485,11 @@ const applyTheme = useCallback((color: string, bg: string) => {
   const [showAttachSheet, setShowAttachSheet] = useState(false);
   const [reactionMsgId, setReactionMsgId] = useState<string|null>(null);
   const [selectedMsgId, setSelectedMsgId] = useState<string|null>(null);
+  // ახალი state-ები
+  const [actionMenuMsgId, setActionMenuMsgId] = useState<string|null>(null);
+  const [unsendMenuMsgId, setUnsendMenuMsgId] = useState<string|null>(null);
+  const [fullscreenImg, setFullscreenImg] = useState<string|null>(null);
+  const pointerDownTime = useRef<number>(0);
   const longPressTimer = useRef<NodeJS.Timeout|null>(null);
   const [replyTo, setReplyTo] = useState<MsgRow|null>(null);
   const [hoveredMsgId, setHoveredMsgId] = useState<string|null>(null);
@@ -457,8 +513,11 @@ const applyTheme = useCallback((color: string, bg: string) => {
   const msgReactionIds = useMemo(() => new Set(reactions.map(r => r.message_id)), [reactions]);
   const bgStyle = useMemo(() => ({ background: chatBg || "#111111" }), [chatBg]);
 
+  // ფონის long press timer (ცალკე, message-ის long press-ისგან განცალკევებული)
+  const bgLongPressTimer = useRef<NodeJS.Timeout|null>(null);
+
   useEffect(() => { if (ctxAnonId && !myAnonId) setMyAnonId(ctxAnonId); }, [ctxAnonId]);
-  useEffect(() => { return () => { setReactionMsgId(null); setSelectedMsgId(null); }; }, []);
+  useEffect(() => { return () => { setReactionMsgId(null); setSelectedMsgId(null); setActionMenuMsgId(null); setUnsendMenuMsgId(null); }; }, []);
   useEffect(() => { if (headerRef.current) setHeaderTop(headerRef.current.getBoundingClientRect().top); }, [isLoaded]);
 
   useEffect(() => {
@@ -523,10 +582,9 @@ const applyTheme = useCallback((color: string, bg: string) => {
       .eq("match_id", matchId).neq("sender_anon", anonId).is("delivered_at", null);
   }, [matchId]);
 
-useEffect(() => {
+  useEffect(() => {
     if (!matchId) return;
 
-    // 🚀 ტრიუკი 1: მყისიერი ჩატვირთვა ტელეფონის მეხსიერებიდან (WhatsApp-ის სტილი)
     const cachedData = localStorage.getItem(`chat_cache_${matchId}`);
     if (cachedData) {
       try {
@@ -535,13 +593,10 @@ useEffect(() => {
         setOtherProfile(cachedProfile);
         setMyAnonId(cachedAnonId);
         setMyUserId(cachedUserId);
-        setIsLoaded(true); // ეკრანი წამიერად იხსნება, ლოუდერის გარეშე!
-      } catch(e) { 
-        // თუ ქეში გაფუჭებულია, ვაიგნორებთ
-      }
+        setIsLoaded(true);
+      } catch(e) {}
     }
 
-    // 🔄 ტრიუკი 2: უკანა ფონზე ახალი მონაცემების წამოღება (ჩუმად)
     (async () => {
       const { data: session } = await supabase.auth.getSession();
       const user = session?.session?.user;
@@ -578,13 +633,11 @@ useEffect(() => {
       const finalMsgs = msgsData.reverse();
       const finalProfile = profileRes.data ?? null;
 
-      // ეკრანის განახლება ახალი (ფრეშ) მონაცემებით (თუ რამე ახალი მოვიდა)
       setOtherProfile(finalProfile);
       setMsgs(finalMsgs);
       setReactions(reactionsRes.data ??[]);
       setIsLoaded(true);
 
-      // 💾 ტრიუკი 3: ვინახავთ ახალ მონაცემებს ქეშში შემდეგი შემოსვლისთვის
       localStorage.setItem(`chat_cache_${matchId}`, JSON.stringify({
         cachedMsgs: finalMsgs,
         cachedProfile: finalProfile,
@@ -592,7 +645,6 @@ useEffect(() => {
         cachedUserId: user.id
       }));
 
-      // წაკითხულად მონიშვნა
       Promise.all([
         markRead(anonId, user.id),
         markDelivered(anonId),
@@ -671,20 +723,38 @@ useEffect(() => {
     }
   }
 
-  const bgLongPressTimer = useRef<NodeJS.Timeout|null>(null);
-
+  // long press → reaction + action menu
   function onMsgPointerDown(msgId: string, mine: boolean) {
+    pointerDownTime.current = Date.now();
     longPressTimer.current = setTimeout(() => {
       setReactionMsgId(msgId);
-      if (mine) setSelectedMsgId(msgId);
+      setActionMenuMsgId(msgId);
+      setUnsendMenuMsgId(null);
     }, 500);
   }
-  function onMsgPointerUp() { if (longPressTimer.current) clearTimeout(longPressTimer.current); }
 
-  async function deleteMessage(msgId: string) {
+  function onMsgPointerUp() {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+  }
+
+  function closeAllMenus() {
+    setReactionMsgId(null);
+    setSelectedMsgId(null);
+    setActionMenuMsgId(null);
+    setUnsendMenuMsgId(null);
+  }
+
+  // Unsend for everyone — წაშლა DB-დანაც
+  async function unsendForEveryone(msgId: string) {
     await supabase.from("messages").delete().eq("id", msgId);
     setMsgs(prev => prev.filter(m => m.id !== msgId));
-    setSelectedMsgId(null); setReactionMsgId(null);
+    closeAllMenus();
+  }
+
+  // Unsend for you — მხოლოდ ლოკალურად
+  function unsendForYou(msgId: string) {
+    setMsgs(prev => prev.filter(m => m.id !== msgId));
+    closeAllMenus();
   }
 
   async function uploadImage(file: File) {
@@ -811,9 +881,9 @@ useEffect(() => {
   const hasFocusOrText = text.trim().length > 0;
 
   if (!isLoaded) return (
-<div className="fixed inset-0 flex justify-center" 
-  style={{ ...bgStyle, willChange: "background" }}>
-          <div className="w-full max-w-lg flex flex-col bg-[#111]">
+    <div className="fixed inset-0 flex justify-center" 
+      style={{ ...bgStyle, willChange: "background" }}>
+      <div className="w-full max-w-lg flex flex-col bg-[#111]">
         <div className="flex items-center gap-3 px-4 py-3 bg-zinc-900 border-b border-white/10 shrink-0">
           <div className="w-9 h-9 rounded-full bg-white/10 animate-pulse" />
           <div className="flex items-center gap-3 flex-1">
@@ -834,13 +904,14 @@ useEffect(() => {
   );
 
   return (
-  <div className="fixed inset-0 flex justify-center"
-  style={{ ...bgStyle, willChange: "auto" }}>
+    <div className="fixed inset-0 flex justify-center"
+      style={{ ...bgStyle, willChange: "auto" }}>
       <div className="w-full max-w-lg flex flex-col" style={{ background: "transparent" }}>
+
         {/* HEADER */}
         <div ref={headerRef} className="flex items-center gap-3 px-4 py-3 bg-slate-900 border-b border-white/8 shrink-0"
           style={{ position: "sticky", top: headerTop, zIndex: 50 }}>
-          <button onClick={() => { setReactionMsgId(null); setSelectedMsgId(null); router.push("/chat"); }}
+          <button onClick={() => { closeAllMenus(); router.push("/chat"); }}
             className="rounded-full bg-white/8 w-9 h-9 flex items-center justify-center text-white shrink-0 hover:bg-white/12 transition">←</button>
           <div className="flex items-center gap-3 flex-1 cursor-pointer"
             onClick={() => otherUserId && router.push(`/profile/${otherUserId}`)}>
@@ -860,14 +931,21 @@ useEffect(() => {
 
         {/* MESSAGES */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 scrollbar-hide"
-  style={{ overscrollBehavior: "none", userSelect: "none", WebkitUserSelect: "none" }}
-         onTouchStart={e => {
-  bgLongPressTimer.current = setTimeout(() => setShowThemeModal(true), 700);
-}}
-onTouchEnd={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer.current); }}
-onTouchMove={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer.current); }}
+          style={{ overscrollBehavior: "none", userSelect: "none", WebkitUserSelect: "none" }}
+          // ფონის long press — მხოლოდ როცა პირდაპ scrollRef-ზეა (message-ზე არა)
+          onPointerDown={e => {
+            // თუ message bubble-ზე დაეჭირა, ეს არ გაეშვება (message-ის handler გაეშვება)
+            if ((e.target as HTMLElement).closest("[data-msg]")) return;
+            bgLongPressTimer.current = setTimeout(() => setShowThemeModal(true), 700);
+          }}
           onPointerUp={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer.current); }}
-          onPointerLeave={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer.current); }}>
+          onPointerLeave={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer.current); }}
+          onPointerMove={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer.current); }}
+          // ჩვეულებრივი tap ფონზე — მენიუების დახურვა (theme modal-ის გახსნა არა)
+          onClick={e => {
+            if ((e.target as HTMLElement).closest("[data-msg]")) return;
+            closeAllMenus();
+          }}>
           <div className="flex flex-col justify-end min-h-full space-y-0.5 pb-2">
             {matchCreatedAt && (
               <div className="text-center text-xs text-white/30 py-3">
@@ -884,17 +962,19 @@ onTouchMove={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer
               const isRead = !!m.read_at;
               const isDelivered = !!m.delivered_at;
               const prevSame = i > 0 && msgs[i-1].sender_anon === m.sender_anon;
-              const isSelected = selectedMsgId === m.id;
               const showReactionBar = reactionMsgId === m.id;
+              const showActionMenu = actionMenuMsgId === m.id;
+              const showUnsendMenu = unsendMenuMsgId === m.id;
               const isHovered = hoveredMsgId === m.id;
 
               return (
-                <div key={m.id} className={`flex flex-col w-full ${mine?"items-end":"items-start"} ${prevSame?"mt-0.5":"mt-3"}`}>
+                <div key={m.id} data-msg="1" className={`flex flex-col w-full ${mine?"items-end":"items-start"} ${prevSame?"mt-0.5":"mt-3"}`}>
                   <div className="relative flex w-full px-2"
                     style={{ justifyContent: mine ? "flex-end" : "flex-start" }}
                     onMouseEnter={() => setHoveredMsgId(m.id)}
                     onMouseLeave={() => setHoveredMsgId(null)}
                     onPointerDown={e => {
+                      e.stopPropagation(); // ფონის handler-ს ნუ გაეშვება
                       onMsgPointerDown(m.id, mine);
                       swipeStartX.current = e.clientX;
                       swipeStartY.current = e.clientY;
@@ -927,12 +1007,8 @@ onTouchMove={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer
                       <div className={`absolute top-1/2 -translate-y-1/2 flex items-center gap-1 z-20 ${mine ? "right-full pr-2" : "left-full pl-2"}`}>
                         <button onClick={e => { e.stopPropagation(); setReplyTo(m); setTimeout(()=>inputRef.current?.focus(), 50); }}
                           className="w-7 h-7 rounded-full bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center text-white/70 hover:text-white transition text-sm">↩</button>
-                        <button onClick={e => { e.stopPropagation(); setReactionMsgId(m.id); }}
+                        <button onClick={e => { e.stopPropagation(); setReactionMsgId(m.id); setActionMenuMsgId(m.id); }}
                           className="w-7 h-7 rounded-full bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center transition text-sm">😊</button>
-                        {mine && (
-                          <button onClick={e => { e.stopPropagation(); deleteMessage(m.id); }}
-                            className="w-7 h-7 rounded-full bg-zinc-700 hover:bg-red-500/80 flex items-center justify-center text-white/50 hover:text-white transition text-xs">🗑</button>
-                        )}
                       </div>
                     )}
 
@@ -951,7 +1027,7 @@ onTouchMove={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer
                         )}
 
                         {m.type === "voice" ? (
-                          <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl max-w-[270px] ${mine?"rounded-tr-sm":"bg-slate-800 rounded-tl-sm"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}
+                          <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl max-w-[270px] ${mine?"rounded-tr-sm":"bg-slate-800 rounded-tl-sm"} ${isTemp?"opacity-60":""}`}
                             style={mine ? { background: chatTheme } : {}}>
                             <span className="text-lg shrink-0">🎤</span>
                             <audio controls src={m.content} className="h-8 max-w-[160px]" preload="metadata" />
@@ -961,7 +1037,17 @@ onTouchMove={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer
                             </div>
                           </div>
                         ) : m.type === "image" ? (
-                          <div className={`rounded-2xl overflow-hidden max-w-[260px] ${mine?"rounded-tr-sm":"rounded-tl-sm"} ${isTemp?"opacity-60":""}`}>
+                          // ფოტო — short tap → fullscreen, long press → action menu
+                          <div
+                            className={`rounded-2xl overflow-hidden max-w-[260px] ${mine?"rounded-tr-sm":"rounded-tl-sm"} ${isTemp?"opacity-60":""} cursor-pointer`}
+                            onClick={e => {
+                              // short tap (არა long press) → fullscreen
+                              const elapsed = Date.now() - pointerDownTime.current;
+                              if (elapsed < 400 && !showActionMenu) {
+                                e.stopPropagation();
+                                setFullscreenImg(m.content);
+                              }
+                            }}>
                             <img src={m.content} className="max-w-full max-h-[280px] object-cover block" alt=""
                               onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
                             {mine && (
@@ -971,7 +1057,7 @@ onTouchMove={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer
                             )}
                           </div>
                         ) : (
-                          <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words select-none ${mine?"rounded-2xl rounded-tr-sm":"bg-zinc-800 rounded-2xl rounded-tl-sm"} ${isTemp?"opacity-60":""} ${isSelected?"ring-2 ring-red-400":""}`}
+                          <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words select-none ${mine?"rounded-2xl rounded-tr-sm":"bg-zinc-800 rounded-2xl rounded-tl-sm"} ${isTemp?"opacity-60":""}`}
                             style={mine ? { background: chatTheme } : {}}>
                             <span>{m.content}</span>
                             <span className="inline-flex items-center gap-0.5 ml-2">
@@ -981,6 +1067,29 @@ onTouchMove={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer
                           </div>
                         )}
                       </div>
+
+                      {/* Action Menu (Reply / Copy / Unsend) */}
+                      {showActionMenu && !showUnsendMenu && (
+                        <ActionMenu
+                          msg={m}
+                          mine={mine}
+                          theme={chatTheme}
+                          onReply={() => { setReplyTo(m); setTimeout(() => inputRef.current?.focus(), 50); }}
+                          onCopy={() => { navigator.clipboard?.writeText(m.content); }}
+                          onUnsend={() => setUnsendMenuMsgId(m.id)}
+                          onClose={closeAllMenus}
+                        />
+                      )}
+
+                      {/* Unsend submenu */}
+                      {showUnsendMenu && (
+                        <UnsendMenu
+                          mine={mine}
+                          onForYou={() => unsendForYou(m.id)}
+                          onForEveryone={() => unsendForEveryone(m.id)}
+                          onClose={closeAllMenus}
+                        />
+                      )}
 
                       {msgReactionIds.has(m.id) && (
                         <div className={`flex mt-[-10px] z-10 ${mine ? "mr-1 justify-end" : "ml-auto mr-[-10px]"}`}>
@@ -1093,6 +1202,7 @@ onTouchMove={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer
         </div>
       </div>
 
+      {/* IMAGE PREVIEW (გასაგზავნი) */}
       {imagePreview && (
         <div className="fixed inset-0 z-50 bg-black flex flex-col">
           <div className="flex items-center justify-between px-4 py-3" style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 12px)" }}>
@@ -1109,6 +1219,17 @@ onTouchMove={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer
         </div>
       )}
 
+      {/* FULLSCREEN IMAGE VIEWER */}
+      {fullscreenImg && (
+        <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center"
+          onClick={() => setFullscreenImg(null)}>
+          <button className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white text-lg z-10"
+            onClick={() => setFullscreenImg(null)}>✕</button>
+          <img src={fullscreenImg} className="max-w-full max-h-full object-contain" alt=""
+            onClick={e => e.stopPropagation()} />
+        </div>
+      )}
+
       {showMenu && <ChatMenu lang={lang} onClose={() => setShowMenu(false)}
         onViewProfile={() => { setShowMenu(false); otherUserId && router.push(`/profile/${otherUserId}`); }}
         onUnmatch={() => { setShowMenu(false); setShowUnmatchModal(true); }}
@@ -1118,13 +1239,14 @@ onTouchMove={() => { if (bgLongPressTimer.current) clearTimeout(bgLongPressTimer
 
       {showAttachSheet && <AttachSheet lang={lang} onClose={() => setShowAttachSheet(false)}
         onGallery={() => galleryInputRef.current?.click()} onCamera={() => cameraInputRef.current?.click()} />}
-{showThemeModal && (
-  <ThemeModal current={chatTheme} currentBg={chatBg} onClose={() => setShowThemeModal(false)}
-    onSelect={(color, bg) => applyTheme(color, bg)} />
-)}
 
-      {(reactionMsgId || selectedMsgId) && (
-        <div className="fixed inset-0 z-30" onClick={() => { setReactionMsgId(null); setSelectedMsgId(null); }} />
+      {showThemeModal && (
+        <ThemeModal current={chatTheme} currentBg={chatBg} onClose={() => setShowThemeModal(false)}
+          onSelect={(color, bg) => applyTheme(color, bg)} />
+      )}
+
+      {(reactionMsgId || selectedMsgId || actionMenuMsgId || unsendMenuMsgId) && (
+        <div className="fixed inset-0 z-30" onClick={closeAllMenus} />
       )}
     </div>
   );
