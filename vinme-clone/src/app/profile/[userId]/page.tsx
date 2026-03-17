@@ -86,15 +86,34 @@ export default function UserProfilePage() {
 
   const age = useMemo(() => profile?.age ?? calcAge(profile?.birthdate ?? null), [profile]);
 
-  const distanceKm = useMemo(() => {
-    if (!profile?.latitude || !profile?.longitude || !myProfile?.latitude || !myProfile?.longitude) return null;
-    if (profile.latitude === 0 && profile.longitude === 0) return null;
-    if (myProfile.latitude === 0 && myProfile.longitude === 0) return null;
-    const dist = haversineKm(myProfile.latitude, myProfile.longitude, profile.latitude, profile.longitude);
-    if (dist > 5000) return null;
-    return dist;
-  }, [profile, myProfile]);
+ const distanceKm = useMemo(() => {
+    // 1. ვაზღვევთ, რომ მონაცემები აუცილებლად რიცხვებად აღიქვას
+    const lat1 = Number(myProfile?.latitude);
+    const lon1 = Number(myProfile?.longitude);
+    const lat2 = Number(profile?.latitude);
+    const lon2 = Number(profile?.longitude);
 
+    // 2. თუ რომელიმეს კოორდინატი 0-ია ან საერთოდ არ გვაქვს (null/undefined)
+    if (!lat1 || !lon1 || !lat2 || !lon2) {
+      console.log("კმ არ იწერება იმიტომ, რომ კოორდინატები აკლია:", {
+        შენი_Lat: lat1, 
+        მეორეს_Lat: lat2 
+      });
+      return null;
+    }
+
+    // 3. ვითვლით მანძილს ფორმულით
+    const dist = haversineKm(lat1, lon1, lat2, lon2);
+    
+    console.log("დათვლილი მანძილი კილომეტრებში არის:", dist);
+
+    // 4. თუ 5000 კმ-ზე მეტია, დავმალოთ
+    if (dist > 5000) return null;
+    
+    return dist;
+  },[profile, myProfile]);
+
+  
   async function goToChat() {
     if (!myProfile) return;
     const myId = myProfile.user_id;
