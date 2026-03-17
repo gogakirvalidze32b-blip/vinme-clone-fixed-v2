@@ -62,10 +62,12 @@ function Ticks({ isTemp, delivered, read, mine }: { isTemp: boolean; delivered: 
   );
 }
 
-function ThemeModal({ current, currentBg, onClose, onSelect }: {
+function ThemeModal({ current, currentBg, onClose, onSelect, ka }: {
   current: string; currentBg: string; onClose: () => void; 
-  onSelect: (color: string, bg: string) => void;
+  onSelect: (color: string, bg: string) => void; ka: boolean;
 }) {
+  const [selectedColor, setSelectedColor] = useState(current);
+  const [selectedBg, setSelectedBg] = useState(currentBg);
   const [custom, setCustom] = useState(current);
   const [tab, setTab] = useState<"color" | "bg">("color");
 
@@ -85,7 +87,7 @@ function ThemeModal({ current, currentBg, onClose, onSelect }: {
   ];
 
   const backgrounds =[
-    { label: "შავი", bg: "" },
+    { label: "შავი", bg: "#111111" }, // შევცვალე ცარიელიდან #111-ზე რომ კარგად დაჯდეს
     { label: "ღამე", bg: "linear-gradient(160deg, #0a0a0a 0%, #1a1a2e 100%)" },
     { label: "ოკეანე", bg: "linear-gradient(160deg, #0f0c29, #302b63, #24243e)" },
     { label: "ტყე", bg: "linear-gradient(160deg, #0a0a0a, #0d2b1a, #1a3a0a)" },
@@ -104,18 +106,18 @@ function ThemeModal({ current, currentBg, onClose, onSelect }: {
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div className="relative w-full max-w-lg bg-zinc-900 rounded-t-3xl p-5" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-white text-base">🎨 ჩათის სტილი</h3>
+          <h3 className="font-bold text-white text-base">🎨 {ka ? "ჩატის სტილი" : "Chat Style"}</h3>
           <button onClick={onClose} className="text-white/40 hover:text-white text-xl">✕</button>
         </div>
 
         <div className="flex rounded-full bg-white/8 p-0.5 mb-4">
           <button onClick={() => setTab("color")}
             className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${tab === "color" ? "bg-white text-black" : "text-white/50"}`}>
-            🎨 ფერი
+            🎨 {ka ? "ფერი" : "Color"}
           </button>
           <button onClick={() => setTab("bg")}
             className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${tab === "bg" ? "bg-white text-black" : "text-white/50"}`}>
-            🖼 ფონი
+            🖼 {ka ? "ფონი" : "Background"}
           </button>
         </div>
 
@@ -123,48 +125,52 @@ function ThemeModal({ current, currentBg, onClose, onSelect }: {
           <>
             <div className="grid grid-cols-6 gap-3 mb-5">
               {themes.map(t => (
-                <button key={t.color} onClick={() => { onSelect(t.color, currentBg); onClose(); }}
+                <button key={t.color} onClick={() => setSelectedColor(t.color)}
                   className="flex flex-col items-center gap-1.5">
                   <div className="w-11 h-11 rounded-full transition-transform active:scale-90"
-                    style={{ background: t.color, outline: current === t.color ? "3px solid white" : "3px solid transparent", outlineOffset: "2px" }} />
+                    style={{ background: t.color, outline: selectedColor === t.color ? "3px solid white" : "3px solid transparent", outlineOffset: "2px" }} />
                   <span className="text-[10px] text-white/50">{t.label}</span>
                 </button>
               ))}
             </div>
             <div className="border-t border-white/8 pt-4">
-              <div className="text-xs text-white/40 mb-2">ხელით შეყვანა</div>
+              <div className="text-xs text-white/40 mb-2">{ka ? "ხელით შეყვანა" : "Custom Color"}</div>
               <div className="flex items-center gap-3">
-                <input type="color" value={custom} onChange={e => setCustom(e.target.value)}
+                <input type="color" value={custom} onChange={e => { setCustom(e.target.value); setSelectedColor(e.target.value); }}
                   className="w-10 h-10 rounded-xl cursor-pointer bg-transparent border-0 p-0" />
-                <input value={custom} onChange={e => setCustom(e.target.value)}
+                <input value={custom} onChange={e => { setCustom(e.target.value); setSelectedColor(e.target.value); }}
                   className="flex-1 bg-zinc-800 rounded-xl px-3 py-2 text-sm text-white outline-none font-mono"
                   placeholder="#7C3AED" />
-                <button onClick={() => { onSelect(custom, currentBg); onClose(); }}
-                  className="rounded-xl px-4 py-2 text-sm font-bold text-white"
-                  style={{ background: custom }}>
-                  OK
-                </button>
               </div>
             </div>
           </>
         )}
 
         {tab === "bg" && (
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-3 overflow-y-auto max-h-[240px] scrollbar-hide pb-2">
             {backgrounds.map(b => (
-              <button key={b.label} onClick={() => { onSelect(current, b.bg); onClose(); }}
+              <button key={b.label} onClick={() => setSelectedBg(b.bg)}
                 className="flex flex-col items-center gap-1.5">
                 <div className="w-full h-16 rounded-2xl border-2 transition-transform active:scale-95"
                   style={{
-                    background: b.bg || "#111111",
-                    borderColor: currentBg === b.bg ? "white" : "transparent"
+                    background: b.bg,
+                    borderColor: selectedBg === b.bg ? "white" : "transparent"
                   }} />
                 <span className="text-[10px] text-white/50">{b.label}</span>
               </button>
             ))}
           </div>
         )}
-        <div className="h-4" />
+        
+        {/* Save Button */}
+        <div className="mt-6 pt-4 border-t border-white/10">
+          <button 
+            onClick={() => { onSelect(selectedColor, selectedBg); onClose(); }}
+            className="w-full py-4 rounded-2xl font-bold text-white shadow-lg active:scale-[0.98] transition-transform"
+            style={{ background: selectedColor }}>
+            {ka ? "შენახვა" : "Save"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -391,7 +397,7 @@ const EMOJI_ROWS = [["😀","😃","😄","😁","😆","😅","🤣","😂","�
 const ALL_EMOJIS = EMOJI_ROWS.flat();
 
 function QuickEmojiPicker({ onPick, onClose }: { onPick: (e: string) => void; onClose: () => void }) {
-  const[search, setSearch] = useState("");
+  const [search, setSearch] = useState("");
   const filtered = search ? ALL_EMOJIS.filter(e => e.includes(search)) : ALL_EMOJIS;
   return (
     <div className="bg-zinc-900 border-t border-white/8 rounded-t-2xl shadow-xl" onClick={e => e.stopPropagation()}>
@@ -430,7 +436,7 @@ export default function ChatThreadPage() {
 
   const[matchCreatedAt, setMatchCreatedAt] = useState<string|null>(null);
   const [chatTheme, setChatTheme] = useState("#7C3AED");
-  const [chatBg, setChatBg] = useState("");  
+  const[chatBg, setChatBg] = useState("#111111");  
   const[showThemeModal, setShowThemeModal] = useState(false);
   const [msgToDelete, setMsgToDelete] = useState<string | null>(null);
 
@@ -663,7 +669,7 @@ export default function ChatThreadPage() {
           setReactions(prev => {
             const cleaned = prev.filter(x => !(x.id.startsWith("temp-") && x.message_id === r.message_id && x.sender_anon === r.sender_anon));
             if (cleaned.some(x => x.id === r.id)) return cleaned;
-            return[...cleaned, r];
+            return [...cleaned, r];
           });
         }
         if (payload.eventType === "DELETE") {
@@ -853,8 +859,8 @@ export default function ChatThreadPage() {
 
   if (!isLoaded) return (
     <div className="fixed inset-0 h-[100dvh] flex justify-center select-none" style={{ ...bgStyle, willChange: "background", WebkitTouchCallout: "none" }}>
-      <div className="w-full max-w-lg flex flex-col h-full bg-[#111]">
-        <div className="flex items-center gap-3 px-4 py-3 bg-zinc-900 border-b border-white/10 shrink-0">
+      <div className="w-full max-w-lg flex flex-col h-full bg-black/40">
+        <div className="flex items-center gap-3 px-4 py-3 shrink-0">
           <div className="w-9 h-9 rounded-full bg-white/10 animate-pulse" />
           <div className="flex items-center gap-3 flex-1">
             <div className="w-10 h-10 rounded-full bg-white/10 animate-pulse" />
@@ -863,11 +869,6 @@ export default function ChatThreadPage() {
               <div className="h-2 w-16 bg-white/8 rounded animate-pulse" />
             </div>
           </div>
-        </div>
-        <div className="flex-1 px-4 py-4 space-y-3">
-          {[1,2,3,4].map(i => <div key={i} className={`flex ${i%2===0?"justify-end":"justify-start"}`}>
-            <div className={`h-9 rounded-2xl bg-white/8 animate-pulse ${i%2===0?"w-48":"w-36"}`} />
-          </div>)}
         </div>
       </div>
     </div>
@@ -897,41 +898,40 @@ export default function ChatThreadPage() {
       <div className="fixed inset-0 h-[100dvh] flex justify-center select-none" style={{ ...bgStyle, willChange: "auto", WebkitTouchCallout: "none" }}>
         <div className="w-full max-w-lg flex flex-col h-full" style={{ background: "transparent" }}>
           
-          {/* HEADER */}
-          <div ref={headerRef} className="flex items-center gap-3 px-4 py-3 bg-slate-900 border-b border-white/8 shrink-0"
+          {/* HEADER (Transparent) */}
+          <div ref={headerRef} className="flex items-center gap-3 px-4 py-3 bg-transparent shrink-0"
             style={{ position: "sticky", top: headerTop, zIndex: 50 }}>
             <button onClick={() => { setReactionMsgId(null); router.push("/chat"); }}
-              className="rounded-full bg-white/8 w-9 h-9 flex items-center justify-center text-white shrink-0 hover:bg-white/12 transition">←</button>
-            <div className="flex items-center gap-3 flex-1 cursor-pointer"
+              className="rounded-full bg-black/20 backdrop-blur-md w-9 h-9 flex items-center justify-center text-white shrink-0 transition">←</button>
+            <div className="flex items-center gap-3 flex-1 cursor-pointer bg-black/20 backdrop-blur-md px-3 py-1.5 rounded-full"
               onClick={() => otherUserId && router.push(`/profile/${otherUserId}`)}>
               <div className="relative shrink-0">
-                <SafeImg src={avatar} className="w-10 h-10 rounded-full object-cover ring-2 ring-white/10"
-                  fallback={<div className="w-10 h-10 rounded-full bg-zinc-700 flex items-center justify-center text-sm">👤</div>} />
-                {isOnline && <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-400 border-2 border-zinc-950" />}
+                <SafeImg src={avatar} className="w-8 h-8 rounded-full object-cover ring-1 ring-white/20"
+                  fallback={<div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center text-xs">👤</div>} />
+                {isOnline && <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-green-400 border border-zinc-950" />}
               </div>
-              <div className="min-w-0">
-                <div className="font-semibold text-sm truncate">{otherName}</div>
-                <div className={`text-[11px] ${isOnline?"text-green-400":"text-white/40"}`}>{formatLastSeen(otherProfile?.last_seen ?? null, ka)}</div>
+              <div className="min-w-0 flex-1">
+                <div className="font-bold text-[13px] truncate drop-shadow-md">{otherName}</div>
               </div>
             </div>
             <button onClick={e => { e.stopPropagation(); setShowMenu(true); }}
-              className="w-9 h-9 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/8 transition shrink-0 text-lg font-bold tracking-widest">···</button>
+              className="w-9 h-9 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white transition shrink-0 text-lg font-bold tracking-widest">···</button>
           </div>
 
           {/* MESSAGES */}
-          <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 scrollbar-hide"
+          <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 scrollbar-hide relative"
             style={{ overscrollBehavior: "none" }}
+            onClick={() => setReactionMsgId(null)}
             onContextMenu={e => e.preventDefault()}>
             
             <div className="flex flex-col justify-end min-h-full pt-24 pb-8 space-y-0.5">
               {matchCreatedAt && (
-                <div className="text-center text-xs text-white/30 py-3">
-                  {ka ? `${otherName}-თან შეხვედრა შედგა` : `You matched with ${otherName} on`}{" "}
-                  {new Date(matchCreatedAt).toLocaleDateString(ka ? "ka-GE" : "en-US", { day: "numeric", month: "long", year: "numeric" })}
-                  {" · "}
-                  {new Date(matchCreatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                <div className="text-center text-xs text-white/50 bg-black/20 backdrop-blur-md px-4 py-1.5 rounded-full mx-auto mb-4 w-max">
+                  {ka ? `${otherName}-თან შეხვედრა შედგა` : `Matched with ${otherName} on`}{" "}
+                  {new Date(matchCreatedAt).toLocaleDateString(ka ? "ka-GE" : "en-US", { day: "numeric", month: "short" })}
                 </div>
               )}
+              
               {msgs.map((m, i) => {
                 if (!myAnonId) return null;
                 const mine = m.sender_anon === myAnonId;
@@ -943,7 +943,7 @@ export default function ChatThreadPage() {
 
                 return (
                   <div key={m.id} className={`flex flex-col w-full ${mine?"items-end":"items-start"} ${prevSame?"mt-0.5":"mt-3"}`}>
-                    <div className="relative flex w-full px-2"
+                    <div className="relative flex w-full"
                       style={{ justifyContent: mine ? "flex-end" : "flex-start" }}>
 
                       {showReactionBar && (
@@ -951,7 +951,7 @@ export default function ChatThreadPage() {
                           onReact={handleReact} onClose={() => setReactionMsgId(null)} onDelete={() => setMsgToDelete(m.id)} onReply={() => { setReplyTo(m); setTimeout(()=>inputRef.current?.focus(), 50); }} />
                       )}
 
-                      <div className="msg-box relative flex flex-col cursor-pointer" style={{ maxWidth: "78%" }}
+                      <div className="msg-box relative flex flex-col cursor-pointer"
                            onPointerDown={e => {
                              e.stopPropagation();
                              msgLongPressTimer.current = setTimeout(() => setReactionMsgId(m.id), 400);
@@ -961,19 +961,19 @@ export default function ChatThreadPage() {
                            onPointerLeave={() => { if (msgLongPressTimer.current) clearTimeout(msgLongPressTimer.current); }}>
                         <div>
                           {m.reply_preview && (
-                            <div className={`mb-1 px-3 py-1.5 rounded-xl text-xs border-l-2 bg-white/8 max-w-[240px] truncate text-white/60 ${mine?"ml-auto":""}`}
-                              style={{ borderColor: chatTheme }}>
+                            <div className={`mb-1 px-3 py-1.5 rounded-xl text-xs border-l-2 bg-black/40 backdrop-blur-sm truncate text-white/80 ${mine?"ml-auto":""}`}
+                              style={{ borderColor: chatTheme, maxWidth: "240px" }}>
                               ↩ {m.reply_preview}
                             </div>
                           )}
 
                           {m.type === "voice" ? (
-                            <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl max-w-[270px] ${mine?"rounded-tr-sm":"bg-slate-800 rounded-tl-sm"} ${isTemp?"opacity-60":""}`}
+                            <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl max-w-[270px] ${mine?"rounded-tr-sm":"bg-zinc-800/90 backdrop-blur-md rounded-tl-sm"} ${isTemp?"opacity-60":""}`}
                               style={mine ? { background: chatTheme } : {}}>
                               <span className="text-lg shrink-0">🎤</span>
                               <audio controls src={m.content} className="h-8 max-w-[160px]" preload="metadata" />
                               <div className="flex items-center gap-0.5 shrink-0">
-                                <span className="text-[10px] text-white/40">{fmtTime(m.created_at)}</span>
+                                <span className="text-[10px] text-white/60 drop-shadow-sm">{fmtTime(m.created_at)}</span>
                                 <Ticks isTemp={isTemp} delivered={isDelivered} read={isRead} mine={mine} />
                               </div>
                             </div>
@@ -988,11 +988,11 @@ export default function ChatThreadPage() {
                               )}
                             </div>
                           ) : (
-                            <div className={`px-3.5 py-2.5 text-sm leading-relaxed break-words ${mine?"rounded-2xl rounded-tr-sm":"bg-zinc-800 rounded-2xl rounded-tl-sm"} ${isTemp?"opacity-60":""}`}
+                            <div className={`px-4 py-2.5 text-[15px] leading-relaxed break-words shadow-sm ${mine?"rounded-2xl rounded-tr-sm text-white":"bg-zinc-800/95 backdrop-blur-md rounded-2xl rounded-tl-sm text-white"} ${isTemp?"opacity-60":""}`}
                               style={mine ? { background: chatTheme } : {}}>
                               <span>{m.content}</span>
-                              <span className="inline-flex items-center gap-0.5 ml-2">
-                                <span className={`text-[10px] ${mine?"text-white/50":"text-white/25"}`}>{fmtTime(m.created_at)}</span>
+                              <span className="inline-flex items-center gap-0.5 ml-2 float-right mt-1.5">
+                                <span className={`text-[10px] drop-shadow-sm ${mine?"text-white/70":"text-white/40"}`}>{fmtTime(m.created_at)}</span>
                                 <Ticks isTemp={isTemp} delivered={isDelivered} read={isRead} mine={mine} />
                               </span>
                             </div>
@@ -1013,29 +1013,71 @@ export default function ChatThreadPage() {
             </div>
           </div>
 
-          {/* INPUT BAR */}
-          <div className="shrink-0 bg-slate-900 border-t border-white/8 z-10"
-            style={{ paddingBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : "calc(env(safe-area-inset-bottom, 0px))" }}>
+          {/* INPUT BAR (Transparent Tinder Style) */}
+          <div className="shrink-0 bg-transparent z-10 px-3 pt-2"
+            style={{ paddingBottom: keyboardHeight > 0 ? `${keyboardHeight + 8}px` : "calc(env(safe-area-inset-bottom, 0px) + 8px)" }}>
 
             {showEmoji && (
               <QuickEmojiPicker onPick={e => setText(p => p + e)} onClose={() => setShowEmoji(false)} />
             )}
 
             {replyTo && (
-              <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2 rounded-2xl bg-zinc-800"
+              <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-2xl bg-black/40 backdrop-blur-md"
                 style={{ borderLeft: `2px solid ${chatTheme}` }}>
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold mb-0.5" style={{ color: chatTheme }}>↩ {ka?"პასუხი":"Reply"}</div>
-                  <div className="text-xs text-white/60 truncate">
+                  <div className="text-xs font-semibold mb-0.5 drop-shadow" style={{ color: chatTheme }}>↩ {ka?"პასუხი":"Reply"}</div>
+                  <div className="text-xs text-white/80 truncate drop-shadow">
                     {replyTo.type==="voice"?"🎤 Voice":replyTo.type==="image"?"📷 Photo":replyTo.content.slice(0,60)}
                   </div>
                 </div>
-                <button onClick={() => setReplyTo(null)} className="text-white/40 hover:text-white text-lg shrink-0">✕</button>
+                <button onClick={() => setReplyTo(null)} className="text-white/60 hover:text-white text-lg shrink-0">✕</button>
+              </div>
+            )}
+
+            {!recording && (
+              <div className="flex items-end gap-1.5">
+                <div className="flex-1 flex items-center bg-black/40 backdrop-blur-xl rounded-3xl px-4 py-2 min-h-[44px] ring-1 ring-white/10">
+                  <input ref={inputRef} value={text}
+                    onChange={e => setText(e.target.value)}
+                    onFocus={() => {
+                      setShowEmoji(false);
+                      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+                    }}
+                    autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
+                    onKeyDown={e => { if (e.key==="Enter" && !e.shiftKey && !sending) { e.preventDefault(); send(); } }}
+                    placeholder={ka?"მესიჯი...":"Type a message..."} 
+                    className="bg-transparent outline-none text-white w-full text-[15px] placeholder:text-white/50 select-text"
+                    style={{ WebkitUserSelect: "auto", WebkitTouchCallout: "default" }} />
+                  
+                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                    <button onClick={e => { e.stopPropagation(); setShowEmoji(p => !p); }}
+                      className="w-7 h-7 flex items-center justify-center text-white/70 hover:text-white transition text-lg">🙂</button>
+                    {!text.trim() && (
+                      <button onClick={() => setShowAttachSheet(true)}
+                        className="w-7 h-7 flex items-center justify-center text-white/70 hover:text-white transition text-xl">+</button>
+                    )}
+                  </div>
+                </div>
+
+                {text.trim() ? (
+                  <button onClick={send} disabled={sending} onMouseDown={e => e.preventDefault()}
+                    className="shrink-0 w-11 h-11 rounded-full flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg"
+                    style={{ background: chatTheme }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+                  </button>
+                ) : (
+                  <button onPointerDown={e => { e.preventDefault(); startRecording(); }}
+                    className="shrink-0 w-11 h-11 rounded-full bg-black/40 backdrop-blur-xl ring-1 ring-white/10 flex items-center justify-center text-white/80 hover:text-white transition active:scale-90">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+                    </svg>
+                  </button>
+                )}
               </div>
             )}
 
             {recording && (
-              <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2.5 rounded-2xl bg-red-500/10 border border-red-500/20">
+              <div className="flex items-center gap-2 mt-2 px-3 py-2.5 rounded-2xl bg-red-500/20 backdrop-blur-xl border border-red-500/30">
                 <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse shrink-0" />
                 <span className="text-red-400 font-bold text-sm tabular-nums shrink-0">{fmtTimer(recordTime)}</span>
                 <div className="flex-1 flex items-end gap-[2px] h-6 overflow-hidden">
@@ -1043,75 +1085,14 @@ export default function ChatThreadPage() {
                     <div key={i} className="bg-red-400/60 rounded-full shrink-0" style={{width:"2px",height:`${5+((i*7+recordTime*13)%16)}px`}} />
                   ))}
                 </div>
-                <button onClick={cancelRecording} className="text-white/40 hover:text-red-400 shrink-0 px-1">🗑</button>
-                <button onClick={stopRecording} className="rounded-full bg-red-500 px-3 py-1.5 text-xs font-bold text-white shrink-0">{ka?"გაჩერება":"Stop"}</button>
-              </div>
-            )}
-
-            {!recording && audioBlob && audioPreviewUrl && (
-              <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2 rounded-2xl bg-zinc-800 border border-white/10">
-                <span className="text-white/70 text-xs shrink-0">🎤</span>
-                <audio controls src={audioPreviewUrl} className="flex-1 h-8" preload="auto" />
-                <button onClick={cancelRecording} className="text-white/40 hover:text-white shrink-0 text-lg leading-none">✕</button>
-              </div>
-            )}
-
-            <input ref={galleryInputRef} type="file" accept="image/*" className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) setImagePreview({ file: f, url: URL.createObjectURL(f) }); e.target.value=""; }} />
-            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) setImagePreview({ file: f, url: URL.createObjectURL(f) }); e.target.value=""; }} />
-
-            {!recording && (
-              <div className="flex items-center gap-1.5 px-3 py-2">
-                <button onClick={() => setShowAttachSheet(true)}
-                  className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90 text-xl">+</button>
-                {!hasFocusOrText && (
-                  <button onPointerDown={e => { e.preventDefault(); startRecording(); }}
-                    className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition active:scale-90">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                      <line x1="12" y1="19" x2="12" y2="23"/>
-                      <line x1="8" y1="23" x2="16" y2="23"/>
-                    </svg>
-                  </button>
-                )}
-                <div className="flex-1 flex items-center bg-zinc-800 rounded-full px-4 py-1.5 gap-2 min-w-0">
-                  <input ref={inputRef} value={text}
-                    onChange={e => setText(e.target.value)}
-                    onFocus={() => {
-                      setShowEmoji(false);
-                      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
-                      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 300);
-                    }}
-                    autoComplete="off" autoCorrect="off" autoCapitalize="sentences"
-                    onKeyDown={e => { if (e.key==="Enter" && !e.shiftKey && !sending) { e.preventDefault(); send(); } }}
-                    placeholder={ka?"მესიჯი...":"Message..."} 
-                    className="bg-transparent outline-none text-white w-full text-[15px] placeholder:text-white/40 select-text"
-                    style={{ WebkitUserSelect: "auto", WebkitTouchCallout: "default" }} />
-                </div>
-                {text.trim() ? (
-                  <button onClick={send} disabled={sending} onMouseDown={e => e.preventDefault()}
-                    className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg"
-                    style={{ background: chatTheme }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
-                  </button>
-                ) : audioBlob ? (
-                  <button onClick={sendVoice} disabled={uploadingVoice}
-                    className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center disabled:opacity-40 active:scale-90 transition shadow-lg"
-                    style={{ background: chatTheme }}>
-                    {uploadingVoice ? <span className="text-xs text-white">⏳</span>
-                      : <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>}
-                  </button>
-                ) : (
-                  <button onClick={e => { e.stopPropagation(); setShowEmoji(p => !p); }}
-                    className="shrink-0 w-9 h-9 flex items-center justify-center text-white/70 hover:text-white transition text-xl">🙂</button>
-                )}
+                <button onClick={cancelRecording} className="text-white/60 hover:text-red-400 shrink-0 px-2">✕</button>
+                <button onClick={stopRecording} className="rounded-full bg-red-500 px-3 py-1.5 text-xs font-bold text-white shrink-0">{ka?"გაგზავნა":"Send"}</button>
               </div>
             )}
           </div>
         </div>
 
+        {/* MODALS */}
         {imagePreview && (
           <div className="fixed inset-0 z-50 bg-black flex flex-col">
             <div className="flex items-center justify-between px-4 py-3" style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 12px)" }}>
@@ -1140,7 +1121,7 @@ export default function ChatThreadPage() {
           onGallery={() => galleryInputRef.current?.click()} onCamera={() => cameraInputRef.current?.click()} />}
         
         {showThemeModal && (
-          <ThemeModal current={chatTheme} currentBg={chatBg} onClose={() => setShowThemeModal(false)}
+          <ThemeModal ka={ka} current={chatTheme} currentBg={chatBg} onClose={() => setShowThemeModal(false)}
             onSelect={(color, bg) => applyTheme(color, bg)} />
         )}
 
