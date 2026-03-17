@@ -443,43 +443,30 @@ export default function ChatThreadPage() {
   const ka = lang !== "en";
   const { anonId: ctxAnonId } = useUser();
 
-  const [msgs, setMsgs] = useState<MsgRow[]>(() => {
+  // ⚡️ SPEED FIX: ჩატში შესვლის წამიერი დაყოვნების ("ფიქრის") მოსაშორებლად.
+  // 5-ჯერ JSON.parse-ის ნაცვლად, ქეშს ვკითხულობთ მხოლოდ 1-ხელ და ვუნაწილებთ სტეიტებს
+  const cacheRef = useRef<any>(undefined);
+  if (cacheRef.current === undefined) {
     if (typeof window !== "undefined") {
       const c = localStorage.getItem(`chat_cache_${matchId}`);
-      if (c) return JSON.parse(c).cachedMsgs ||[];
+      cacheRef.current = c ? JSON.parse(c) : null;
+    } else {
+      cacheRef.current = null;
     }
-    return[];
-  });
-  const [otherProfile, setOtherProfile] = useState<any>(() => {
-    if (typeof window !== "undefined") {
-      const c = localStorage.getItem(`chat_cache_${matchId}`);
-      if (c) return JSON.parse(c).cachedProfile || null;
-    }
-    return null;
-  });
-  const[myAnonId, setMyAnonId] = useState<string|null>(() => {
-    if (typeof window !== "undefined") {
-      const c = localStorage.getItem(`chat_cache_${matchId}`);
-      if (c) return JSON.parse(c).cachedAnonId || null;
-    }
-    return null;
-  });
-  const[myUserId, setMyUserId] = useState<string|null>(() => {
-    if (typeof window !== "undefined") {
-      const c = localStorage.getItem(`chat_cache_${matchId}`);
-      if (c) return JSON.parse(c).cachedUserId || null;
-    }
-    return null;
-  });
-  const[isLoaded, setIsLoaded] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return !!localStorage.getItem(`chat_cache_${matchId}`);
-    }
-    return false;
-  });
+  }
+  const cache = cacheRef.current || {};
+
+  const [msgs, setMsgs] = useState<MsgRow[]>(cache.cachedMsgs || []);
+  const [otherProfile, setOtherProfile] = useState<any>(cache.cachedProfile || null);
+  const [myAnonId, setMyAnonId] = useState<string|null>(cache.cachedAnonId || null);
+  const [myUserId, setMyUserId] = useState<string|null>(cache.cachedUserId || null);
+  const [isLoaded, setIsLoaded] = useState<boolean>(!!cache.cachedMsgs);
 
   const [matchCreatedAt, setMatchCreatedAt] = useState<string|null>(null);
+  
+  // აქედან ჩვეულებრივად გრძელდება შენი კოდი...
   const [chatTheme, setChatTheme] = useState("#7C3AED");
+  // ...
   const[chatBg, setChatBg] = useState("#111111");  
   const[showThemeModal, setShowThemeModal] = useState(false);
   const[msgToDelete, setMsgToDelete] = useState<string | null>(null);
