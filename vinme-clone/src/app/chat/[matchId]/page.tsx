@@ -1040,14 +1040,7 @@ export default function ChatThreadPage() {
                           onReact={handleReact} onClose={() => setReactionMsgId(null)} />
                       )}
 
-                      <div className={`msg-box relative flex flex-col cursor-pointer max-w-[75vw] sm:max-w-[320px] select-none ${showReactionBar ? 'z-[60] scale-[1.02] transition-transform' : 'z-10'}`}
-                           onClick={(e) => {
-                             e.stopPropagation();
-                             if (!touchState.current.isLong && !touchState.current.isSwipe) {
-                               setShowTimeFor(prev => prev === m.id ? null : m.id);
-                               setReactionMsgId(null);
-                             }
-                           }}
+            <div className={`msg-box relative flex flex-col cursor-pointer max-w-[75vw] sm:max-w-[320px] select-none ${showReactionBar ? 'z-[60] scale-[1.02] transition-transform' : 'z-10'}`}
                            onTouchStart={e => {
                              if (touchState.current.timer) clearTimeout(touchState.current.timer);
                              touchState.current = {
@@ -1061,7 +1054,7 @@ export default function ChatThreadPage() {
                                  setReactionMsgId(m.id);
                                  setShowTimeFor(null);
                                  if (navigator.vibrate) navigator.vibrate(50);
-                               }, 400)
+                               }, 300)
                              };
                            }}
                            onTouchMove={e => {
@@ -1076,7 +1069,7 @@ export default function ChatThreadPage() {
                                }
                              }
                            }}
-onTouchEnd={e => {
+                           onTouchEnd={e => {
                              if (touchState.current.id !== m.id) return;
                              if (touchState.current.timer) {
                                clearTimeout(touchState.current.timer);
@@ -1085,14 +1078,17 @@ onTouchEnd={e => {
                              if (!touchState.current.isLong) {
                                const dx = e.changedTouches[0].clientX - touchState.current.startX;
                                const dy = Math.abs(e.changedTouches[0].clientY - touchState.current.startY);
+                               
+                               // გასრიალება დასარეფლაიებლად
                                if (Math.abs(dx) > 60 && dy < 40) {
                                   setReplyTo(m); 
                                   setTimeout(() => inputRef.current?.focus(), 50);
                                } 
-                               // ⚡️ წამიერი დაჭერა (Tap) - თუ სურათია გადიდდება, თუ ტექსტია თარიღს აჩვენებს
+                               // ⚡️ წამიერი დაჭერა (Tap)
                                else if (Math.abs(dx) < 10 && dy < 10 && !touchState.current.isSwipe) {
                                   if (m.type === "image") {
-                                    setViewingImage(m.content);
+                                    // ⏱ 50 მილიწამიანი დაყოვნება აგვარებს "ეგრევე დახურვის" პრობლემას
+                                    setTimeout(() => setViewingImage(m.content), 50);
                                   } else {
                                     setShowTimeFor(prev => prev === m.id ? null : m.id);
                                   }
@@ -1304,25 +1300,28 @@ onTouchEnd={e => {
             onSelect={(color, bg) => applyTheme(color, bg)} />
         )}
 
-         {/* 👇 აი ზუსტად აქ, ბოლო </div>-ების წინ ჩასვი ეს გადიდების კოდი 👇 */}
+ {/* 🖼 სურათის სრულ ეკრანზე ნახვა (დაცული შენახვისგან) */}
         {viewingImage && (
           <div className="fixed inset-0 z-[80] bg-black/95 backdrop-blur-xl flex flex-col"
-               onClick={() => setViewingImage(null)}
+               onClick={(e) => {
+                 // დაიხურება მხოლოდ მაშინ, თუ ზუსტად შავ ფონს დააჭერს (ან X ღილაკს)
+                 if (e.target === e.currentTarget) setViewingImage(null);
+               }}
                onContextMenu={e => e.preventDefault()}>
             
-            <div className="flex justify-end px-4 py-4" style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 16px)" }}>
-              <button className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white text-lg active:scale-90 transition">✕</button>
+            <div className="flex justify-end px-4 py-4 pointer-events-none" style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 16px)" }}>
+              <button onClick={() => setViewingImage(null)} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white text-lg active:scale-90 transition pointer-events-auto">✕</button>
             </div>
             
-            <div className="flex-1 relative flex items-center justify-center p-2 overflow-hidden">
+            <div className="flex-1 relative flex items-center justify-center p-2 overflow-hidden pointer-events-none">
               <img src={viewingImage} 
-                   className="max-w-full max-h-full object-contain select-none" 
+                   className="max-w-full max-h-full object-contain select-none pointer-events-auto" 
                    draggable="false" 
-                   style={{ WebkitTouchCallout: "none", pointerEvents: "none" }} 
+                   style={{ WebkitTouchCallout: "none" }} 
                    alt="fullscreen" />
               
               {/* 🛡 უხილავი დამცავი ფენა (ბლოკავს სურათის შენახვას/ჩამოტვირთვას) */}
-              <div className="absolute inset-0 z-10 bg-transparent" onContextMenu={e => e.preventDefault()} />
+              <div className="absolute inset-0 z-10 bg-transparent pointer-events-auto" onContextMenu={e => e.preventDefault()} />
             </div>
           </div>
         )}
