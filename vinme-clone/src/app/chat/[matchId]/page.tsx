@@ -482,7 +482,8 @@ const [hasMore, setHasMore] = useState(true);
   const[loadingMore, setLoadingMore] = useState(false);
 
 
-  const hasOverlay = isSearching  || !!viewingImage  || showThemeModal ||  !!msgToDelete;
+  const hasOverlay = isSearching   || !!viewingImage  || showThemeModal ||  !!msgToDelete;
+  
 
 
     // 👇 👇 👇 აქედან იწყება Swipe Back-ის კოდი 
