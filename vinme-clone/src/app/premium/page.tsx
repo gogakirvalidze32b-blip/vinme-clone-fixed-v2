@@ -1,48 +1,49 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { getLang } from "@/lib/i18n";
 import { supabase } from "@/lib/supabase";
 
 export default function PremiumPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const lang = getLang();
   const ka = lang !== "en";
 
   const [selectedPlan, setSelectedPlan] = useState<"week" | "month" | "year">("week");
-  const [showCheckout, setShowCheckout] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<{ type: "success" | "fail"; text: string } | null>(null);
 
   const plans = {
-    week: {
-      name: ka ? "1 კვირა" : "1 Week",
-      price: "47.50",
-      days: 7,
-      popular: true,
-    },
-    month: {
-      name: ka ? "1 თვე" : "1 Month",
-      price: "95.00",
-      days: 30,
-      popular: false,
-    },
-    year: {
-      name: ka ? "1 წელი" : "1 Year",
-      price: "570.00",
-      days: 365,
-      popular: false,
-    },
+    week:  { name: ka ? "1 კვირა"  : "1 Week",  price: "47.50",  days: 7,   popular: true  },
+    month: { name: ka ? "1 თვე"   : "1 Month", price: "95.00",  days: 30,  popular: false },
+    year:  { name: ka ? "1 წელი"  : "1 Year",  price: "570.00", days: 365, popular: false },
   };
 
   const features = [
     ka ? "უსაზღვრო მოწონებები" : "Unlimited Likes",
-    ka ? "ნახე ვინ მოგწონა" : "See Who Likes You",
-    ka ? "გადატრიალება" : "Unlimited Rewinds",
-    ka ? "ბუსტი თვეში" : "Free Boost",
+    ka ? "ნახე ვინ მოგწონა"    : "See Who Likes You",
+    ka ? "გადატრიალება"        : "Unlimited Rewinds",
+    ka ? "ბუსტი თვეში"        : "Free Boost",
   ];
 
-  // რეალური გადახდის და გააქტიურების ლოგიკა
+  useEffect(() => {
+    const status = searchParams.get("status");
+    if (status === "success") {
+      setStatusMsg({
+        type: "success",
+        text: ka ? "✅ გადახდა წარმატებით დასრულდა! Premium გააქტიურდება რამდენიმე წამში." : "✅ Payment successful! Premium activating shortly.",
+      });
+      setTimeout(() => router.push("/likes"), 3000);
+    } else if (status === "fail") {
+      setStatusMsg({
+        type: "fail",
+        text: ka ? "❌ გადახდა ვერ შესრულდა. სცადე თავიდან." : "❌ Payment failed. Please try again.",
+      });
+    }
+  }, [searchParams]);
+
   const handlePayment = async () => {
     setLoading(true);
     try {
@@ -52,26 +53,23 @@ export default function PremiumPage() {
         return;
       }
 
-      const expireDate = new Date();
-      expireDate.setDate(expireDate.getDate() + plans[selectedPlan].days);
+      const res = await fetch("/api/payment/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: selectedPlan, userId: user.id }),
+      });
 
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          is_premium: true,
-          premium_until: expireDate.toISOString(),
-        })
-        .eq("user_id", user.id);
+      const data = await res.json();
 
-      if (error) throw error;
+      if (!res.ok || !data.redirectUrl) {
+        throw new Error(data.error || "Failed to create payment");
+      }
 
-      alert(ka ? "✅ პრემიუმი წარმატებით გააქტიურდა!" : "✅ Premium activated!");
-      setShowCheckout(false);
-      router.push("/likes"); // გადავიყვანოთ იქ, სადაც ნახავს ვინ მოიწონა
+      window.location.href = data.redirectUrl;
 
     } catch (err) {
       console.error(err);
-      alert("Error activating premium");
+      alert(ka ? "შეცდომა გადახდის შექმნისას. სცადე თავიდან." : "Payment error. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -80,8 +78,15 @@ export default function PremiumPage() {
   return (
     <div className="fixed inset-0 bg-black flex justify-center overflow-hidden">
       <div className="w-full max-w-lg flex flex-col bg-black text-white h-[100dvh]">
-        
-        {/* COMPACT HEADER */}
+
+        {statusMsg && (
+          <div className={`mx-4 mt-4 p-3 rounded-xl text-sm font-semibold text-center ${
+            statusMsg.type === "success" ? "bg-green-500/20 text-green-400 border border-green-500/30" : "bg-red-500/20 text-red-400 border border-red-500/30"
+          }`}>
+            {statusMsg.text}
+          </div>
+        )}
+
         <div className="relative bg-gradient-to-b from-pink-500/20 via-purple-500/10 to-black pt-6 pb-4 px-4 shrink-0 text-center">
           <button onClick={() => router.back()} className="absolute top-4 left-4 text-white/50 text-xl">✕</button>
           <div className="text-3xl mb-1">✨</div>
@@ -93,7 +98,6 @@ export default function PremiumPage() {
           </p>
         </div>
 
-        {/* PLANS AREA - COMPACT */}
         <div className="flex-1 px-4 space-y-3 overflow-y-auto scrollbar-hide">
           <div className="grid grid-cols-1 gap-2">
             {(["week", "month", "year"] as const).map((key) => (
@@ -117,7 +121,6 @@ export default function PremiumPage() {
             ))}
           </div>
 
-          {/* FEATURES GRID - 2x2 for space saving */}
           <div className="bg-white/5 border border-white/10 rounded-xl p-3">
             <div className="grid grid-cols-2 gap-y-2 gap-x-1">
               {features.map((f, i) => (
@@ -128,59 +131,33 @@ export default function PremiumPage() {
               ))}
             </div>
           </div>
+
+          <div className="flex items-center justify-center gap-2 py-1 flex-wrap">
+            <span className="text-white/30 text-[10px]">{ka ? "მიღებული:" : "Accepted:"}</span>
+            {["💳 Visa", "💳 MC", "🍎 Apple Pay", "🤖 Google Pay"].map((m) => (
+              <span key={m} className="text-white/50 text-[10px] bg-white/5 px-2 py-0.5 rounded-full">{m}</span>
+            ))}
+          </div>
         </div>
 
-        {/* STICKY FOOTER */}
         <div className="p-4 bg-black/80 backdrop-blur-md border-t border-white/10 shrink-0">
           <button
-            onClick={() => setShowCheckout(true)}
-            className="w-full bg-gradient-to-r from-pink-500 to-purple-500 text-white font-bold py-3.5 rounded-full shadow-lg shadow-pink-500/20 active:scale-95 transition text-md"
+            onClick={handlePayment}
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-pink-500 to-purple-500 text-white font-bold py-3.5 rounded-full shadow-lg shadow-pink-500/20 active:scale-95 transition text-md disabled:opacity-60"
           >
-            {ka ? `გააქტიურება - ${plans[selectedPlan].price}₾` : `Continue - ${plans[selectedPlan].price}₾`}
+            {loading
+              ? (ka ? "მუშავდება..." : "Processing...")
+              : (ka ? `გადახდა - ${plans[selectedPlan].price}₾` : `Pay - ${plans[selectedPlan].price}₾`)
+            }
           </button>
           <button onClick={() => router.back()} className="w-full text-white/40 text-xs font-semibold py-2 mt-2">
             {ka ? "არა, გმადლობთ" : "No, thanks"}
           </button>
+          <p className="text-center text-white/20 text-[9px] mt-1">
+            🔒 {ka ? "გადახდა დაცულია BOG-ის მიერ" : "Secured by Bank of Georgia"}
+          </p>
         </div>
-
-        {/* CHECKOUT MODAL */}
-        {showCheckout && (
-          <div className="fixed inset-0 z-50 bg-black/80 flex items-end justify-center p-0">
-            <div className="w-full max-w-lg bg-zinc-900 rounded-t-3xl overflow-hidden animate-in slide-in-from-bottom duration-300">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
-                <h2 className="text-white font-bold">{ka ? "გადახდა" : "Payment"}</h2>
-                <button onClick={() => setShowCheckout(false)} className="text-white/40 text-xl">✕</button>
-              </div>
-
-              <div className="p-4 space-y-2">
-                {[
-                  { id: 'card', name: "Visa / Mastercard", icon: "💳", sub: ka ? "საბანკო ბარათი" : "Bank Card" },
-                  { id: 'apple', name: "Apple Pay", icon: "🍎", sub: "Fast Pay" },
-                  { id: 'tbc', name: "TBC Pay", icon: "💎", sub: "Instant" }
-                ].map((m) => (
-                  <button key={m.id} className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 transition">
-                    <span className="text-2xl">{m.icon}</span>
-                    <div className="text-left flex-1">
-                      <div className="text-white font-bold text-sm">{m.name}</div>
-                      <div className="text-white/40 text-[10px]">{m.sub}</div>
-                    </div>
-                    <span className="text-white/20">›</span>
-                  </button>
-                ))}
-              </div>
-
-              <div className="p-4 pb-8">
-                <button
-                  onClick={handlePayment}
-                  disabled={loading}
-                  className="w-full bg-pink-500 text-white font-black py-3.5 rounded-full active:scale-95 transition disabled:opacity-50 shadow-xl"
-                >
-                  {loading ? (ka ? "მუშავდება..." : "Processing...") : (ka ? "დადასტურება" : "Confirm & Pay")}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
