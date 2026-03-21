@@ -14,6 +14,7 @@ export default function LikesPage() {
   const [likeCount, setLikeCount] = useState(0);
   const [isPremium, setIsPremium] = useState(false);
   const [likers, setLikers] = useState<{ id: string; name: string; age: number; photo: string }[]>([]);
+  const [loading, setLoading] = useState(true);
  
   useEffect(() => {
     try {
@@ -37,15 +38,16 @@ export default function LikesPage() {
         (!profile?.premium_until || new Date(profile.premium_until) > new Date());
  
       setIsPremium(premium);
+      if (!premium) setLoading(false);
  
       // ჩემი მეჩები — გამორიცხვისთვის
       const { data: myMatches } = await supabase
         .from("matches")
-        .select("user1_id, user2_id")
-        .or(`user1_id.eq.${uid},user2_id.eq.${uid}`);
+        .select("user_a, user_b")
+        .or(`user_a.eq.${uid},user_b.eq.${uid}`);
  
       const matchedIds = new Set(
-        (myMatches || []).map((m: any) => m.user1_id === uid ? m.user2_id : m.user1_id)
+        (myMatches || []).map((m: any) => m.user_a === uid ? m.user_b : m.user_a)
       );
  
       // ლაიქების რაოდენობა
@@ -80,17 +82,23 @@ export default function LikesPage() {
               .select("user_id, nickname, age, photo1_url")
               .in("user_id", fromIds);
  
+            const STORAGE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL + "/storage/v1/object/public/";
             if (profiles) {
               setLikers(profiles.map((p: any) => ({
                 id: p.user_id,
                 name: p.nickname || "?",
                 age: p.age || 0,
-                photo: p.photo1_url || "",
+                photo: p.photo1_url
+                  ? p.photo1_url.startsWith("http")
+                    ? p.photo1_url
+                    : STORAGE_URL + p.photo1_url
+                  : "",
               })));
             }
           }
         }
       }
+      setLoading(false);
     })();
   }, []);
  
@@ -113,7 +121,11 @@ export default function LikesPage() {
           </button>
         </div>
  
-        {isPremium ? (
+        {loading ? (
+          <div className="flex justify-center items-center py-20">
+            <div className="w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : isPremium ? (
           <div className="grid grid-cols-2 gap-3">
             {likers.length === 0 ? (
               <div className="col-span-2 text-center text-white/40 py-12">
@@ -180,3 +192,4 @@ export default function LikesPage() {
     </main>
   );
 }
+ 
