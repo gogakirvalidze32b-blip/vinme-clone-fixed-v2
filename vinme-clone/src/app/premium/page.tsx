@@ -15,6 +15,13 @@ export default function PremiumPage() {
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "fail"; text: string } | null>(null);
 
+  <button
+  onClick={() => alert("დაჭერილია!")}
+  className="w-full bg-gradient-to-r from-pink-500 to-purple-500 text-white font-bold py-3.5 rounded-full"
+>
+  ტესტი
+</button>
+
   const plans = {
     week:  { name: ka ? "1 კვირა"  : "1 Week",  price: "47.50",  days: 7,   popular: true  },
     month: { name: ka ? "1 თვე"   : "1 Month", price: "95.00",  days: 30,  popular: false },
