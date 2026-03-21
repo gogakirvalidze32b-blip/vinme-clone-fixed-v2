@@ -64,7 +64,7 @@ export default function LikesPage() {
           const fromIds = swipes.map((s: any) => s.from_id);
           const { data: profiles } = await supabase
             .from("profiles")
-            .select("user_id, name, age, photos")
+            .select("user_id, name, age, photo_url")
             .in("user_id", fromIds);
  
           if (profiles) {
@@ -72,7 +72,7 @@ export default function LikesPage() {
               id: p.user_id,
               name: p.name || "?",
               age: p.age || 0,
-              photo: p.photos?.[0] || "",
+              photo: p.photo_url || "",
             })));
           }
         }
