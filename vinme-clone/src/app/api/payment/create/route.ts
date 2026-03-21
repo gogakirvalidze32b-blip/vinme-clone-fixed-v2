@@ -32,7 +32,7 @@ async function getBOGToken(): Promise<string> {
   }
  
   const data = await res.json();
-  console.log("BOG token OK:", data.token_type);
+  console.log("BOG token OK");
   return data.access_token;
 }
  
@@ -47,26 +47,20 @@ export async function POST(req: NextRequest) {
     const shopOrderId = `${userId}_${plan}_${Date.now()}`;
     const planData = PLANS[plan];
  
-    // BOG dev API - სწორი body სტრუქტურა
     const body = {
-      callback_url: `${APP_URL}/api/payment/callback`,
-      external_order_id: shopOrderId,
-      purchase_units: {
-        currency: "GEL",
-        total_amount: planData.price,
-        basket: [
-          {
-            product_id: plan,
-            quantity: 1,
-            unit_price: planData.price,
-            description: planData.name,
-          }
-        ],
+      intent: "CAPTURE",
+      purchaseUnit: {
+        amount: {
+          value: planData.price.toFixed(2),
+          currency_code: "GEL",
+        },
+        shop_order_id: shopOrderId,
       },
       redirect_urls: {
         success: `${APP_URL}/premium?status=success`,
         fail: `${APP_URL}/premium?status=fail`,
       },
+      callback_url: `${APP_URL}/api/payment/callback`,
     };
  
     console.log("BOG order request:", JSON.stringify(body));
@@ -87,8 +81,10 @@ export async function POST(req: NextRequest) {
       throw new Error("Failed to create BOG order");
     }
  
-    const redirectUrl = orderData._links?.redirect?.href 
-      || orderData.links?.find((l: {rel: string}) => l.rel === "approve")?.href;
+    // redirect link - BOG გვიბრუნებს გადახდის გვერდს
+    const redirectUrl = orderData._links?.redirect?.href
+      || orderData.links?.find((l: { rel: string }) => l.rel === "approve")?.href
+      || orderData.redirectUrl;
  
     return NextResponse.json({
       orderId: orderData.id,
@@ -101,4 +97,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Payment creation failed" }, { status: 500 });
   }
 }
- 
