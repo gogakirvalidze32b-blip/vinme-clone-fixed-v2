@@ -1,11 +1,12 @@
 "use client";
  
+import { Suspense } from "react";
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getLang } from "@/lib/i18n";
 import { supabase } from "@/lib/supabase";
  
-export default function PremiumPage() {
+function PremiumContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const lang = getLang();
@@ -160,5 +161,13 @@ export default function PremiumPage() {
         </div>
       </div>
     </div>
+  );
+}
+ 
+export default function PremiumPage() {
+  return (
+    <Suspense fallback={<div className="fixed inset-0 bg-black" />}>
+      <PremiumContent />
+    </Suspense>
   );
 }
