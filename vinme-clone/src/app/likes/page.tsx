@@ -14,7 +14,6 @@ export default function LikesPage() {
   const [likeCount, setLikeCount] = useState(0);
   const [isPremium, setIsPremium] = useState(false);
   const [likers, setLikers] = useState<{ id: string; name: string; age: number; photo: string }[]>([]);
-  const [loading, setLoading] = useState(true);
  
   useEffect(() => {
     try {
@@ -39,14 +38,24 @@ export default function LikesPage() {
  
       setIsPremium(premium);
  
+      // ჩემი მეჩები — გამორიცხვისთვის
+      const { data: myMatches } = await supabase
+        .from("matches")
+        .select("user1_id, user2_id")
+        .or(`user1_id.eq.${uid},user2_id.eq.${uid}`);
+ 
+      const matchedIds = new Set(
+        (myMatches || []).map((m: any) => m.user1_id === uid ? m.user2_id : m.user1_id)
+      );
+ 
       // ლაიქების რაოდენობა
-      const { count, error } = await supabase
+      const { count } = await supabase
         .from("swipes")
         .select("id", { count: "exact", head: true })
         .eq("to_id", uid)
         .eq("action", "like");
  
-      if (!error && count !== null) {
+      if (count !== null) {
         setLikeCount(count);
         localStorage.setItem("likes_count_cache", String(count));
       }
@@ -58,27 +67,30 @@ export default function LikesPage() {
           .select("from_id")
           .eq("to_id", uid)
           .eq("action", "like")
-          .limit(20);
+          .limit(50);
  
         if (swipes && swipes.length > 0) {
-          const fromIds = swipes.map((s: any) => s.from_id);
-          const { data: profiles } = await supabase
-            .from("profiles")
-            .select("user_id, name, age, photo_url")
-            .in("user_id", fromIds);
+          const fromIds = swipes
+            .map((s: any) => s.from_id)
+            .filter((id: string) => !matchedIds.has(id)); // მეჩები გამოვრიცხოთ
  
-          if (profiles) {
-            setLikers(profiles.map((p: any) => ({
-              id: p.user_id,
-              name: p.name || "?",
-              age: p.age || 0,
-              photo: p.photo_url || "",
-            })));
+          if (fromIds.length > 0) {
+            const { data: profiles } = await supabase
+              .from("profiles")
+              .select("user_id, nickname, age, photo1_url")
+              .in("user_id", fromIds);
+ 
+            if (profiles) {
+              setLikers(profiles.map((p: any) => ({
+                id: p.user_id,
+                name: p.nickname || "?",
+                age: p.age || 0,
+                photo: p.photo1_url || "",
+              })));
+            }
           }
         }
       }
- 
-      setLoading(false);
     })();
   }, []);
  
@@ -102,29 +114,36 @@ export default function LikesPage() {
         </div>
  
         {isPremium ? (
-          /* PREMIUM - ვხედავთ ვინ მოგწონა */
           <div className="grid grid-cols-2 gap-3">
-            {likers.length === 0 && !loading && (
+            {likers.length === 0 ? (
               <div className="col-span-2 text-center text-white/40 py-12">
                 {L("ჯერ არავის მოუწონებია", "No likes yet")}
               </div>
-            )}
-            {likers.map((liker) => (
-              <div key={liker.id} className="relative aspect-[3/4] rounded-3xl overflow-hidden bg-zinc-900">
-                {liker.photo ? (
-                  <img src={liker.photo} alt={liker.name} className="absolute inset-0 w-full h-full object-cover" />
-                ) : (
-                  <div className="absolute inset-0 bg-gradient-to-br from-pink-500/20 to-purple-500/20" />
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-                <div className="absolute bottom-3 left-3">
-                  <div className="font-bold text-sm">{liker.name}, {liker.age}</div>
+            ) : (
+              likers.map((liker) => (
+                <div
+                  key={liker.id}
+                  onClick={() => router.push(`/profile/${liker.id}`)}
+                  className="relative aspect-[3/4] rounded-3xl overflow-hidden bg-zinc-900 cursor-pointer active:scale-95 transition"
+                >
+                  {liker.photo ? (
+                    <img
+                      src={liker.photo}
+                      alt={liker.name}
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 bg-gradient-to-br from-pink-500/20 to-purple-500/20" />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                  <div className="absolute bottom-3 left-3">
+                    <div className="font-bold text-sm">{liker.name}{liker.age ? `, ${liker.age}` : ""}</div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         ) : (
-          /* NON-PREMIUM - blur + upgrade */
           <div className="relative">
             <div className="grid grid-cols-2 gap-3">
               {[1,2,3,4].map(i => (
