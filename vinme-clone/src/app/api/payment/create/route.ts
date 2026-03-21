@@ -4,7 +4,6 @@ const BOG_CLIENT_ID = process.env.BOG_CLIENT_ID || "1006";
 const BOG_SECRET_KEY = process.env.BOG_SECRET_KEY || "581ba5eeadd657c8ccddc74c839bd3ad";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
  
-// dev.ipay.ge - სწორი endpoint-ები ძველი SDK-ს მიხედვით
 const BOG_AUTH_URL = "https://dev.ipay.ge/opay/api/v1/oauth2/token";
 const BOG_ORDER_URL = "https://dev.ipay.ge/opay/api/v1/checkout/orders";
  
@@ -21,7 +20,7 @@ async function getBOGToken(): Promise<string> {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
-      Authorization: `Basic ${credentials}`,
+      "Authorization": `Basic ${credentials}`,
     },
     body: "grant_type=client_credentials",
   });
@@ -33,6 +32,7 @@ async function getBOGToken(): Promise<string> {
   }
  
   const data = await res.json();
+  console.log("BOG token OK:", data.token_type);
   return data.access_token;
 }
  
@@ -40,57 +40,59 @@ export async function POST(req: NextRequest) {
   try {
     const { plan, userId } = await req.json();
  
-    if (!plan || !PLANS[plan]) {
-      return NextResponse.json({ error: "Invalid plan" }, { status: 400 });
-    }
-    if (!userId) {
-      return NextResponse.json({ error: "User not found" }, { status: 401 });
-    }
+    if (!plan || !PLANS[plan]) return NextResponse.json({ error: "Invalid plan" }, { status: 400 });
+    if (!userId) return NextResponse.json({ error: "User not found" }, { status: 401 });
  
     const token = await getBOGToken();
     const shopOrderId = `${userId}_${plan}_${Date.now()}`;
     const planData = PLANS[plan];
  
+    // BOG dev API - სწორი body სტრუქტურა
+    const body = {
+      callback_url: `${APP_URL}/api/payment/callback`,
+      external_order_id: shopOrderId,
+      purchase_units: {
+        currency: "GEL",
+        total_amount: planData.price,
+        basket: [
+          {
+            product_id: plan,
+            quantity: 1,
+            unit_price: planData.price,
+            description: planData.name,
+          }
+        ],
+      },
+      redirect_urls: {
+        success: `${APP_URL}/premium?status=success`,
+        fail: `${APP_URL}/premium?status=fail`,
+      },
+    };
+ 
+    console.log("BOG order request:", JSON.stringify(body));
+ 
     const orderRes = await fetch(BOG_ORDER_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+        "Authorization": `Bearer ${token}`,
       },
-      body: JSON.stringify({
-        intent: "AUTHORIZE",
-        redirect_url: `${APP_URL}/premium?status=success`,
-        shop_order_id: shopOrderId,
-        locale: "ka",
-        industry_type: "ECOMMERCE",
-        currency_code: "GEL",
-        callback_url: `${APP_URL}/api/payment/callback`,
-        purchase_units: [
-          {
-            product_id: plan,
-            quantity: 1,
-            amount: planData.price,
-            description: planData.name,
-          },
-        ],
-      }),
+      body: JSON.stringify(body),
     });
- 
-    if (!orderRes.ok) {
-      const err = await orderRes.text();
-      console.error("BOG order error:", err);
-      throw new Error("Failed to create BOG order");
-    }
  
     const orderData = await orderRes.json();
     console.log("BOG order response:", JSON.stringify(orderData));
  
-    // approve link = გადახდის გვერდი
-    const approveLink = orderData.links?.find((l: { rel: string }) => l.rel === "approve")?.href;
+    if (!orderRes.ok) {
+      throw new Error("Failed to create BOG order");
+    }
+ 
+    const redirectUrl = orderData._links?.redirect?.href 
+      || orderData.links?.find((l: {rel: string}) => l.rel === "approve")?.href;
  
     return NextResponse.json({
-      orderId: orderData.order_id,
-      redirectUrl: approveLink,
+      orderId: orderData.id,
+      redirectUrl,
       shopOrderId,
     });
  
@@ -99,4 +101,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Payment creation failed" }, { status: 500 });
   }
 }
- 
