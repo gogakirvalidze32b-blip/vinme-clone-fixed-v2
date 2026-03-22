@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { getLang } from "@/lib/i18n";
 import BottomNav from "@/components/BottomNav";
-import MatchOverlay from "@/components/MatchOverlay";
+import MatchModal from "@/components/MatchModal";
  
 type Liker = {
   id: string;
@@ -25,7 +25,8 @@ export default function LikesPage() {
   const [loading, setLoading] = useState(true);
   const [myId, setMyId] = useState<string | null>(null);
   const [myPhoto, setMyPhoto] = useState<string | null>(null);
-  const [matchOverlay, setMatchOverlay] = useState<{ visible: boolean; liker: Liker | null }>({ visible: false, liker: null });
+  const [myName, setMyName] = useState<string>("მე");
+  const [matchModal, setMatchModal] = useState<{ visible: boolean; liker: Liker | null; matchId: string | null }>({ visible: false, liker: null, matchId: null });
   const [actionLoading, setActionLoading] = useState<string | null>(null);
  
   const STORAGE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL + "/storage/v1/object/public/";
@@ -48,13 +49,14 @@ export default function LikesPage() {
       setMyId(uid);
  
       const [profileRes, matchesRes, countRes] = await Promise.all([
-        supabase.from("profiles").select("is_premium, premium_until, photo1_url").eq("user_id", uid).maybeSingle(),
+        supabase.from("profiles").select("is_premium, premium_until, photo1_url, nickname").eq("user_id", uid).maybeSingle(),
         supabase.from("matches").select("user_a, user_b").or(`user_a.eq.${uid},user_b.eq.${uid}`),
         supabase.from("swipes").select("id", { count: "exact", head: true }).eq("to_id", uid).eq("action", "like"),
       ]);
  
       const profile = profileRes.data;
       setMyPhoto(buildPhoto(profile?.photo1_url));
+      setMyName(profile?.nickname || "მე");
  
       const premium = profile?.is_premium === true &&
         (!profile?.premium_until || new Date(profile.premium_until) > new Date());
@@ -111,28 +113,29 @@ export default function LikesPage() {
     })();
   }, []);
  
-  const handleLike = async (liker: Liker) => {
+  const handleLike = async (e: React.MouseEvent, liker: Liker) => {
+    e.stopPropagation();
     if (!myId || actionLoading) return;
     setActionLoading(liker.id);
- 
     try {
-      // ვამატებთ swipe like
-      await supabase.from("swipes").insert({
-        from_id: myId,
-        to_id: liker.id,
-        action: "like",
-      });
+      await supabase.from("swipes").insert({ from_id: myId, to_id: liker.id, action: "like" });
+      const { data: match } = await supabase.from("matches").insert({ user_a: myId, user_b: liker.id }).select("id").single();
+      setLikers(prev => prev.filter(l => l.id !== liker.id));
+      setLikeCount(prev => prev - 1);
+      setMatchModal({ visible: true, liker, matchId: match?.id ?? null });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
  
-      // ვქმნით match-ს
-      await supabase.from("matches").insert({
-        user_a: myId,
-        user_b: liker.id,
-      });
- 
-      // ვაჩვენებთ match overlay
-      setMatchOverlay({ visible: true, liker });
- 
-      // ვშლით სიიდან
+  const handleDislike = async (e: React.MouseEvent, liker: Liker) => {
+    e.stopPropagation();
+    if (!myId || actionLoading) return;
+    setActionLoading(liker.id);
+    try {
+      await supabase.from("swipes").insert({ from_id: myId, to_id: liker.id, action: "dislike" });
       setLikers(prev => prev.filter(l => l.id !== liker.id));
       setLikeCount(prev => prev - 1);
     } catch (err) {
@@ -142,44 +145,9 @@ export default function LikesPage() {
     }
   };
  
-  const handleDislike = async (liker: Liker) => {
-    if (!myId || actionLoading) return;
-    setActionLoading(liker.id);
- 
-    try {
-      await supabase.from("swipes").insert({
-        from_id: myId,
-        to_id: liker.id,
-        action: "dislike",
-      });
- 
-      setLikers(prev => prev.filter(l => l.id !== liker.id));
-      setLikeCount(prev => prev - 1);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setActionLoading(null);
-    }
-  };
- 
-  const handleMessage = async (text: string) => {
-    if (!myId || !matchOverlay.liker) return;
-    // match-ის პოვნა და შეტყობინების გაგზავნა
-    const { data: match } = await supabase
-      .from("matches")
-      .select("id")
-      .or(`user_a.eq.${myId},user_b.eq.${myId}`)
-      .or(`user_a.eq.${matchOverlay.liker.id},user_b.eq.${matchOverlay.liker.id}`)
-      .maybeSingle();
- 
-    if (match?.id) {
-      await supabase.from("messages").insert({
-        match_id: match.id,
-        sender_anon: myId,
-        content: text,
-      });
-      router.push(`/chat/${match.id}`);
-    }
+  const handleOpenChat = () => {
+    if (matchModal.matchId) router.push(`/chat/${matchModal.matchId}`);
+    else router.push("/chat");
   };
  
   return (
@@ -212,7 +180,11 @@ export default function LikesPage() {
               </div>
             ) : (
               likers.map((liker) => (
-                <div key={liker.id} className="relative aspect-[3/4] rounded-3xl overflow-hidden bg-zinc-900">
+                <div
+                  key={liker.id}
+                  onClick={() => router.push(`/profile/${liker.id}`)}
+                  className="relative aspect-[3/4] rounded-3xl overflow-hidden bg-zinc-900 cursor-pointer active:scale-95 transition"
+                >
                   {liker.photo ? (
                     <img src={liker.photo} alt={liker.name} className="absolute inset-0 w-full h-full object-cover" />
                   ) : (
@@ -220,22 +192,20 @@ export default function LikesPage() {
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
  
-                  {/* სახელი */}
                   <div className="absolute bottom-16 left-3">
                     <div className="font-bold text-sm">{liker.name}{liker.age ? `, ${liker.age}` : ""}</div>
                   </div>
  
-                  {/* X და ❤️ ღილაკები */}
                   <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-4">
                     <button
-                      onClick={() => handleDislike(liker)}
+                      onClick={(e) => handleDislike(e, liker)}
                       disabled={actionLoading === liker.id}
                       className="w-12 h-12 rounded-full bg-black/60 backdrop-blur border border-white/10 flex items-center justify-center text-xl hover:bg-red-500/30 active:scale-90 transition disabled:opacity-50"
                     >
                       ✕
                     </button>
                     <button
-                      onClick={() => handleLike(liker)}
+                      onClick={(e) => handleLike(e, liker)}
                       disabled={actionLoading === liker.id}
                       className="w-12 h-12 rounded-full bg-black/60 backdrop-blur border border-white/10 flex items-center justify-center text-xl hover:bg-pink-500/30 active:scale-90 transition disabled:opacity-50"
                     >
@@ -280,16 +250,16 @@ export default function LikesPage() {
         )}
       </div>
  
-      {/* Match Overlay */}
-      <MatchOverlay
-        visible={matchOverlay.visible}
-        onClose={() => setMatchOverlay({ visible: false, liker: null })}
-        onMessage={handleMessage}
-        onContinue={() => setMatchOverlay({ visible: false, liker: null })}
-        mePhoto={myPhoto}
-        otherPhoto={matchOverlay.liker?.photo}
-        otherName={matchOverlay.liker?.name}
-      />
+      {matchModal.visible && (
+        <MatchModal
+          onClose={() => setMatchModal({ visible: false, liker: null, matchId: null })}
+          onOpenChat={handleOpenChat}
+          meName={myName}
+          matchName={matchModal.liker?.name ?? ""}
+          myPhoto={myPhoto}
+          theirPhoto={matchModal.liker?.photo ?? null}
+        />
+      )}
  
       <BottomNav />
     </main>
