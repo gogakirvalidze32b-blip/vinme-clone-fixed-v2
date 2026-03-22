@@ -1,293 +1,281 @@
 "use client";
-
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+ 
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { photoSrc } from "@/lib/photos";
 import { getLang } from "@/lib/i18n";
 import BottomNav from "@/components/BottomNav";
-
-function calcAge(birthdate: string | null): number | null {
-  if (!birthdate) return null;
-  const bd = new Date(birthdate);
-  const now = new Date();
-  let age = now.getFullYear() - bd.getFullYear();
-  if (now.getMonth() < bd.getMonth() || (now.getMonth() === bd.getMonth() && now.getDate() < bd.getDate())) age--;
-  return age;
-}
-
-function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
-}
-
-const INTENT_KA: Record<string,string> = { relationship:"ურთიერთობა", friends:"მეგობრობა", casual:"კაჟუალი", short_term_open:"მოკლევადიანი", long_term_open:"გრძელვადიანი", long_term:"გრძელვადიანი", short_term:"მოკლევადიანი", networking:"ნეთვორქინგი" };
-const INTENT_EN: Record<string,string> = { relationship:"Relationship", friends:"Friends", casual:"Casual", short_term_open:"Short-term", long_term_open:"Long-term", long_term:"Long-term", short_term:"Short-term", networking:"Networking" };
-const GENDER_KA: Record<string,string> = { male:"მამაკაცი", female:"ქალი", nonbinary:"არარობინარი" };
-const GENDER_EN: Record<string,string> = { male:"Man", female:"Woman", nonbinary:"Non-binary" };
-const ORIENT_KA: Record<string,string> = { straight:"ჰეტეროსექსუალი", gay:"გეი", lesbian:"ლესბოსელი", bisexual:"ბისექსუალი", asexual:"ასექსუალი", demisexual:"დემისექსუალი", pansexual:"პანსექსუალი", queer:"ქვირი", questioning:"კითხვის ნიშნის ქვეშ", not_listed:"სხვა", other:"სხვა" };
-const ORIENT_EN: Record<string,string> = { straight:"Straight", gay:"Gay", lesbian:"Lesbian", bisexual:"Bisexual", asexual:"Asexual", demisexual:"Demisexual", pansexual:"Pansexual", queer:"Queer", questioning:"Questioning", not_listed:"Not listed", other:"Other" };
-
-export default function UserProfilePage() {
+import MatchOverlay from "@/components/MatchOverlay";
+ 
+type Liker = {
+  id: string;
+  name: string;
+  age: number;
+  photo: string;
+};
+ 
+export default function LikesPage() {
   const router = useRouter();
-  const params = useParams();
-  const userId = params?.userId as string;
   const lang = getLang();
-  const ka = lang !== "en";
-
-  const [profile, setProfile] = useState<any>(null);
-  const [myProfile, setMyProfile] = useState<any>(null);
+  const L = (ka: string, en: string) => lang === "en" ? en : ka;
+ 
+  const [likeCount, setLikeCount] = useState(0);
+  const [isPremium, setIsPremium] = useState(false);
+  const [likers, setLikers] = useState<Liker[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activePhoto, setActivePhoto] = useState(0);
-  const [showDetails, setShowDetails] = useState(false);
-  const detailsRef = useRef<HTMLDivElement>(null);
-
+  const [myId, setMyId] = useState<string | null>(null);
+  const [myPhoto, setMyPhoto] = useState<string | null>(null);
+  const [matchOverlay, setMatchOverlay] = useState<{ visible: boolean; liker: Liker | null }>({ visible: false, liker: null });
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+ 
+  const STORAGE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL + "/storage/v1/object/public/";
+ 
+  const buildPhoto = (url: string | null) => {
+    if (!url) return "";
+    return url.startsWith("http") ? url : STORAGE_URL + url;
+  };
+ 
   useEffect(() => {
-    if (!userId) return;
+    try {
+      const cachedCount = localStorage.getItem("likes_count_cache");
+      if (cachedCount !== null) setLikeCount(Number(cachedCount));
+    } catch (e) {}
+ 
     (async () => {
       const { data: sess } = await supabase.auth.getSession();
       const uid = sess.session?.user?.id;
-      const [{ data: other }, { data: me }] = await Promise.all([
-        supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
-        uid ? supabase.from("profiles").select("*").eq("user_id", uid).maybeSingle() : Promise.resolve({ data: null }),
+      if (!uid) { setLoading(false); return; }
+      setMyId(uid);
+ 
+      const [profileRes, matchesRes, countRes] = await Promise.all([
+        supabase.from("profiles").select("is_premium, premium_until, photo1_url").eq("user_id", uid).maybeSingle(),
+        supabase.from("matches").select("user_a, user_b").or(`user_a.eq.${uid},user_b.eq.${uid}`),
+        supabase.from("swipes").select("id", { count: "exact", head: true }).eq("to_id", uid).eq("action", "like"),
       ]);
-      setProfile(other);
-      setMyProfile(me);
-      setLoading(false);
-
-      // ✅ შენი GPS-ის განახლება — რათა კილომეტრი სწორად გამოჩნდეს
-      if (uid && navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          async (pos) => {
-            const lat = pos.coords.latitude;
-            const lon = pos.coords.longitude;
-            // state-ი განვაახლოთ მყისიერად — UI-ში კილომეტრი გამოჩნდება
-           // ძველი კოდი:
-        // შეცვლილი კოდი:
-          setMyProfile((prev: any) => prev ? { ...prev, lat: lat, lng: lon } : prev);
-          await supabase.from("profiles")
-            .update({ lat: lat, lng: lon })
-            .eq("user_id", uid);
-          },
-          () => {
-            // GPS permission denied — ძველი კოორდინატები დარჩება
-          }
-        );
+ 
+      const profile = profileRes.data;
+      setMyPhoto(buildPhoto(profile?.photo1_url));
+ 
+      const premium = profile?.is_premium === true &&
+        (!profile?.premium_until || new Date(profile.premium_until) > new Date());
+ 
+      const matchedIds = new Set(
+        (matchesRes.data || []).map((m: any) => m.user_a === uid ? m.user_b : m.user_a)
+      );
+ 
+      setIsPremium(premium);
+ 
+      if (countRes.count !== null) {
+        localStorage.setItem("likes_count_cache", String(countRes.count));
       }
+ 
+      if (!premium) { setLoading(false); return; }
+ 
+      const { data: swipes } = await supabase
+        .from("swipes")
+        .select("from_id")
+        .eq("to_id", uid)
+        .eq("action", "like")
+        .limit(50);
+ 
+      if (swipes && swipes.length > 0) {
+        const fromIds = swipes
+          .map((s: any) => s.from_id)
+          .filter((id: string) => !matchedIds.has(id));
+ 
+        if (fromIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from("profiles")
+            .select("user_id, nickname, age, photo1_url")
+            .in("user_id", fromIds);
+ 
+          if (profiles) {
+            const likersList = profiles.map((p: any) => ({
+              id: p.user_id,
+              name: p.nickname || "?",
+              age: p.age || 0,
+              photo: buildPhoto(p.photo1_url),
+            }));
+            setLikers(likersList);
+            setLikeCount(likersList.length);
+            localStorage.setItem("likes_count_cache", String(likersList.length));
+          }
+        } else {
+          setLikeCount(0);
+        }
+      } else {
+        setLikeCount(0);
+      }
+ 
+      setLoading(false);
     })();
-  }, [userId]);
-
-  const photos = useMemo(() => {
-    if (!profile) return [];
-    return [1,2,3,4,5,6,7,8,9].map(i => profile[`photo${i}_url`]).filter(Boolean).map((p: string) => photoSrc(p));
-  }, [profile]);
-
-  const age = useMemo(() => profile?.age ?? calcAge(profile?.birthdate ?? null), [profile]);
-
-
-   console.log("DEBUG LOCATION:", { 
-    myLat: myProfile?.latitude, 
-    myLon: myProfile?.longitude, 
-    otherLat: profile?.latitude, // ან top?.latitude Feed-ში
-    otherLon: profile?.longitude // ან top?.longitude Feed-ში
-  });
-
-const distanceKm = useMemo(() => {
-    // 1. ვამოწმებთ, საერთოდ გვაქვს თუ არა ოთხივე რიცხვი
-    if (!profile?.latitude || !profile?.longitude || !myProfile?.latitude || !myProfile?.longitude) return null;
-    
-    // 2. ვამოწმებთ, ხომ არ არის რომელიმე 0 (ნულოვანი კოორდინატები)
-    if (profile.latitude === 0 && profile.longitude === 0) return null;
-    if (myProfile.latitude === 0 && myProfile.longitude === 0) return null;
-
-    // 3. ვითვლით მანძილს
-    const dist = haversineKm(myProfile.latitude, myProfile.longitude, profile.latitude, profile.longitude);
-    
-    // 4. ვამოწმებთ, ხომ არ არის 5000 კმ-ზე მეტი (დამცავი)
-    if (dist > 5000) return null;
-
-    return dist;
-  },[profile, myProfile]);
-
-
-  async function goToChat() {
-    if (!myProfile) return;
-    const myId = myProfile.user_id;
-    const { data: existing } = await supabase.from("matches").select("id")
-      .or(`and(user_a.eq.${myId},user_b.eq.${userId}),and(user_a.eq.${userId},user_b.eq.${myId})`).maybeSingle();
-    if (existing?.id) { router.push(`/chat/${existing.id}`); return; }
-    router.push("/chat");
-  }
-
-  if (loading) return <div className="h-[100dvh] bg-black flex items-center justify-center text-white">Loading…</div>;
-  if (!profile) return <div className="h-[100dvh] bg-black flex items-center justify-center text-white">Not found</div>;
-
-  const name = profile.nickname ?? profile.first_name ?? "User";
-
+  }, []);
+ 
+  const handleLike = async (liker: Liker) => {
+    if (!myId || actionLoading) return;
+    setActionLoading(liker.id);
+ 
+    try {
+      // ვამატებთ swipe like
+      await supabase.from("swipes").insert({
+        from_id: myId,
+        to_id: liker.id,
+        action: "like",
+      });
+ 
+      // ვქმნით match-ს
+      await supabase.from("matches").insert({
+        user_a: myId,
+        user_b: liker.id,
+      });
+ 
+      // ვაჩვენებთ match overlay
+      setMatchOverlay({ visible: true, liker });
+ 
+      // ვშლით სიიდან
+      setLikers(prev => prev.filter(l => l.id !== liker.id));
+      setLikeCount(prev => prev - 1);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+ 
+  const handleDislike = async (liker: Liker) => {
+    if (!myId || actionLoading) return;
+    setActionLoading(liker.id);
+ 
+    try {
+      await supabase.from("swipes").insert({
+        from_id: myId,
+        to_id: liker.id,
+        action: "dislike",
+      });
+ 
+      setLikers(prev => prev.filter(l => l.id !== liker.id));
+      setLikeCount(prev => prev - 1);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+ 
+  const handleMessage = async (text: string) => {
+    if (!myId || !matchOverlay.liker) return;
+    // match-ის პოვნა და შეტყობინების გაგზავნა
+    const { data: match } = await supabase
+      .from("matches")
+      .select("id")
+      .or(`user_a.eq.${myId},user_b.eq.${myId}`)
+      .or(`user_a.eq.${matchOverlay.liker.id},user_b.eq.${matchOverlay.liker.id}`)
+      .maybeSingle();
+ 
+    if (match?.id) {
+      await supabase.from("messages").insert({
+        match_id: match.id,
+        sender_anon: myId,
+        content: text,
+      });
+      router.push(`/chat/${match.id}`);
+    }
+  };
+ 
   return (
-    <div className="min-h-[100dvh] bg-black text-white">
-
-      <div className="mx-auto" style={{ maxWidth: 430 }}>
-
-        {/* PHOTO SECTION */}
-        <div className="relative w-full bg-black overflow-hidden" style={{ height: "80dvh" }}>
-
-          {photos.length > 0 ? (
-            <img
-              src={photos[activePhoto]}
-              className="absolute inset-0 w-full h-full object-cover object-top"
-              alt=""
-              onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-            />
-          ) : (
-            <div className="absolute inset-0 bg-zinc-900 flex items-center justify-center">
-              <span className="text-7xl opacity-20">👤</span>
-            </div>
-          )}
-
-          <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/75 pointer-events-none" />
-
-          {photos.length > 1 && (
-            <div className="absolute top-3 left-0 right-0 flex gap-1 px-12 z-20">
-              {photos.map((_, i) => (
-                <div key={i} className="flex-1 h-0.5 rounded-full bg-white/30 overflow-hidden">
-                  <div className={`h-full bg-white transition-all ${i <= activePhoto ? "w-full" : "w-0"}`} />
+    <main className="min-h-[100dvh] bg-black text-white pb-28">
+      <div className="mx-auto w-full max-w-md px-4 pt-6">
+        <h1 className="text-2xl font-extrabold mb-1">{L("მოწონებები", "Likes")}</h1>
+        <p className="text-sm text-white/40 mb-6">
+          {L(`${likeCount} ადამიანმა მოგიწონა`, `${likeCount} people liked you`)}
+        </p>
+ 
+        <div className="flex rounded-full bg-white/8 p-1 mb-6">
+          <button className="flex-1 rounded-full py-2 text-sm font-semibold bg-white text-black">
+            {L(`${likeCount} მოწონება`, `${likeCount} Like${likeCount !== 1 ? "s" : ""}`)}
+          </button>
+          <button className="flex-1 rounded-full py-2 text-sm font-semibold text-white/40">
+            {L("საუკეთესო", "Top Picks")}
+            <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-pink-500" />
+          </button>
+        </div>
+ 
+        {loading ? (
+          <div className="flex justify-center items-center py-20">
+            <div className="w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : isPremium ? (
+          <div className="grid grid-cols-2 gap-3">
+            {likers.length === 0 ? (
+              <div className="col-span-2 text-center text-white/40 py-12">
+                {L("ჯერ არავის მოუწონებია", "No likes yet")}
+              </div>
+            ) : (
+              likers.map((liker) => (
+                <div
+                  key={liker.id}
+                  onClick={() => router.push(`/profile/${liker.id}`)}
+                  className="relative aspect-[3/4] rounded-3xl overflow-hidden bg-zinc-900 cursor-pointer active:scale-95 transition"
+                >
+                  {liker.photo ? (
+                    <img src={liker.photo} alt={liker.name} className="absolute inset-0 w-full h-full object-cover" />
+                  ) : (
+                    <div className="absolute inset-0 bg-gradient-to-br from-pink-500/20 to-purple-500/20" />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
+                  <div className="absolute bottom-3 left-3">
+                    <div className="font-bold text-sm">{liker.name}{liker.age ? `, ${liker.age}` : ""}</div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        ) : (
+          <div className="relative">
+            <div className="grid grid-cols-2 gap-3">
+              {[1,2,3,4].map(i => (
+                <div key={i} className="relative aspect-[3/4] rounded-3xl overflow-hidden bg-zinc-900">
+                  <div className="absolute inset-0 bg-gradient-to-br from-pink-500/20 to-purple-500/20" />
+                  <div className="absolute inset-0 backdrop-blur-xl" />
+                  <div className="absolute bottom-3 left-3">
+                    <div className="h-3 w-20 bg-white/30 rounded-full" />
+                    <div className="h-2 w-12 bg-white/20 rounded-full mt-1.5" />
+                  </div>
                 </div>
               ))}
             </div>
-          )}
-
-          {photos.length > 1 && (
-            <>
-              <button className="absolute left-0 top-0 bottom-0 w-1/3 z-10" onClick={() => setActivePhoto(p => Math.max(0, p-1))} />
-              <button className="absolute right-0 top-0 bottom-0 w-1/3 z-10" onClick={() => setActivePhoto(p => Math.min(photos.length-1, p+1))} />
-            </>
-          )}
-
-          <button onClick={() => router.back()}
-            className="absolute top-4 left-4 z-20 w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white shadow"
-            style={{ marginTop: "env(safe-area-inset-top, 0px)" }}>
-            ←
-          </button>
-
-          <div className="absolute bottom-0 left-0 right-0 z-20 px-4 pb-4">
-            <div className="flex items-end justify-between">
-              <div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-black drop-shadow">{name}</span>
-                  {age && <span className="text-3xl font-light text-white/85 drop-shadow">{age}</span>}
+            <div className="absolute inset-0 flex flex-col items-center justify-center px-6">
+              <div className="rounded-3xl bg-zinc-950/90 backdrop-blur p-6 ring-1 ring-white/10 text-center w-full max-w-[280px]">
+                <div className="text-4xl mb-3">👀</div>
+                <div className="font-extrabold text-base mb-1">
+                  {L("ნახე ვინ მოგწონს", "See Who Likes You")}
                 </div>
-
-                {(profile.city || distanceKm != null) && (
-                  <div className="flex items-center gap-1 text-sm text-white/80 mt-1 font-medium drop-shadow-md">
-                    <span>📍</span>
-                    <span>
-                      {profile.city ? profile.city : ""}
-                      {profile.city && distanceKm != null ? " · " : ""}
-                      {distanceKm != null ? `${distanceKm} ${ka ? "კმ" : "km"}` : ""}
-                    </span>
-                  </div>
-                )}
+                <div className="text-xs text-white/50 mb-4">
+                  {L("გააქტიურე Premium-ი ვინ მოგწონს სანახავად", "Upgrade to see everyone who already liked you")}
+                </div>
+                <button
+                  onClick={() => router.push("/premium")}
+                  className="w-full rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 py-3 font-bold text-black text-sm hover:shadow-lg transition active:scale-95">
+                  {L("Upgrade Premium", "Upgrade to Gold")} 👑
+                </button>
               </div>
-
-              <button
-                onClick={() => { setShowDetails(v => !v); setTimeout(() => detailsRef.current?.scrollIntoView({ behavior: "smooth" }), 60); }}
-                className="w-11 h-11 rounded-full bg-white flex items-center justify-center shadow-xl transition-transform"
-                style={{ transform: showDetails ? "rotate(180deg)" : "rotate(0deg)" }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path d="M6 9l6 6 6-6" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </button>
-            </div>
-
-            <div className="flex flex-wrap gap-2 mt-2.5">
-              {profile.intent && (
-                <span className="rounded-full bg-white/15 backdrop-blur-sm px-3 py-1 text-xs font-medium">
-                  🎯 {ka ? (INTENT_KA[profile.intent] ?? profile.intent) : (INTENT_EN[profile.intent] ?? profile.intent)}
-                </span>
-              )}
-              {profile.gender && (
-                <span className="rounded-full bg-white/15 backdrop-blur-sm px-3 py-1 text-xs font-medium">
-                  {ka ? (GENDER_KA[profile.gender] ?? profile.gender) : (GENDER_EN[profile.gender] ?? profile.gender)}
-                </span>
-              )}
             </div>
           </div>
-        </div>
-
-        {/* DETAILS */}
-        <div ref={detailsRef} className={`overflow-hidden transition-all duration-300 ${showDetails ? "opacity-100" : "opacity-0 h-0"}`}>
-          <div className="px-4 py-4 space-y-3" style={{ paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))" }}>
-
-            {profile.bio && (
-              <div className="rounded-2xl bg-zinc-900 p-4 ring-1 ring-white/8">
-                <div className="text-[11px] text-white/35 uppercase tracking-wide mb-1">{ka ? "ბიო" : "About"}</div>
-                <p className="text-sm leading-relaxed text-white/90">{profile.bio}</p>
-              </div>
-            )}
-
-            <div className="rounded-2xl bg-zinc-900 ring-1 ring-white/8 divide-y divide-white/5 overflow-hidden">
-              {profile.gender && <InfoRow icon="⚧" label={ka?"სქესი":"Gender"} value={ka?(GENDER_KA[profile.gender]??profile.gender):(GENDER_EN[profile.gender]??profile.gender)} />}
-              {profile.orientation && <InfoRow icon="" label={ka?"ორიენტაცია":"Orientation"} value={ka?(ORIENT_KA[profile.orientation]??profile.orientation):(ORIENT_EN[profile.orientation]??profile.orientation)} />}
-              {profile.intent && <InfoRow icon="🎯" label={ka?"მიზანი":"Looking for"} value={ka?(INTENT_KA[profile.intent]??profile.intent):(INTENT_EN[profile.intent]??profile.intent)} />}
-              {profile.job_title && <InfoRow icon="💼" label={ka?"სამსახური":"Job"} value={`${profile.job_title}${profile.company?" · "+profile.company:""}`} />}
-              {profile.education && <InfoRow icon="🎓" label={ka?"განათლება":"Education"} value={profile.education} />}
-            </div>
-
-            {(profile.pets||profile.drinking||profile.smoking||profile.workout) && (
-              <div className="flex flex-wrap gap-2">
-                {profile.pets && <Chip icon="🐾" label={profile.pets} />}
-                {profile.drinking && <Chip icon="🍷" label={profile.drinking} />}
-                {profile.smoking && <Chip icon="🚬" label={profile.smoking} />}
-                {profile.workout && <Chip icon="💪" label={profile.workout} />}
-              </div>
-            )}
-
-            {photos.length > 1 && (
-              <div className="grid grid-cols-3 gap-0.5 rounded-2xl overflow-hidden">
-                {photos.map((ph, i) => (
-                  <button key={i} onClick={() => { setActivePhoto(i); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                    className={`aspect-square overflow-hidden ${i===activePhoto?"ring-2 ring-pink-500":""}`}>
-                    <img src={ph} className="w-full h-full object-cover" alt=""
-                      onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <button onClick={goToChat}
-              className="w-full rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 py-4 font-bold text-white text-base shadow-lg active:scale-[0.99] transition">
-              💬 {ka ? "მესიჯის გაგზავნა" : "Send Message"}
-            </button>
-          </div>
-        </div>
-
+        )}
       </div>
+ 
+      {/* Match Overlay */}
+      <MatchOverlay
+        visible={matchOverlay.visible}
+        onClose={() => setMatchOverlay({ visible: false, liker: null })}
+        onMessage={handleMessage}
+        onContinue={() => setMatchOverlay({ visible: false, liker: null })}
+        mePhoto={myPhoto}
+        otherPhoto={matchOverlay.liker?.photo}
+        otherName={matchOverlay.liker?.name}
+      />
+ 
       <BottomNav />
-    </div>
-  );
-}
-
-function InfoRow({ icon, label, value }: { icon: string; label: string; value: string }) {
-  return (
-    <div className="flex items-center gap-3 px-4 py-3">
-      <span className="text-base shrink-0">{icon}</span>
-      <div className="min-w-0">
-        <div className="text-[10px] text-white/35 uppercase tracking-wide">{label}</div>
-        <div className="text-sm font-medium text-white truncate">{value}</div>
-      </div>
-    </div>
-  );
-}
-
-function Chip({ icon, label }: { icon: string; label: string }) {
-  return (
-    <div className="flex items-center gap-1.5 rounded-full bg-zinc-800 px-3 py-1.5">
-      <span className="text-sm">{icon}</span>
-      <span className="text-xs text-white/75 font-medium">{label}</span>
-    </div>
+    </main>
   );
 }
