@@ -47,21 +47,24 @@ export async function POST(req: NextRequest) {
     const shopOrderId = `${userId}_${plan}_${Date.now()}`;
     const planData = PLANS[plan];
  
-    const body = {
-      intent: "CAPTURE",
-      purchaseUnit: {
-        amount: {
-          value: planData.price.toFixed(2),
-          currency_code: "GEL",
-        },
-        shop_order_id: shopOrderId,
-      },
-      redirect_urls: {
-        success: `${APP_URL}/premium?status=success`,
-        fail: `${APP_URL}/premium?status=fail`,
-      },
-      callback_url: `${APP_URL}/api/payment/callback`,
-    };
+   // app/api/payment/create/route.ts (შემოკლებული)
+const body = {
+  intent: "CAPTURE",
+  purchaseUnit: {
+    amount: {
+      value: planData.price.toFixed(2),
+      currency_code: "GEL",
+    },
+    shop_order_id: shopOrderId,
+  },
+  // 🔥 ვეუბნებით BOG-ს, რომ გვინდა ბარათის ტოკენი დაგვიბრუნოს მომავალი ჩამოჭრებისთვის
+  save_card: true, 
+  redirect_urls: {
+    success: `${APP_URL}/premium?status=success`,
+    fail: `${APP_URL}/premium?status=fail`,
+  },
+  callback_url: `${APP_URL}/api/payment/callback`,
+};
  
     console.log("BOG order request:", JSON.stringify(body));
  
