@@ -27,6 +27,8 @@ type Props = {
   onLike?: () => void | Promise<void>;
   onSkip?: () => void | Promise<void>;
   onSuperLike?: () => void | Promise<void>;
+  onSendMessage: (message: string) => void;
+  messagesLeft: number;
   onFirstImpression?: (message: string) => void | Promise<void>;
   superLikesLeft?: number;
   firstImpressionsLeft?: number;
