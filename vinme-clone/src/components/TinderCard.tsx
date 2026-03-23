@@ -44,6 +44,8 @@ type Props = {
 export default function TinderCard({
   user, otherUserId, myProfile, loading,
   onLike, onSkip, onSuperLike, onFirstImpression,
+  onSendMessage,   // ✅
+  messagesLeft,    // ✅
   superLikesLeft = 0, firstImpressionsLeft = 0,
   externalMatchId, externalShowMatch, onCloseMatch, onOpenChat,
   matchedUserName, matchedUserPhoto, onOpenProfile,
