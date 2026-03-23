@@ -40,7 +40,10 @@ export default function UserProfilePage() {
 
   const [profile, setProfile] = useState<any>(null);
   const [myProfile, setMyProfile] = useState<any>(null);
+  const [isMatch, setIsMatch] = useState(false);
+  const[hasSwiped, setHasSwiped] = useState(false); // თუ უკვე შევაფასეთ, მაგრამ მეჩი არაა
   const [loading, setLoading] = useState(true);
+  
   const [activePhoto, setActivePhoto] = useState(0);
   const [showDetails, setShowDetails] = useState(false);
   const detailsRef = useRef<HTMLDivElement>(null);
@@ -50,31 +53,35 @@ export default function UserProfilePage() {
     (async () => {
       const { data: sess } = await supabase.auth.getSession();
       const uid = sess.session?.user?.id;
-      const [{ data: other }, { data: me }] = await Promise.all([
+      
+      // ვიძახებთ პროფილებს + შემოწმებებს მეჩზე და სვაიპზე ერთდროულად
+      const[
+        { data: other },
+        { data: me },
+        { data: matchData },
+        { data: mySwipeData }
+      ] = await Promise.all([
         supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
         uid ? supabase.from("profiles").select("*").eq("user_id", uid).maybeSingle() : Promise.resolve({ data: null }),
+        uid ? supabase.from("matches").select("id").or(`and(user_a.eq.${uid},user_b.eq.${userId}),and(user_a.eq.${userId},user_b.eq.${uid})`).maybeSingle() : Promise.resolve({ data: null }),
+        uid ? supabase.from("swipes").select("action").eq("from_id", uid).eq("to_id", userId).maybeSingle() : Promise.resolve({ data: null })
       ]);
+
       setProfile(other);
       setMyProfile(me);
+      setIsMatch(!!matchData);
+      setHasSwiped(!!mySwipeData);
       setLoading(false);
 
-      // ✅ შენი GPS-ის განახლება — რათა კილომეტრი სწორად გამოჩნდეს
       if (uid && navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           async (pos) => {
             const lat = pos.coords.latitude;
             const lon = pos.coords.longitude;
-            // state-ი განვაახლოთ მყისიერად — UI-ში კილომეტრი გამოჩნდება
-           // ძველი კოდი:
-        // შეცვლილი კოდი:
-          setMyProfile((prev: any) => prev ? { ...prev, lat: lat, lng: lon } : prev);
-          await supabase.from("profiles")
-            .update({ lat: lat, lng: lon })
-            .eq("user_id", uid);
+            setMyProfile((prev: any) => prev ? { ...prev, lat: lat, lng: lon } : prev);
+            await supabase.from("profiles").update({ lat: lat, lng: lon }).eq("user_id", uid);
           },
-          () => {
-            // GPS permission denied — ძველი კოორდინატები დარჩება
-          }
+          () => {}
         );
       }
     })();
@@ -82,36 +89,20 @@ export default function UserProfilePage() {
 
   const photos = useMemo(() => {
     if (!profile) return [];
-    return [1,2,3,4,5,6,7,8,9].map(i => profile[`photo${i}_url`]).filter(Boolean).map((p: string) => photoSrc(p));
+    return[1,2,3,4,5,6,7,8,9].map(i => profile[`photo${i}_url`]).filter(Boolean).map((p: string) => photoSrc(p));
   }, [profile]);
 
   const age = useMemo(() => profile?.age ?? calcAge(profile?.birthdate ?? null), [profile]);
 
+  const distanceKm = useMemo(() => {
+    if (!profile?.lat || !profile?.lng || !myProfile?.lat || !myProfile?.lng) return null;
+    if (profile.lat === 0 && profile.lng === 0) return null;
+    if (myProfile.lat === 0 && myProfile.lng === 0) return null;
 
-   console.log("DEBUG LOCATION:", { 
-    myLat: myProfile?.latitude, 
-    myLon: myProfile?.longitude, 
-    otherLat: profile?.latitude, // ან top?.latitude Feed-ში
-    otherLon: profile?.longitude // ან top?.longitude Feed-ში
-  });
-
-const distanceKm = useMemo(() => {
-    // 1. ვამოწმებთ, საერთოდ გვაქვს თუ არა ოთხივე რიცხვი
-    if (!profile?.latitude || !profile?.longitude || !myProfile?.latitude || !myProfile?.longitude) return null;
-    
-    // 2. ვამოწმებთ, ხომ არ არის რომელიმე 0 (ნულოვანი კოორდინატები)
-    if (profile.latitude === 0 && profile.longitude === 0) return null;
-    if (myProfile.latitude === 0 && myProfile.longitude === 0) return null;
-
-    // 3. ვითვლით მანძილს
-    const dist = haversineKm(myProfile.latitude, myProfile.longitude, profile.latitude, profile.longitude);
-    
-    // 4. ვამოწმებთ, ხომ არ არის 5000 კმ-ზე მეტი (დამცავი)
+    const dist = haversineKm(myProfile.lat, myProfile.lng, profile.lat, profile.lng);
     if (dist > 5000) return null;
-
     return dist;
-  },[profile, myProfile]);
-
+  }, [profile, myProfile]);
 
   async function goToChat() {
     if (!myProfile) return;
@@ -122,6 +113,48 @@ const distanceKm = useMemo(() => {
     router.push("/chat");
   }
 
+  // ახალი ფუნქცია: X და ❤️ ღილაკებისთვის
+  async function handleSwipe(action: "like" | "pass") {
+    if (!myProfile || !profile) return;
+    const myId = myProfile.user_id;
+    const theirId = profile.user_id;
+
+    // 1. ვწერთ ჩვენს სვაიპს (like ან pass)
+    await supabase.from("swipes").insert({
+      from_id: myId,
+      to_id: theirId,
+      action: action,
+    });
+
+    setHasSwiped(true);
+
+    if (action === "like") {
+      // 2. ვამოწმებთ, იმან თუ უკვე დაგვილაიქა (მაგალითად, თუ Likes გვერდიდან შემოვედით)
+      const { data: theirSwipe } = await supabase.from("swipes").select("id")
+        .eq("from_id", theirId)
+        .eq("to_id", myId)
+        .eq("action", "like")
+        .maybeSingle();
+
+      if (theirSwipe) {
+        // უკვე დაულაიქებივართ -> მეჩია!
+        await supabase.from("matches").insert({
+          user_a: myId,
+          user_b: theirId,
+        });
+        
+        // ვცვლით state-ს და ეგრევე გამოჩნდება მესიჯის ღილაკი
+        setIsMatch(true);
+      } else {
+        // თუ ისეთს დავულაიქეთ, ვისაც ჯერ არ მოვწონვართ, ვბრუნდებით უკან
+        router.back();
+      }
+    } else {
+      // თუ X დავაჭირეთ, ვბრუნდებით უკან
+      router.back();
+    }
+  }
+
   if (loading) return <div className="h-[100dvh] bg-black flex items-center justify-center text-white">Loading…</div>;
   if (!profile) return <div className="h-[100dvh] bg-black flex items-center justify-center text-white">Not found</div>;
 
@@ -129,27 +162,17 @@ const distanceKm = useMemo(() => {
 
   return (
     <div className="min-h-[100dvh] bg-black text-white">
-
       <div className="mx-auto" style={{ maxWidth: 430 }}>
-
         {/* PHOTO SECTION */}
         <div className="relative w-full bg-black overflow-hidden" style={{ height: "80dvh" }}>
-
           {photos.length > 0 ? (
-            <img
-              src={photos[activePhoto]}
-              className="absolute inset-0 w-full h-full object-cover object-top"
-              alt=""
-              onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-            />
+             <img src={photos[activePhoto]} className="absolute inset-0 w-full h-full object-cover object-top" alt="" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
           ) : (
-            <div className="absolute inset-0 bg-zinc-900 flex items-center justify-center">
-              <span className="text-7xl opacity-20">👤</span>
-            </div>
+             <div className="absolute inset-0 bg-zinc-900 flex items-center justify-center"><span className="text-7xl opacity-20">👤</span></div>
           )}
-
+          {/* ... სხვა UI (სურათების სლაიდერი და ღილაკები) ... */}
+          
           <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/75 pointer-events-none" />
-
           {photos.length > 1 && (
             <div className="absolute top-3 left-0 right-0 flex gap-1 px-12 z-20">
               {photos.map((_, i) => (
@@ -159,7 +182,6 @@ const distanceKm = useMemo(() => {
               ))}
             </div>
           )}
-
           {photos.length > 1 && (
             <>
               <button className="absolute left-0 top-0 bottom-0 w-1/3 z-10" onClick={() => setActivePhoto(p => Math.max(0, p-1))} />
@@ -167,11 +189,7 @@ const distanceKm = useMemo(() => {
             </>
           )}
 
-          <button onClick={() => router.back()}
-            className="absolute top-4 left-4 z-20 w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white shadow"
-            style={{ marginTop: "env(safe-area-inset-top, 0px)" }}>
-            ←
-          </button>
+          <button onClick={() => router.back()} className="absolute top-4 left-4 z-20 w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white shadow" style={{ marginTop: "env(safe-area-inset-top, 0px)" }}>←</button>
 
           <div className="absolute bottom-0 left-0 right-0 z-20 px-4 pb-4">
             <div className="flex items-end justify-between">
@@ -180,7 +198,6 @@ const distanceKm = useMemo(() => {
                   <span className="text-3xl font-black drop-shadow">{name}</span>
                   {age && <span className="text-3xl font-light text-white/85 drop-shadow">{age}</span>}
                 </div>
-
                 {(profile.city || distanceKm != null) && (
                   <div className="flex items-center gap-1 text-sm text-white/80 mt-1 font-medium drop-shadow-md">
                     <span>📍</span>
@@ -201,19 +218,6 @@ const distanceKm = useMemo(() => {
                   <path d="M6 9l6 6 6-6" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </button>
-            </div>
-
-            <div className="flex flex-wrap gap-2 mt-2.5">
-              {profile.intent && (
-                <span className="rounded-full bg-white/15 backdrop-blur-sm px-3 py-1 text-xs font-medium">
-                  🎯 {ka ? (INTENT_KA[profile.intent] ?? profile.intent) : (INTENT_EN[profile.intent] ?? profile.intent)}
-                </span>
-              )}
-              {profile.gender && (
-                <span className="rounded-full bg-white/15 backdrop-blur-sm px-3 py-1 text-xs font-medium">
-                  {ka ? (GENDER_KA[profile.gender] ?? profile.gender) : (GENDER_EN[profile.gender] ?? profile.gender)}
-                </span>
-              )}
             </div>
           </div>
         </div>
@@ -237,31 +241,37 @@ const distanceKm = useMemo(() => {
               {profile.education && <InfoRow icon="🎓" label={ka?"განათლება":"Education"} value={profile.education} />}
             </div>
 
-            {(profile.pets||profile.drinking||profile.smoking||profile.workout) && (
-              <div className="flex flex-wrap gap-2">
-                {profile.pets && <Chip icon="🐾" label={profile.pets} />}
-                {profile.drinking && <Chip icon="🍷" label={profile.drinking} />}
-                {profile.smoking && <Chip icon="🚬" label={profile.smoking} />}
-                {profile.workout && <Chip icon="💪" label={profile.workout} />}
-              </div>
-            )}
-
             {photos.length > 1 && (
-              <div className="grid grid-cols-3 gap-0.5 rounded-2xl overflow-hidden">
+              <div className="grid grid-cols-3 gap-0.5 rounded-2xl overflow-hidden mb-4">
                 {photos.map((ph, i) => (
                   <button key={i} onClick={() => { setActivePhoto(i); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                     className={`aspect-square overflow-hidden ${i===activePhoto?"ring-2 ring-pink-500":""}`}>
-                    <img src={ph} className="w-full h-full object-cover" alt=""
-                      onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
+                    <img src={ph} className="w-full h-full object-cover" alt="" onError={e => { (e.target as HTMLImageElement).style.display="none"; }} />
                   </button>
                 ))}
               </div>
             )}
 
-            <button onClick={goToChat}
-              className="w-full rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 py-4 font-bold text-white text-base shadow-lg active:scale-[0.99] transition">
-              💬 {ka ? "მესიჯის გაგზავნა" : "Send Message"}
-            </button>
+            {/* 🔥 აქ წყდება რა გამოჩნდება ბოლოში: X და ❤️ თუ მესიჯი */}
+            {isMatch ? (
+              <button onClick={goToChat} className="w-full rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 py-4 font-bold text-white text-base shadow-lg active:scale-[0.99] transition">
+                💬 {ka ? "მესიჯის გაგზავნა" : "Send Message"}
+              </button>
+            ) : hasSwiped ? (
+              <button disabled className="w-full rounded-2xl bg-zinc-800 text-white/40 py-4 font-bold text-base cursor-not-allowed">
+                {ka ? "უკვე შეფასებულია" : "Already evaluated"}
+              </button>
+            ) : (
+              <div className="flex gap-3">
+                <button onClick={() => handleSwipe("pass")} className="flex-1 rounded-2xl bg-zinc-800 text-red-500 py-4 text-2xl font-bold hover:bg-red-500 hover:text-white transition shadow-lg active:scale-[0.99] flex items-center justify-center">
+                  ✕
+                </button>
+                <button onClick={() => handleSwipe("like")} className="flex-1 rounded-2xl bg-zinc-800 text-green-500 py-4 text-2xl font-bold hover:bg-green-500 hover:text-white transition shadow-lg active:scale-[0.99] flex items-center justify-center">
+                  ❤️
+                </button>
+              </div>
+            )}
+
           </div>
         </div>
 
