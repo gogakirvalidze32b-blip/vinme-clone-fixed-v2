@@ -12,9 +12,9 @@ export default function LikesPage() {
   const L = (ka: string, en: string) => lang === "en" ? en : ka;
  
   const [likeCount, setLikeCount] = useState(0);
-  const [isPremium, setIsPremium] = useState(false);
-  const[likers, setLikers] = useState<{ id: string; name: string; age: number; photo: string }[]>([]);
-  const [loading, setLoading] = useState(true);
+  const[isPremium, setIsPremium] = useState(false);
+  const [likers, setLikers] = useState<{ id: string; name: string; age: number; photo: string }[]>([]);
+  const[loading, setLoading] = useState(true);
  
   useEffect(() => {
     try {
@@ -30,7 +30,7 @@ export default function LikesPage() {
       if (!uid) return;
  
       try {
-        // 🔥 ნაბიჯი 1: ყველაფერი მოგვაქვს ერთდროულად (პარალელურად), რომ არ იფიქროს!
+        // ერთდროულად მოგვაქვს ყველაფერი
         const[
           { data: profile },
           { data: myMatches },
@@ -40,27 +40,25 @@ export default function LikesPage() {
           supabase.from("profiles").select("is_premium, premium_until").eq("user_id", uid).maybeSingle(),
           supabase.from("matches").select("user_a, user_b").or(`user_a.eq.${uid},user_b.eq.${uid}`),
           supabase.from("swipes").select("to_id").eq("from_id", uid),
-          supabase.from("swipes").select("from_id").eq("to_id", uid).eq("action", "like") // ვინც დაგვალაიქა
+          supabase.from("swipes").select("from_id").eq("to_id", uid).eq("action", "like")
         ]);
 
         if (!alive) return;
 
-        // Premium სტატუსი
         const premium = profile?.is_premium === true && (!profile?.premium_until || new Date(profile.premium_until) > new Date());
         setIsPremium(premium);
 
-        // ვისთანაც მეჩი გვაქვს ან უკვე შევაფასეთ (დავულაიქეთ/დავუპასეთ)
+        // გამოვრიცხოთ ვისთანაც მეჩი გვაქვს ან უკვე სვაიპი გავაკეთეთ
         const excludeIds = new Set([
           ...(myMatches || []).map((m: any) => m.user_a === uid ? m.user_b : m.user_a),
           ...(mySwipes ||[]).map((s: any) => s.to_id)
         ]);
 
-        // ვფილტრავთ მხოლოდ იმათ, ვინც დაგვალაიქა და ჯერ არ შეგვიფასებია
         const actionableIds = (incomingLikes ||[])
           .map((s: any) => s.from_id)
           .filter((id: string) => !excludeIds.has(id));
 
-        // 🔥 ვაახლებთ რაოდენობას ფაქტიური, გაუფილტრავი ლაიქების მიხედვით!
+        // ზუსტად იმდენი ლაიქი, რაც დაგვრჩა შესაფასებელი
         const realCount = actionableIds.length;
         setLikeCount(realCount);
         localStorage.setItem("likes_count_cache", String(realCount));
@@ -70,8 +68,7 @@ export default function LikesPage() {
           return;
         }
 
-        // 🔥 ნაბიჯი 2: მოგვაქვს მხოლოდ იმ ადამიანების პროფილები, ვინც შეგვრჩა
-        const idsToFetch = actionableIds.slice(0, 50); // ვზღუდავთ 50-მდე, რომ ტელეფონი არ გაჭედოს
+        const idsToFetch = actionableIds.slice(0, 50);
         const { data: profiles } = await supabase
           .from("profiles")
           .select("user_id, nickname, age, photo1_url")
@@ -100,16 +97,14 @@ export default function LikesPage() {
   },[]);
 
   const handleQuickAction = async (targetId: string, action: "like" | "pass", e: React.MouseEvent) => {
-    e.stopPropagation(); // პროფილზე რომ არ გადახტეს
+    e.stopPropagation();
     const { data: sess } = await supabase.auth.getSession();
     const uid = sess.session?.user?.id;
     if (!uid) return;
 
-    // ოპტიმისტური UI - ეგრევე ვაქრობთ სურათს და ვაკლებთ რიცხვს ლოდინის გარეშე
     setLikers(prev => prev.filter(l => l.id !== targetId));
-    setLikeCount(prev => Math.max(0, prev - 1));
+    setLikeCount(prev => Math.max(0, prev - 1)); // ვაკლებთ ციფრს მყისიერად
 
-    // ბაზაში ვწერთ ფონურ რეჟიმში
     await supabase.from("swipes").insert({ from_id: uid, to_id: targetId, action: action });
     if (action === "like") {
       await supabase.from("matches").insert({ user_a: uid, user_b: targetId });
@@ -121,7 +116,6 @@ export default function LikesPage() {
       <div className="mx-auto w-full max-w-md px-4 pt-6">
         <h1 className="text-2xl font-extrabold mb-1">{L("მოწონებები", "Likes")}</h1>
         
-        {/* 🔥 აქ ზუსტი რიცხვი დაიწერება ყოველთვის */}
         <p className="text-sm text-white/40 mb-6">
           {L(`${likeCount} ადამიანმა მოგიწონა`, `${likeCount} people liked you`)}
         </p>
@@ -140,42 +134,44 @@ export default function LikesPage() {
           <div className="flex justify-center items-center py-20">
             <div className="w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" />
           </div>
+        ) : likeCount === 0 ? (
+          /* თუ 0 ლაიქია: საერთოდ არ გამოვაჩენთ ბლარებს და პრემიუმის რეკლამას */
+          <div className="text-center text-white/40 py-12">
+            {L("ჯერ არავის მოუწონებია შენი პროფილი", "No new likes yet")}
+          </div>
         ) : isPremium ? (
+          /* თუ პრემიუმია და არის ლაიქები */
           <div className="grid grid-cols-2 gap-3">
-            {likeCount === 0 || likers.length === 0 ? (
-              <div className="col-span-2 text-center text-white/40 py-12">
-                {L("ახალი მოწონებები არ გაქვს", "No new likes")}
-              </div>
-            ) : (
-              likers.map((liker) => (
-                <div
-                  key={liker.id}
-                  onClick={() => router.push(`/profile/${liker.id}`)}
-                  className="relative aspect-[3/4] rounded-3xl overflow-hidden bg-zinc-900 cursor-pointer active:scale-95 transition"
-                >
-                  {liker.photo ? (
-                    <img src={liker.photo} alt={liker.name} className="absolute inset-0 w-full h-full object-cover" />
-                  ) : (
-                    <div className="absolute inset-0 bg-gradient-to-br from-pink-500/20 to-purple-500/20" />
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                  
-                  <div className="absolute bottom-16 left-3">
-                    <div className="font-bold text-sm">{liker.name}{liker.age ? `, ${liker.age}` : ""}</div>
-                  </div>
-
-                  <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-3">
-                    <button onClick={(e) => handleQuickAction(liker.id, "pass", e)} className="w-10 h-10 flex items-center justify-center bg-zinc-800/80 backdrop-blur rounded-full text-red-500 hover:bg-red-500 hover:text-white transition shadow-lg">✕</button>
-                    <button onClick={(e) => handleQuickAction(liker.id, "like", e)} className="w-10 h-10 flex items-center justify-center bg-zinc-800/80 backdrop-blur rounded-full text-green-500 hover:bg-green-500 hover:text-white transition shadow-lg">❤️</button>
-                  </div>
+            {likers.map((liker) => (
+              <div
+                key={liker.id}
+                onClick={() => router.push(`/profile/${liker.id}`)}
+                className="relative aspect-[3/4] rounded-3xl overflow-hidden bg-zinc-900 cursor-pointer active:scale-95 transition"
+              >
+                {liker.photo ? (
+                  <img src={liker.photo} alt={liker.name} className="absolute inset-0 w-full h-full object-cover" />
+                ) : (
+                  <div className="absolute inset-0 bg-gradient-to-br from-pink-500/20 to-purple-500/20" />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                
+                <div className="absolute bottom-16 left-3">
+                  <div className="font-bold text-sm">{liker.name}{liker.age ? `, ${liker.age}` : ""}</div>
                 </div>
-              ))
-            )}
+
+                <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-3">
+                  <button onClick={(e) => handleQuickAction(liker.id, "pass", e)} className="w-10 h-10 flex items-center justify-center bg-zinc-800/80 backdrop-blur rounded-full text-red-500 hover:bg-red-500 hover:text-white transition shadow-lg">✕</button>
+                  <button onClick={(e) => handleQuickAction(liker.id, "like", e)} className="w-10 h-10 flex items-center justify-center bg-zinc-800/80 backdrop-blur rounded-full text-green-500 hover:bg-green-500 hover:text-white transition shadow-lg">❤️</button>
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
+          /* თუ არა-პრემიუმია და ლაიქები > 0 */
           <div className="relative">
             <div className="grid grid-cols-2 gap-3">
-              {[1,2,3,4].map(i => (
+              {/* ვაგენერირებთ იმდენ ჩარჩოს, რამდენი ლაიქიცაა (მაქს. 50 რომ ტელეფონი არ გაჭედოს თუ ძალიან ბევრია) */}
+              {Array.from({ length: Math.min(likeCount, 50) }).map((_, i) => (
                 <div key={i} className="relative aspect-[3/4] rounded-3xl overflow-hidden bg-zinc-900">
                   <div className="absolute inset-0 bg-gradient-to-br from-pink-500/20 to-purple-500/20" />
                   <div className="absolute inset-0 backdrop-blur-xl" />
@@ -186,7 +182,8 @@ export default function LikesPage() {
                 </div>
               ))}
             </div>
-            <div className="absolute inset-0 flex flex-col items-center justify-center px-6">
+            {/* პრემიუმის ბანერი ეფარება ზემოდან */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center px-6 z-10">
               <div className="rounded-3xl bg-zinc-950/90 backdrop-blur p-6 ring-1 ring-white/10 text-center w-full max-w-[280px]">
                 <div className="text-4xl mb-3">👀</div>
                 <div className="font-extrabold text-base mb-1">
