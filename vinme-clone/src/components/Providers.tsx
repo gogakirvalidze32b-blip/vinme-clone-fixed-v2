@@ -3,11 +3,12 @@
 import { UserProvider } from "@/lib/userContext";
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { startKeepAlive } from "@/lib/keepAlive";
 
 function PullToRefresh({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [pullY, setPullY] = useState(0);
+  const[pullY, setPullY] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const startY = useRef(0);
   const pulling = useRef(false);
@@ -76,6 +77,12 @@ function PullToRefresh({ children }: { children: React.ReactNode }) {
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  
+  // ✅ აქ გადმოვიტანეთ startKeepAlive
+  useEffect(() => {
+    startKeepAlive();
+  },[]);
+
   useEffect(() => {
     (async () => {
       const { supabase } = await import("@/lib/supabase");
@@ -93,7 +100,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <UserProvider>
-      <PullToRefresh>{children}</PullToRefresh>
+      <PullToRefresh>
+        {children}
+      </PullToRefresh>
     </UserProvider>
   );
 }

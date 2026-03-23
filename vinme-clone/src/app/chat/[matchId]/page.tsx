@@ -482,38 +482,7 @@ const [hasMore, setHasMore] = useState(true);
   const[loadingMore, setLoadingMore] = useState(false);
 
 
-  const hasOverlay = isSearching   || !!viewingImage  || showThemeModal ||  !!msgToDelete;
   
-
-
-    // 👇 👇 👇 აქედან იწყება Swipe Back-ის კოდი 
-
-  useEffect(() => {
-    if (hasOverlay) {
-      window.history.pushState(null, "", window.location.href);
-    }
-  }, [hasOverlay]);
-
-  useEffect(() => {
-    const handlePopState = () => {
-      if (hasOverlay) {
-        setIsSearching(false);
-        setShowEmoji(false);
-        setViewingImage(null);
-        setReactionMsgId(null);
-        setShowMenu(false);
-        setShowAttachSheet(false);
-        setShowThemeModal(false);
-        setShowUnmatchModal(false);
-        setMsgToDelete(null);
-      }
-    };
-    
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, [hasOverlay]);
-  // 👆 👆 👆 აქ მთავრდება Swipe Back-ის კოდი
-
   
 
   useEffect(() => {
@@ -568,11 +537,38 @@ const [hasMore, setHasMore] = useState(true);
 
   const touchState = useRef({ id: null as string | null, startX: 0, startY: 0, timer: null as any, isLong: false, isSwipe: false });
 
+   const hasOverlay = isSearching || showEmoji || !!viewingImage || !!reactionMsgId || showMenu || showAttachSheet || showThemeModal || showUnmatchModal || !!msgToDelete;
+
+  useEffect(() => {
+    if (hasOverlay) {
+      window.history.pushState(null, "", window.location.href);
+    }
+  }, [hasOverlay]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (hasOverlay) {
+        setIsSearching(false);
+        setShowEmoji(false);
+        setViewingImage(null);
+        setReactionMsgId(null);
+        setShowMenu(false);
+        setShowAttachSheet(false);
+        setShowThemeModal(false);
+        setShowUnmatchModal(false);
+        setMsgToDelete(null);
+      }
+    };
+    
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [hasOverlay]);
+  // 👆 👆 👆 აქ მთავრდება Swipe Back-ის კოდი
+
   useEffect(() => { if (ctxAnonId && !myAnonId) setMyAnonId(ctxAnonId); },[ctxAnonId]);
   useEffect(() => { return () => { setReactionMsgId(null); setShowTimeFor(null); }; },[]);
   useEffect(() => { if (headerRef.current) setHeaderTop(headerRef.current.getBoundingClientRect().top); }, [isLoaded]);
-
-  useEffect(() => {
+    useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
     function onResize() {

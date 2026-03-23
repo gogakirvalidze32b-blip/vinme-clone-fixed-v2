@@ -17,16 +17,16 @@ function PremiumContent() {
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "fail"; text: string } | null>(null);
  
   const plans = {
-    week:  { name: ka ? "1 კვირა"  : "1 Week",  price: "47.50",  days: 7,   popular: true  },
-    month: { name: ka ? "1 თვე"   : "1 Month", price: "95.00",  days: 30,  popular: false },
-    year:  { name: ka ? "1 წელი"  : "1 Year",  price: "570.00", days: 365, popular: false },
+    week:  { name: ka ? "1 კვირა"  : "1 Week",  price: "9.99",  days: 7,   popular: false  },
+    month: { name: ka ? "1 თვე"   : "1 Month", price: "29.99",  days: 30,  popular: true },
+    year:  { name: ka ? "3 თვე"  : "3 Months",  price: "69.99", days: 90, popular: false },
   };
  
   const features = [
     ka ? "უსაზღვრო მოწონებები" : "Unlimited Likes",
-    ka ? "ნახე ვინ მოგწონა"    : "See Who Likes You",
+    ka ? "ნახე ვის მოეწონე"    : "See Who Likes You",
     ka ? "გადატრიალება"        : "Unlimited Rewinds",
-    ka ? "ბუსტი თვეში"        : "Free Boost",
+    ka ? "ულიმიტო ბუსტი"        : "Free Boost",
   ];
  
   useEffect(() => {
