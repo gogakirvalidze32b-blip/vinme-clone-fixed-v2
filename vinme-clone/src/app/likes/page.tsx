@@ -11,17 +11,20 @@ export default function LikesPage() {
   const lang = getLang();
   const L = (ka: string, en: string) => lang === "en" ? en : ka;
  
-  const [likeCount, setLikeCount] = useState(0);
+  // ვიყენებთ Cache-ს, რომ რიცხვი მაშინვე გამოჩნდეს გვერდის ჩატვირთვისას
+  const [likeCount, setLikeCount] = useState(() => {
+    if (typeof window !== "undefined") {
+      const cached = localStorage.getItem("likes_count_cache");
+      return cached ? Number(cached) : 0;
+    }
+    return 0;
+  });
+  
   const [isPremium, setIsPremium] = useState(false);
   const[likers, setLikers] = useState<{ id: string; name: string; age: number; photo: string }[]>([]);
   const [loading, setLoading] = useState(true);
  
   useEffect(() => {
-    try {
-      const cachedCount = localStorage.getItem("likes_count_cache");
-      if (cachedCount !== null) setLikeCount(Number(cachedCount));
-    } catch (e) {}
- 
     let alive = true;
 
     (async () => {
@@ -47,7 +50,6 @@ export default function LikesPage() {
         const premium = profile?.is_premium === true && (!profile?.premium_until || new Date(profile.premium_until) > new Date());
         setIsPremium(premium);
 
-        // ვიღებთ მეჩებს და უკვე შეფასებულებს, რომ რიცხვში არ აისახოს
         const excludeIds = new Set([
           ...(myMatches || []).map((m: any) => m.user_a === uid ? m.user_b : m.user_a),
           ...(mySwipes ||[]).map((s: any) => s.to_id)
@@ -61,14 +63,12 @@ export default function LikesPage() {
         setLikeCount(realCount);
         localStorage.setItem("likes_count_cache", String(realCount));
 
-        // თუ 0 ლაიქია, ვწყვეტთ ჩატვირთვას
         if (realCount === 0) {
           setLoading(false);
           return;
         }
 
-        // 🔥 ვაგრძელებთ პროფილების მოტანას იმ შემთხვევაშიც, თუ არ აქვს პრემიუმი (ბლარისთვის გვჭირდება)
-        const idsToFetch = actionableIds.slice(0, 50); // მაქს. 50 ცალი რომ არ გაჭედოს მოწყობილობამ
+        const idsToFetch = actionableIds.slice(0, 50);
         const { data: profiles } = await supabase
           .from("profiles")
           .select("user_id, nickname, age, photo1_url")
@@ -110,6 +110,9 @@ export default function LikesPage() {
       await supabase.from("matches").insert({ user_a: uid, user_b: targetId });
     }
   };
+
+  // სანამ იტვირთება, ეკრანზე გამოჩნდება იმდენი ცარიელი ჩარჩო, რამდენიც ქეშში იყო (ან მინიმუმ 4)
+  const skeletons = Array.from({ length: Math.min(likeCount || 4, 10) });
  
   return (
     <main className="min-h-[100dvh] bg-black text-white pb-28">
@@ -130,15 +133,12 @@ export default function LikesPage() {
           </button>
         </div>
  
-        {loading ? (
-          <div className="flex justify-center items-center py-20">
-            <div className="w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : likeCount === 0 ? (
+        {!loading && likeCount === 0 ? (
+          /* თუ ნამდვილად 0 ლაიქია ჩატვირთვის მერე */
           <div className="text-center text-white/40 py-12">
             {L("ჯერ არავის მოუწონებია შენი პროფილი", "No new likes yet")}
           </div>
-        ) : isPremium ? (
+        ) : !loading && isPremium ? (
           /* ================= PREMIUM VERSION ================= */
           <div className="grid grid-cols-2 gap-3">
             {likers.map((liker) => (
@@ -166,43 +166,49 @@ export default function LikesPage() {
             ))}
           </div>
         ) : (
-          /* ================= NON-PREMIUM VERSION ================= */
+          /* ================= NON-PREMIUM & LOADING VERSION ================= */
           <div className="relative">
-            {/* დაბლარული პროფილები რეალური სახელებით (სქროლვადი) */}
             <div className="grid grid-cols-2 gap-3 pb-24">
-              {likers.map((liker) => (
-                <div key={liker.id} className="relative aspect-[3/4] rounded-3xl overflow-hidden bg-zinc-900 select-none">
-                  {liker.photo ? (
-                    // blur-2xl აბლარებს ძალიან მაგრად, scale-110 კი აქრობს ბლარის თეთრ კიდეებს
-                    <img src={liker.photo} alt={liker.name} className="absolute inset-0 w-full h-full object-cover blur-2xl scale-110 opacity-80" />
-                  ) : (
-                    <div className="absolute inset-0 bg-gradient-to-br from-pink-500/20 to-purple-500/20 blur-xl scale-110" />
-                  )}
-                  {/* გრადიენტი, რათა სახელი და ასაკი კარგად გამოჩნდეს */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent" />
-                  
-                  {/* რეალური სახელი და ასაკი */}
-                  <div className="absolute bottom-3 left-3 z-10">
-                    <div className="font-bold text-sm text-white drop-shadow-md">
-                      {liker.name}{liker.age ? `, ${liker.age}` : ""}
+              {loading ? (
+                /* Loading მდგომარეობაში მაშინვე ჩანს ცარიელი ბლარ-ჩარჩოები (რგოლის მაგივრად) */
+                skeletons.map((_, i) => (
+                  <div key={i} className="relative aspect-[3/4] rounded-3xl overflow-hidden bg-zinc-900 select-none">
+                    <div className="absolute inset-0 bg-gradient-to-br from-pink-500/20 to-purple-500/20 blur-xl scale-110 opacity-70" />
+                  </div>
+                ))
+              ) : (
+                /* ჩატვირთვის მერე ჩნდება ნამდვილი პროფილები ბლარით და სახელებით */
+                likers.map((liker) => (
+                  <div key={liker.id} className="relative aspect-[3/4] rounded-3xl overflow-hidden bg-zinc-900 select-none">
+                    {liker.photo ? (
+                      <img src={liker.photo} alt={liker.name} className="absolute inset-0 w-full h-full object-cover blur-2xl scale-110 opacity-80" />
+                    ) : (
+                      <div className="absolute inset-0 bg-gradient-to-br from-pink-500/20 to-purple-500/20 blur-xl scale-110" />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent" />
+                    
+                    <div className="absolute bottom-3 left-3 z-10">
+                      <div className="font-bold text-sm text-white drop-shadow-md">
+                        {liker.name}{liker.age ? `, ${liker.age}` : ""}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
 
-            {/* Sticky ბანერი — სქროლის დროს ეკრანის შუაში იტივტივებს */}
+            {/* STICKY ბანერი, რომელიც სულ ჩანს შუაში სქროლვის დროს და გადადის /premium-ზე */}
             <div className="absolute inset-0 z-20 pointer-events-none">
               <div className="sticky top-[30vh] flex flex-col items-center justify-center px-6 pointer-events-auto">
                 <div className="rounded-3xl bg-zinc-950/90 backdrop-blur-md p-6 ring-1 ring-white/10 text-center w-full max-w-[280px] shadow-2xl">
                   <div className="text-4xl mb-3">👀</div>
                   <div className="text-sm text-white/70 mb-5 leading-relaxed font-medium">
-                    {L("გააქტიურე Premium, რომ ნახო ვინ დაგალაიქა", "Upgrade to Premium to see everyone who liked you")}
+                    {L("გააქტიურე Premium-ი და ნახე სრულად", "Upgrade to Premium to see everyone")}
                   </div>
                   <button
                     onClick={() => router.push("/premium")}
                     className="w-full rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 py-3.5 font-bold text-black text-[15px] hover:shadow-lg transition active:scale-95 flex items-center justify-center gap-2">
-                    {L("ნახე ვინ დაგალაიქა", "See Who Likes You")} 👑
+                    {L("ნახე ვის მოეწონე", "See Who Liked You")} 👑
                   </button>
                 </div>
               </div>
