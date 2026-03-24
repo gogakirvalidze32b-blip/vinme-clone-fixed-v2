@@ -5,245 +5,273 @@ import TinderCard from "@/components/TinderCard";
 import { supabase } from "@/lib/supabase";
 import { photoSrc } from "@/lib/photos";
 import BottomNav from "@/components/BottomNav";
- 
+
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+    Math.cos(lat1 * Math.PI / 180) *
+      Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) ** 2;
   return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
- 
+
 export default function FeedPage() {
   const router = useRouter();
+
   const [me, setMe] = useState<any>(null);
   const [top, setTop] = useState<any>(null);
+  const[nextTop, setNextTop] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
   const [matchId, setMatchId] = useState<string | null>(null);
   const [showMatch, setShowMatch] = useState(false);
-  const [matchedUser, setMatchedUser] = useState<any>(null);
-  const [nextTop, setNextTop] = useState<any>(null);
+  const[matchedUser, setMatchedUser] = useState<any>(null);
+
   const [superLikesLeft, setSuperLikesLeft] = useState(1);
-  const [firstImpressionsLeft, setFirstImpressionsLeft] = useState(1);
- 
+  const [messagesLeft, setMessagesLeft] = useState(1);
+
   const loadingTopRef = useRef(false);
   const meRef = useRef<any>(null);
-  const lastUpdateCoordsRef = useRef<{ lat: number; lon: number } | null>(null);
- 
-  const saveLocation = useCallback(async (uid: string) => {
-    if (!navigator.geolocation) return;
-    const watchId = navigator.geolocation.watchPosition(async (pos) => {
-      const lat = pos.coords.latitude;
-      const lon = pos.coords.longitude;
-      if (lastUpdateCoordsRef.current) {
-        const distanceMoved = haversineKm(lastUpdateCoordsRef.current.lat, lastUpdateCoordsRef.current.lon, lat, lon);
-        if (distanceMoved < 2) return;
-      }
-      let city = meRef.current?.city || "";
-      try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=10&addressdetails=1&email=შენი_მეილი@gmail.com`,
-          { headers: { "Accept-Language": "ka" }, signal: AbortSignal.timeout(5000) }
-        );
-        if (res.ok) {
-          const json = await res.json();
-          city = json.address?.city || json.address?.town || json.address?.village || json.address?.county || "";
-        }
-      } catch { console.log("Geocoding failed"); }
-      await supabase.from("profiles").update({ latitude: lat, longitude: lon, city, last_seen: new Date().toISOString() }).eq("user_id", uid);
-      lastUpdateCoordsRef.current = { lat, lon };
-      setMe((prev: any) => prev ? { ...prev, latitude: lat, longitude: lon, city } : prev);
-    }, (err) => console.error(err), { enableHighAccuracy: true, maximumAge: 60000, timeout: 15000 });
-    return watchId;
-  }, []);
- 
+
+  // ---------------- LOAD ME ----------------
   const loadMe = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
     const user = data.session?.user;
-    if (!user) { router.replace("/login"); return null; }
+
+    if (!user) {
+      router.replace("/login");
+      return null;
+    }
+
     const { data: row } = await supabase
       .from("profiles")
-      .select("user_id,anon_id,seeking,gender,age,first_name,nickname,photo1_url,last_seen,latitude,longitude,city,onboarding_completed,is_plus,plus_expires_at")
+      .select("*")
       .eq("user_id", user.id)
       .maybeSingle();
+
     setMe(row);
     meRef.current = row;
     return row;
   }, [router]);
- 
-  const loadDailyLimits = useCallback(async (uid: string, isPlus: boolean) => {
-    const { data } = await supabase
-      .from("profiles")
-      .select("super_likes_used_today, super_likes_reset_at, fi_used_today, fi_reset_at")
-      .eq("user_id", uid)
-      .maybeSingle();
- 
-    if (!data) return;
-    const now = new Date();
- 
-    // Super Like
-    const slReset = data.super_likes_reset_at ? new Date(data.super_likes_reset_at) : null;
-    if (!slReset || (now.getTime() - slReset.getTime()) > 24 * 60 * 60 * 1000) {
-      await supabase.from("profiles").update({ super_likes_used_today: 0, super_likes_reset_at: now.toISOString() }).eq("user_id", uid);
-      setSuperLikesLeft(1);
-    } else {
-      setSuperLikesLeft(Math.max(0, 1 - (data.super_likes_used_today ?? 0)));
-    }
- 
-    // First Impression — Plus: 3/დღე, უფასო: 1/დღე
-    const fiLimit = isPlus ? 3 : 1;
-    const fiReset = data.fi_reset_at ? new Date(data.fi_reset_at) : null;
-    if (!fiReset || (now.getTime() - fiReset.getTime()) > 24 * 60 * 60 * 1000) {
-      await supabase.from("profiles").update({ fi_used_today: 0, fi_reset_at: now.toISOString() }).eq("user_id", uid);
-      setFirstImpressionsLeft(fiLimit);
-    } else {
-      setFirstImpressionsLeft(Math.max(0, fiLimit - (data.fi_used_today ?? 0)));
-    }
-  }, []);
- 
+
+  // ---------------- MATCHING FIX ----------------
   const loadTop = useCallback(async (myProfile: any) => {
     if (loadingTopRef.current) return;
     loadingTopRef.current = true;
+
     const myId = myProfile.user_id;
-    const seeking = myProfile.seeking ?? "everyone";
-    const myGender = myProfile.gender ?? null;
-    const { data: swiped } = await supabase.from("swipes").select("to_id").eq("from_id", myId);
-    const excludedIds = swiped?.map((s: any) => s.to_id) ?? [];
- 
-    let query = supabase.from("profiles")
-      .select("user_id,first_name,nickname,age,city,photo1_url,last_seen,latitude,longitude,seeking,gender,onboarding_completed")
+    // დაზღვევა: თუ ბაზაში null აქვს, everyone-ად ჩავთვალოთ
+    const mySeeking = myProfile.seeking || "everyone";
+    const myGender = myProfile.gender || null;
+
+    const { data: swiped } = await supabase
+      .from("swipes")
+      .select("to_id")
+      .eq("from_id", myId);
+
+    const excludedIds = swiped?.map((s: any) => s.to_id) ??[];
+
+    // შეცვლილია latitude და longitude -> lat, lng
+    let query = supabase
+      .from("profiles")
+      .select("user_id,first_name,nickname,age,city,photo1_url,last_seen,lat,lng,seeking,gender,onboarding_completed")
       .eq("onboarding_completed", true)
       .neq("user_id", myId)
       .not("photo1_url", "is", null);
- 
-    if (seeking !== "everyone") query = query.eq("gender", seeking);
-    if (myGender) query = query.or(`seeking.eq.everyone,seeking.eq.${myGender}`);
-    if (excludedIds.length > 0) query = query.not("user_id", "in", `(${excludedIds.join(",")})`);
- 
-    const { data } = await query.order("created_at", { ascending: false }).limit(2);
+
+    // 👉 მე ვის ვეძებ (თუ everyone ან both არაა, მაშინ კონკრეტულ სქესს ვეძებთ)
+    if (mySeeking !== "everyone" && mySeeking !== "both") {
+      query = query.eq("gender", mySeeking);
+    }
+
+    // 👉 ისინი მე მეძებენ (თუ ჩემი სქესი მითითებული მაქვს)
+    if (myGender) {
+      // ვაჩვენოთ ისინი: ვისაც everyone აქვს, ან both აქვს, ან პირდაპირ ჩემს სქესს ეძებს, ან საერთოდ არ აქვთ მითითებული (null)
+      query = query.or(`seeking.eq.everyone,seeking.eq.both,seeking.eq.${myGender},seeking.is.null`);
+    }
+
+    if (excludedIds.length > 0) {
+      query = query.not("user_id", "in", `(${excludedIds.join(",")})`);
+    }
+
+    const { data, error } = await query
+      .order("created_at", { ascending: false })
+      .limit(2);
+
+    if (error) {
+      console.error("Feed Error:", error);
+    }
+
     setTop(data?.[0] ?? null);
     setNextTop(data?.[1] ?? null);
+
     loadingTopRef.current = false;
-  }, []);
- 
-  useEffect(() => {
-    let watchId: number;
-    let alive = true;
-    (async () => {
-      const my = await loadMe();
-      if (!alive || !my) return;
-      saveLocation(my.user_id).then(id => { if (id) watchId = id; });
-      const isPlus = my.is_plus && my.plus_expires_at && new Date(my.plus_expires_at) > new Date();
-      await Promise.all([loadTop(my), loadDailyLimits(my.user_id, !!isPlus)]);
-      if (alive) setLoading(false);
-    })();
-    return () => { alive = false; if (watchId) navigator.geolocation.clearWatch(watchId); };
-  }, [loadMe, loadTop, loadDailyLimits, saveLocation]);
- 
-  useEffect(() => {
-    if (!me) return;
-    const ch = supabase.channel(`feed-matches-${me.user_id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "matches" }, async (payload) => {
-        const match = payload.new as any;
-        if (match.user_a !== me.user_id && match.user_b !== me.user_id) return;
-        const otherId = match.user_a === me.user_id ? match.user_b : match.user_a;
-        const { data: otherProfile } = await supabase.from("profiles").select("user_id,first_name,nickname,photo1_url").eq("user_id", otherId).maybeSingle();
-        setMatchedUser(otherProfile ?? null);
-        setMatchId(String(match.id));
-        setShowMatch(true);
-      }).subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [me]);
- 
-  async function checkAndCreateMatch(myId: string, otherId: string): Promise<string | null> {
-    const { data: theirSwipe } = await supabase.from("swipes").select("id")
-      .eq("from_id", otherId).eq("to_id", myId).in("action", ["like", "super_like"]).maybeSingle();
+  },[]);
+
+  // ---------------- MATCH ----------------
+  async function checkAndCreateMatch(myId: string, otherId: string) {
+    const { data: theirSwipe } = await supabase
+      .from("swipes")
+      .select("id")
+      .eq("from_id", otherId)
+      .eq("to_id", myId)
+      .in("action",["like", "super_like"])
+      .maybeSingle();
+
     if (!theirSwipe) return null;
-    const { data: existing } = await supabase.from("matches").select("id")
+
+    const { data: existing } = await supabase
+      .from("matches")
+      .select("id")
       .or(`and(user_a.eq.${myId},user_b.eq.${otherId}),and(user_a.eq.${otherId},user_b.eq.${myId})`)
-      .limit(1).maybeSingle();
-    if (existing?.id) return String(existing.id);
-    const { data: created } = await supabase.from("matches").insert({ user_a: myId, user_b: otherId }).select("id").single();
-    return created?.id ? String(created.id) : null;
+      .maybeSingle();
+
+    if (existing?.id) return existing.id;
+
+    const { data: created } = await supabase
+      .from("matches")
+      .insert({ user_a: myId, user_b: otherId })
+      .select("id")
+      .single();
+
+    return created?.id ?? null;
   }
- 
+
+  // ---------------- ACTIONS ----------------
   const advanceCard = () => {
-    if (nextTop) { setTop(nextTop); setNextTop(null); }
-    else setTop(null);
+    if (nextTop) {
+      setTop(nextTop);
+      setNextTop(null);
+    } else setTop(null);
   };
- 
+
   const onLike = async () => {
     if (!me || !top) return;
     const cur = { ...top };
     advanceCard();
-    await supabase.from("swipes").insert({ from_id: me.user_id, to_id: cur.user_id, action: "like" });
+
+    await supabase.from("swipes").insert({
+      from_id: me.user_id,
+      to_id: cur.user_id,
+      action: "like",
+    });
+
     const mid = await checkAndCreateMatch(me.user_id, cur.user_id);
-    if (mid) { setMatchedUser(cur); setMatchId(mid); setShowMatch(true); }
+
+    if (mid) {
+      setMatchedUser(cur);
+      setMatchId(mid);
+      setShowMatch(true);
+    }
+
     loadTop(me);
   };
- 
+
   const onSkip = async () => {
     if (!me || !top) return;
     const cur = { ...top };
     advanceCard();
-    await supabase.from("swipes").insert({ from_id: me.user_id, to_id: cur.user_id, action: "skip" });
+
+    await supabase.from("swipes").insert({
+      from_id: me.user_id,
+      to_id: cur.user_id,
+      action: "skip",
+    });
+
     loadTop(me);
   };
- 
+
   const onSuperLike = async () => {
     if (!me || !top || superLikesLeft <= 0) return;
     const cur = { ...top };
     advanceCard();
-    await supabase.from("swipes").insert({ from_id: me.user_id, to_id: cur.user_id, action: "super_like" });
-    await supabase.from("profiles").update({ super_likes_used_today: 1, super_likes_reset_at: new Date().toISOString() }).eq("user_id", me.user_id);
+
+    await supabase.from("swipes").insert({
+      from_id: me.user_id,
+      to_id: cur.user_id,
+      action: "super_like",
+    });
+
     setSuperLikesLeft(0);
+
     const mid = await checkAndCreateMatch(me.user_id, cur.user_id);
-    if (mid) { setMatchedUser(cur); setMatchId(mid); setShowMatch(true); }
+
+    if (mid) {
+      setMatchedUser(cur);
+      setMatchId(mid);
+      setShowMatch(true);
+    }
+
     loadTop(me);
   };
- 
-  const onFirstImpression = async (message: string) => {
-    if (!me || !top || firstImpressionsLeft <= 0) return;
+
+  // ---------------- SEND MESSAGE (+ BUTTON) ----------------
+  const onSendMessage = async (message: string) => {
+    if (!me || !top || messagesLeft <= 0) return;
+
     const cur = { ...top };
     advanceCard();
- 
-    // like + fi_message
-    await supabase.from("swipes").insert({ from_id: me.user_id, to_id: cur.user_id, action: "like" });
-    await supabase.from("fi_messages").insert({ from_id: me.user_id, to_id: cur.user_id, message });
- 
-    // counter update
-    const isPlus = me.is_plus && me.plus_expires_at && new Date(me.plus_expires_at) > new Date();
-    const fiLimit = isPlus ? 3 : 1;
-    const newUsed = fiLimit - firstImpressionsLeft + 1;
-    await supabase.from("profiles").update({ fi_used_today: newUsed, fi_reset_at: new Date().toISOString() }).eq("user_id", me.user_id);
-    setFirstImpressionsLeft(prev => Math.max(0, prev - 1));
- 
+
+    await supabase.from("swipes").insert({
+      from_id: me.user_id,
+      to_id: cur.user_id,
+      action: "like",
+    });
+
+    await supabase.from("messages").insert({
+      from_id: me.user_id,
+      to_id: cur.user_id,
+      message,
+    });
+
+    setMessagesLeft(0);
+
     const mid = await checkAndCreateMatch(me.user_id, cur.user_id);
-    if (mid) { setMatchedUser(cur); setMatchId(mid); setShowMatch(true); }
+
+    if (mid) {
+      setMatchedUser(cur);
+      setMatchId(mid);
+      setShowMatch(true);
+    }
+
     loadTop(me);
   };
- 
-  const distanceKm = useMemo(() => {
-    if (!me?.latitude || !me?.longitude || !top?.latitude || !top?.longitude) return undefined;
-    return haversineKm(me.latitude, me.longitude, top.latitude, top.longitude);
-  }, [me, top]);
- 
+
+  // ---------------- INIT ----------------
+  useEffect(() => {
+    (async () => {
+      const my = await loadMe();
+      if (!my) return;
+
+      await loadTop(my);
+      setLoading(false);
+    })();
+  },[loadMe, loadTop]);
+
+  // ---------------- CARD DATA ----------------
   const cardUser = useMemo(() => {
     if (!top) return null;
+
     return {
-      id: top.user_id, user_id: top.user_id,
-      nickname: top.first_name ?? (top.nickname?.startsWith("User_") ? "Anonymous" : top.nickname) ?? "Anonymous",
+      id: top.user_id,
+      user_id: top.user_id,
+      nickname:
+        top.first_name ??
+        (top.nickname?.startsWith("User_")
+          ? "Anonymous"
+          : top.nickname) ??
+        "Anonymous",
       age: top.age ?? 18,
       city: top.city || undefined,
-      distanceKm,
-      recentlyActive: top.last_seen ? (Date.now() - new Date(top.last_seen).getTime()) < 30 * 60 * 1000 : false,
       photo_url: top.photo1_url ? photoSrc(top.photo1_url) : null,
       photo1_url: top.photo1_url,
     };
-  }, [top, distanceKm]);
- 
+  },[top]);
+
+  // ---------------- UI ----------------
   return (
     <div className="bg-black min-h-screen flex justify-center">
       <div className="w-full max-w-lg relative" style={{ height: "100dvh" }}>
@@ -255,13 +283,17 @@ export default function FeedPage() {
           onLike={onLike}
           onSkip={onSkip}
           onSuperLike={onSuperLike}
-          onFirstImpression={onFirstImpression}
+          onSendMessage={onSendMessage}
+          messagesLeft={messagesLeft}
           superLikesLeft={superLikesLeft}
-          firstImpressionsLeft={firstImpressionsLeft}
           onOpenProfile={() => cardUser && router.push(`/profile/${cardUser.user_id}`)}
           externalMatchId={matchId}
           externalShowMatch={showMatch}
-          onCloseMatch={() => { setShowMatch(false); setMatchId(null); setMatchedUser(null); }}
+          onCloseMatch={() => {
+            setShowMatch(false);
+            setMatchId(null);
+            setMatchedUser(null);
+          }}
           onOpenChat={() => matchId && router.push(`/chat/${matchId}`)}
           matchedUserName={matchedUser?.first_name ?? matchedUser?.nickname ?? undefined}
           matchedUserPhoto={matchedUser?.photo1_url ?? undefined}
