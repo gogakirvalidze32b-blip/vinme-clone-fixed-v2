@@ -44,8 +44,8 @@ type Props = {
 export default function TinderCard({
   user, otherUserId, myProfile, loading,
   onLike, onSkip, onSuperLike, onFirstImpression,
-  onSendMessage,   // ✅
-  messagesLeft,    // ✅
+  onSendMessage,
+  messagesLeft,
   superLikesLeft = 0, firstImpressionsLeft = 0,
   externalMatchId, externalShowMatch, onCloseMatch, onOpenChat,
   matchedUserName, matchedUserPhoto, onOpenProfile,
@@ -58,12 +58,9 @@ export default function TinderCard({
   const [y, setY] = useState(0);
   const [rot, setRot] = useState(0);
   const [dragging, setDragging] = useState(false);
-  const [animating, setAnimating] = useState(false);
+  const[animating, setAnimating] = useState(false);
   const [otherUser, setOtherUser] = useState<any>(null);
   const [superLikeAnim, setSuperLikeAnim] = useState(false);
-  const [showFIModal, setShowFIModal] = useState(false);
-  const [fiMessage, setFiMessage] = useState("");
-  const [fiSending, setFiSending] = useState(false);
  
   const startX = useRef(0);
   const startY = useRef(0);
@@ -89,7 +86,7 @@ export default function TinderCard({
   if (!user) return <TinderEmpty onOpenProfile={onOpenProfile} lang={lang} />;
  
   function onPointerDown(e: React.PointerEvent) {
-    if (animating || showFIModal) return;
+    if (animating) return;
     setDragging(true);
     downAt.current = Date.now();
     startX.current = e.clientX;
@@ -98,7 +95,7 @@ export default function TinderCard({
   }
  
   function onPointerMove(e: React.PointerEvent) {
-    if (!dragging || animating || showFIModal) return;
+    if (!dragging || animating) return;
     const dx = e.clientX - startX.current;
     const dy = e.clientY - startY.current;
     setX(dx);
@@ -135,26 +132,23 @@ export default function TinderCard({
   }
  
   function onPointerUp() {
-    if (!dragging || animating || showFIModal) return;
+    if (!dragging || animating) return;
     setDragging(false);
     const quick = Date.now() - downAt.current < 200;
     const thr = quick ? threshold * 0.7 : threshold;
-    if (isSuperDir && superLikesLeft > 0) return void finish("super_like");
+    
+    // თითით სვაიპის დროს ლიმიტის შემოწმება (თუ 0-ია ამოაგდებს Paywall-ს)
+    if (isSuperDir) {
+      if (superLikesLeft > 0) return void finish("super_like");
+      else {
+        onSuperLike?.(); 
+        return;
+      }
+    }
+    
     if (x > thr) return void finish("like");
     if (x < -thr) return void finish("skip");
     setX(0); setY(0); setRot(0);
-  }
- 
-  async function handleSendFI() {
-    if (!fiMessage.trim() || fiSending) return;
-    setFiSending(true);
-    try {
-      await onFirstImpression?.(fiMessage.trim());
-      setShowFIModal(false);
-      setFiMessage("");
-    } finally {
-      setFiSending(false);
-    }
   }
  
   return (
@@ -273,8 +267,11 @@ export default function TinderCard({
           </svg>
         </ActionBtn>
  
-        <ActionBtn size="sm" disabled={animating || superLikesLeft <= 0} color="#00B4E4"
-          onClick={() => finish("super_like")}
+        <ActionBtn size="sm" disabled={animating} color="#00B4E4"
+          onClick={() => {
+            if (superLikesLeft > 0) finish("super_like");
+            else onSuperLike?.(); // თუ ლიმიტი ამოწურულია, ხსნის Paywall-ს FeedPage-დან
+          }}
           badge={superLikesLeft > 0 ? String(superLikesLeft) : undefined}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
@@ -289,85 +286,15 @@ export default function TinderCard({
           </svg>
         </ActionBtn>
  
-        {/* ✉️ First Impression */}
-        <ActionBtn size="sm" disabled={animating || firstImpressionsLeft <= 0} color="#9B59B6"
-          onClick={() => firstImpressionsLeft > 0 && setShowFIModal(true)}
-          badge={firstImpressionsLeft > 0 ? String(firstImpressionsLeft) : undefined}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+        {/* ✈️ ლურჯი SEND ღილაკი */}
+        <ActionBtn size="sm" disabled={animating} color="#3b82f6"
+          onClick={() => onSendMessage("")}
+          badge={messagesLeft > 0 ? String(messagesLeft) : undefined}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="ml-0.5 mt-0.5">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
           </svg>
         </ActionBtn>
       </div>
- 
-      {/* FIRST IMPRESSION MODAL */}
-      {showFIModal && (
-        <div className="absolute inset-0 z-50 flex flex-col justify-end"
-          style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)" }}>
-          <div className="bg-zinc-900 rounded-t-3xl px-4 pt-5"
-            style={{ paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))" }}>
- 
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-white font-black text-lg">
-                  {ka ? "პირველი შთაბეჭდილება" : "First Impression"}
-                </h2>
-                <p className="text-white/40 text-xs mt-0.5">
-                  {ka
-                    ? `${user.nickname}-ს გაუგზავნე მესიჯი სვაიპამდე`
-                    : `Send ${user.nickname} a message before swiping`}
-                </p>
-              </div>
-              <button onClick={() => { setShowFIModal(false); setFiMessage(""); }}
-                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white/50 text-lg">✕</button>
-            </div>
- 
-            {/* Preview */}
-            <div className="flex items-center gap-3 mb-4 p-3 rounded-2xl bg-white/5">
-              <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 bg-zinc-800">
-                {imgSrc && <img src={imgSrc} className="w-full h-full object-cover" alt="" />}
-              </div>
-              <div>
-                <div className="text-white font-bold text-sm">{user.nickname}, {user.age}</div>
-                <div className="text-white/40 text-xs">{user.city || ""}</div>
-              </div>
-              <div className="ml-auto text-xs text-purple-400 font-semibold">
-                {firstImpressionsLeft} {ka ? "დარჩა" : "left today"}
-              </div>
-            </div>
- 
-            <textarea
-              value={fiMessage}
-              onChange={e => setFiMessage(e.target.value)}
-              maxLength={200}
-              rows={3}
-              placeholder={ka ? "დაწერე მესიჯი..." : "Write a message..."}
-              className="w-full bg-white/8 border border-white/10 rounded-2xl px-4 py-3 text-white text-sm placeholder-white/30 resize-none focus:outline-none focus:border-purple-500 transition"
-              autoFocus
-            />
-            <div className="flex justify-between items-center mt-1 mb-3">
-              <span className="text-white/20 text-xs">{fiMessage.length}/200</span>
-              {firstImpressionsLeft <= 1 && (
-                <span className="text-yellow-400 text-xs">
-                  {ka ? "⚠️ ბოლო დღიური გამოყენება" : "⚠️ Last one today"}
-                </span>
-              )}
-            </div>
- 
-            <button onClick={handleSendFI} disabled={!fiMessage.trim() || fiSending}
-              className="w-full rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 py-3.5 font-bold text-white text-sm shadow-lg disabled:opacity-40 active:scale-[0.99] transition">
-              {fiSending
-                ? (ka ? "იგზავნება..." : "Sending...")
-                : (ka ? "✉️ გაგზავნა" : "✉️ Send")}
-            </button>
- 
-            {firstImpressionsLeft <= 1 && (
-              <p className="text-center text-white/30 text-[11px] mt-2 mb-1">
-                {ka ? "Plus-ით 3/დღეში" : "Get 3/day with Plus"}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
  
       {/* MATCH MODAL */}
       {externalShowMatch && externalMatchId && (
