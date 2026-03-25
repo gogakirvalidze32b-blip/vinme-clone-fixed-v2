@@ -76,7 +76,6 @@ export default function FeedPage() {
   const loadingTopRef = useRef(false);
   const meRef = useRef<any>(me);
 
-  // Browser History ლოგიკა Native Back Swipe-სთვის
   const openOverlay = useCallback((setter: React.Dispatch<React.SetStateAction<boolean>>) => {
     window.history.pushState({ isModal: true }, "");
     setter(true);
@@ -116,7 +115,7 @@ export default function FeedPage() {
     setFirstImpressionsLeft(row?.first_impressions_count || 0);
 
     return row;
-  }, [router]);
+  },[router]);
 
   const loadTop = useCallback(async (myProfile: any) => {
     if (loadingTopRef.current) return;
@@ -131,7 +130,6 @@ export default function FeedPage() {
 
     let query = supabase
       .from("profiles")
-      // აქ დაემატა პრემიუმის და დამალვის ველები
       .select("user_id,first_name,nickname,age,city,photo1_url,last_seen,lat,lng,seeking,gender,onboarding_completed,bio,intent,is_premium,hide_age,hide_distance")
       .eq("onboarding_completed", true)
       .neq("user_id", myId)
@@ -259,20 +257,28 @@ export default function FeedPage() {
       await loadTop(my);
       setIsInitialLoad(false);
     })();
-  },[loadMe, loadTop]);
+  }, [loadMe, loadTop]);
 
+  // 🔥 აქ ხდება მთავარი მანიპულაცია
   const cardUser = useMemo(() => {
     if (!top) return null;
     let dist: number | undefined = undefined;
 
-    // ვამოწმებთ სხვას აქვს თუ არა პრემიუმი და დამალული ხომ არ აქვს 
-    const shouldHideDistance = top.hide_distance && top.is_premium;
-    const shouldHideAge = top.hide_age && top.is_premium;
+    // 💡 LOGS: დეველოპერის კონსოლში ვამოწმებთ ამ იუზერს
+    console.log("👀 FEED-ზე ჩატვირთული იუზერი:", {
+      სახელი: top.nickname,
+      მალავს_ასაკს: top.hide_age,
+      მალავს_მანძილს: top.hide_distance,
+      არის_პრემიუმი: top.is_premium
+    });
+
+    // 💡 დროებით ამოვიღე "&& top.is_premium" რო დავრწმუნდეთ ეს ხო არ ბლოკავდა
+    const shouldHideDistance = top.hide_distance === true;
+    const shouldHideAge = top.hide_age === true;
 
     if (me?.lat && me?.lng && top.lat && top.lng && !shouldHideDistance) {
       dist = haversineKm(me.lat, me.lng, top.lat, top.lng);
     }
-
     return {
       id: top.user_id, 
       user_id: top.user_id,
@@ -289,8 +295,8 @@ export default function FeedPage() {
     if (!nextTop) return null;
     let dist: number | undefined = undefined;
 
-    const shouldHideDistance = nextTop.hide_distance && nextTop.is_premium;
-    const shouldHideAge = nextTop.hide_age && nextTop.is_premium;
+    const shouldHideDistance = nextTop.hide_distance === true;
+    const shouldHideAge = nextTop.hide_age === true;
 
     if (me?.lat && me?.lng && nextTop.lat && nextTop.lng && !shouldHideDistance) {
       dist = haversineKm(me.lat, me.lng, nextTop.lat, nextTop.lng);
@@ -305,7 +311,7 @@ export default function FeedPage() {
       photo_url: nextTop.photo1_url ? photoSrc(nextTop.photo1_url) : null,
       photo1_url: nextTop.photo1_url,
     };
-  }, [nextTop, me]);
+  },[nextTop, me]);
 
   const fiPackages =[
     { id: 3, count: 3, price: "2.49", total: 7.47, label: null, save: null },
@@ -455,104 +461,6 @@ export default function FeedPage() {
             </div>
           </div>
         )}
-
-        {/* ================= First Impressions Paywall ================= */}
-        {showFIPaywall && (
-          <div className="absolute inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-end animate-in fade-in">
-            <div className="bg-[#11141a] w-full rounded-t-3xl pt-6 pb-8 px-5 shadow-2xl slide-in-from-bottom-full border-t border-white/5">
-              <div className="flex justify-between items-center mb-4">
-                <button onClick={() => closeOverlay(setShowFIPaywall)} className="text-white/50 text-2xl font-bold">✕</button>
-                <div className="text-blue-500 font-bold flex items-center gap-2">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-                  {L("შეიძინე პირველი შთაბეჭდილება", "Get First Impressions")}
-                </div>
-                <div className="w-6"></div>
-              </div>
-              <h2 className="text-[17px] font-bold text-white mb-6 text-center leading-snug">
-                {L("გამოირჩიე პირველი შთაბეჭდილებით. შენ გაქვს 5x მეტი შანსი მიიღო მეჩი!", "Stand out with First Impressions. You're up to 5x more likely to get a match!")}
-              </h2>
-              <div className="space-y-3 mb-6">
-                {fiPackages.map((pack) => {
-                  const isSelected = selectedFIPack === pack.id;
-                  return (
-                    <button key={pack.id} onClick={() => setSelectedFIPack(pack.id)} 
-                      className={`w-full relative flex justify-between items-center p-4 rounded-xl border-2 transition ${isSelected ? "border-blue-500 bg-blue-500/10" : "border-white/5 bg-[#1a1f2b]"}`}>
-                      {pack.label && <span className={`absolute -top-2.5 left-4 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${isSelected ? "bg-blue-500 text-white" : "bg-zinc-700 text-zinc-300"}`}>{pack.label}</span>}
-                      {pack.save && <span className="absolute top-4 right-4 text-[11px] font-bold text-white bg-white/10 px-2 py-0.5 rounded-md">{L("დაზოგე", "Save")} {pack.save}</span>}
-                      <span className={`font-bold text-[16px] ${isSelected ? "text-white" : "text-zinc-200"}`}>{pack.count} First Impressions</span>
-                      <span className={`text-[14px] mt-6 ${isSelected ? "text-blue-400" : "text-zinc-400"}`}>{pack.price} {L("₾/ცალი", "₾/ea")}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="text-center mb-6 relative">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/5"></div></div>
-                <span className="bg-[#11141a] px-4 text-xs font-bold text-zinc-500 uppercase relative">or</span>
-              </div>
-              <button onClick={() => router.push("/premium")} className="w-full bg-[#1a1f2b] border border-white/5 rounded-xl p-4 flex justify-between items-center mb-6 hover:bg-white/5 transition">
-                <div className="flex flex-col items-start">
-                  <span className="text-[10px] font-bold text-white/50 uppercase mb-1">{L("შეიცავს 3 უფასოს კვირაში", "Includes 3 free First Impressions a week")}</span>
-                  <div className="flex items-center gap-2"><span className="text-zinc-300 text-lg">🔥</span><span className="font-bold text-white">Get Shekhvdi Plus</span></div>
-                </div>
-                <span className="bg-zinc-700 px-4 py-1.5 rounded-full text-xs font-bold">Select</span>
-              </button>
-              <button onClick={() => router.push(`/checkout?product=first_impression&pack=${selectedFIPack}`)} 
-                className="w-full bg-blue-500 text-white font-bold text-[16px] py-4 rounded-full active:scale-95 transition shadow-lg shadow-blue-500/20">
-                {L(`გაგრძელება ${fiPackages.find(p=>p.id===selectedFIPack)?.total.toFixed(2)} ₾`, `Continue for ${fiPackages.find(p=>p.id===selectedFIPack)?.total.toFixed(2)} ₾ total`)}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ================= Super Like Paywall ================= */}
-        {showSLPaywall && (
-          <div className="absolute inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-end animate-in fade-in">
-            <div className="bg-[#11141a] w-full rounded-t-3xl pt-6 pb-8 px-5 shadow-2xl slide-in-from-bottom-full border-t border-white/5">
-              <div className="flex justify-between items-center mb-4">
-                <button onClick={() => closeOverlay(setShowSLPaywall)} className="text-white/50 text-2xl font-bold">✕</button>
-                <div className="text-blue-400 font-bold flex items-center gap-2">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
-                  {L("შეიძინე Super Likes", "Get Super Likes")}
-                </div>
-                <div className="w-6"></div>
-              </div>
-              <h2 className="text-[17px] font-bold text-white mb-8 text-center leading-snug px-4">
-                {L("გამოირჩიე Super Like-ით. შენ გაქვს 3x მეტი შანსი მიიღო მეჩი!", "Stand out with Super Like. You're 3x more likely to get a match!")}
-              </h2>
-              <div className="flex gap-3 justify-center mb-8">
-                {slPackages.map((pack) => {
-                  const isSelected = selectedSLPack === pack.id;
-                  return (
-                    <div key={pack.id} onClick={() => setSelectedSLPack(pack.id)} 
-                      className={`relative flex-1 rounded-2xl p-5 flex flex-col justify-between h-44 cursor-pointer transition border-2 ${isSelected ? "border-blue-500 bg-blue-500/10" : "border-white/5 bg-[#1a1f2b]"}`}>
-                      {pack.label && <span className={`absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] font-bold px-3 py-0.5 rounded-full uppercase whitespace-nowrap ${isSelected ? "bg-blue-500 text-white" : "bg-zinc-700 text-zinc-300"}`}>{pack.label}</span>}
-                      <span className={`text-[16px] font-bold text-center mt-2 ${isSelected ? "text-white" : "text-zinc-200"}`}>{pack.count} Super Likes</span>
-                      <div className="mt-auto">
-                        <div className={`text-center text-[13px] mb-3 ${isSelected ? "text-blue-400" : "text-zinc-400"}`}>{pack.price} {L("₾/ცალი", "₾/ea")}</div>
-                        <button onClick={(e) => { e.stopPropagation(); router.push(`/checkout?product=super_like&pack=${pack.id}`); }}
-                          className={`w-full font-bold py-2 rounded-full text-sm transition ${isSelected ? "bg-blue-500 text-white hover:bg-blue-600" : "bg-white/10 text-blue-500 hover:bg-white/20"}`}>
-                          {L("არჩევა", "Select")}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="text-center mb-6 relative">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/5"></div></div>
-                <span className="bg-[#11141a] px-4 text-xs font-bold text-zinc-500 uppercase relative">or</span>
-              </div>
-              <button onClick={() => router.push("/premium")} className="w-full bg-gradient-to-r from-amber-400 to-yellow-600 rounded-xl p-4 flex justify-between items-center active:scale-95 transition shadow-lg shadow-amber-500/20">
-                <div className="flex flex-col items-start">
-                  <span className="text-[10px] font-bold text-black/70 uppercase mb-1">{L("შეიცავს 2 უფასო Super Like-ს კვირაში", "Includes 2 free Super Likes every week")}</span>
-                  <div className="flex items-center gap-2"><span className="text-black text-xl">💛</span><span className="font-bold text-black text-[16px]">Get Shekhvdi Plus</span></div>
-                </div>
-                <span className="bg-black/20 px-4 py-1.5 rounded-full text-xs font-bold text-black uppercase">Select</span>
-              </button>
-            </div>
-          </div>
-        )}
-
       </div>
       <BottomNav />
     </div>
