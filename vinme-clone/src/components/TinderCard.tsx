@@ -222,7 +222,7 @@ export default function TinderCard({
           )}
  
           {/* ინფორმაცია აწეულია ოდნავ მაღლა, რათა ღილაკებმა არ დაფაროს */}
-          <div className="absolute bottom-[85px] left-5 right-5 z-20">
+<div className="absolute bottom-[170px] left-5 right-5 z-20">
             <div className="flex items-end justify-between">
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -265,7 +265,7 @@ export default function TinderCard({
 
       {/* 🌟 ACTION BUTTONS: ტივტივებს ბარათის ფსკერზე */}
       {!isBackground && (
-        <div className="absolute bottom-6 left-0 right-0 flex justify-center items-center gap-4 z-40 pointer-events-auto pb-1">
+  <div className="absolute bottom-[90px] left-0 right-0 flex justify-center items-center gap-4 z-40 pointer-events-auto pb-1">
           <ActionBtn size="sm" disabled={animating} color="#F7BB00" onClick={() => onRewind && onRewind()}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>
           </ActionBtn>
