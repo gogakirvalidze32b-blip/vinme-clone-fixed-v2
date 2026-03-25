@@ -25,30 +25,30 @@ export default function FeedPage() {
   const L = (ka: string, en: string) => (lang === "en" ? en : ka);
 
   const [me, setMe] = useState<any>(null);
-  const [top, setTop] = useState<any>(null);
-  const[nextTop, setNextTop] = useState<any>(null);
-  const[previousTop, setPreviousTop] = useState<any>(null);
-
+  const[top, setTop] = useState<any>(null);
+  const [nextTop, setNextTop] = useState<any>(null);
+  const [previousTop, setPreviousTop] = useState<any>(null); 
+  
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  const [matchId, setMatchId] = useState<string | null>(null);
+  const[matchId, setMatchId] = useState<string | null>(null);
   const [showMatch, setShowMatch] = useState(false);
   const [matchedUser, setMatchedUser] = useState<any>(null);
 
-  const [superLikesLeft, setSuperLikesLeft] = useState(0);
-  const [firstImpressionsLeft, setFirstImpressionsLeft] = useState(0);
+  const [superLikesLeft, setSuperLikesLeft] = useState(0); 
+  const[firstImpressionsLeft, setFirstImpressionsLeft] = useState(0);
 
-  const[showFIInput, setShowFIInput] = useState(false);
-  const[showFIPaywall, setShowFIPaywall] = useState(false);
+  const [showFIInput, setShowFIInput] = useState(false);
+  const [showFIPaywall, setShowFIPaywall] = useState(false);
   const [showSLPaywall, setShowSLPaywall] = useState(false);
   
-  // პროფილის ჩამოშლის და ლაივ მონაცემების State-ები
-  const [expandedProfile, setExpandedProfile] = useState(false);
+  // პროფილის ჩამოშლის და ლაივ მონაცემების State
+  const[expandedProfile, setExpandedProfile] = useState(false); 
   const[liveProfileData, setLiveProfileData] = useState<any>(null);
-
+  
   const [msgText, setMsgText] = useState("");
   const [selectedFIPack, setSelectedFIPack] = useState(12);
-  const [selectedSLPack, setSelectedSLPack] = useState(10);
+  const[selectedSLPack, setSelectedSLPack] = useState(10);
 
   const loadingTopRef = useRef(false);
   const meRef = useRef<any>(null);
@@ -56,19 +56,12 @@ export default function FeedPage() {
   const loadMe = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
     const user = data.session?.user;
-    if (!user) {
-      router.replace("/login");
-      return null;
-    }
-    const { data: row } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    if (!user) { router.replace("/login"); return null; }
+    const { data: row } = await supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle();
     setMe(row);
     meRef.current = row;
     return row;
-  },[router]);
+  }, [router]);
 
   const loadTop = useCallback(async (myProfile: any) => {
     if (loadingTopRef.current) return;
@@ -78,10 +71,7 @@ export default function FeedPage() {
     const mySeeking = myProfile.seeking || "everyone";
     const myGender = myProfile.gender || null;
 
-    const { data: swiped } = await supabase
-      .from("swipes")
-      .select("to_id")
-      .eq("from_id", myId);
+    const { data: swiped } = await supabase.from("swipes").select("to_id").eq("from_id", myId);
     const excludedIds = swiped?.map((s: any) => s.to_id) ??[];
 
     let query = supabase
@@ -91,18 +81,11 @@ export default function FeedPage() {
       .neq("user_id", myId)
       .not("photo1_url", "is", null);
 
-    if (mySeeking !== "everyone" && mySeeking !== "both")
-      query = query.eq("gender", mySeeking);
-    if (myGender)
-      query = query.or(
-        `seeking.eq.everyone,seeking.eq.both,seeking.eq.${myGender},seeking.is.null`
-      );
-    if (excludedIds.length > 0)
-      query = query.not("user_id", "in", `(${excludedIds.join(",")})`);
+    if (mySeeking !== "everyone" && mySeeking !== "both") query = query.eq("gender", mySeeking);
+    if (myGender) query = query.or(`seeking.eq.everyone,seeking.eq.both,seeking.eq.${myGender},seeking.is.null`);
+    if (excludedIds.length > 0) query = query.not("user_id", "in", `(${excludedIds.join(",")})`);
 
-    const { data, error } = await query
-      .order("created_at", { ascending: false })
-      .limit(2);
+    const { data, error } = await query.order("created_at", { ascending: false }).limit(2);
     if (error) console.error("Feed Error:", error);
 
     setTop(data?.[0] ?? null);
@@ -112,36 +95,20 @@ export default function FeedPage() {
   },[]);
 
   async function checkAndCreateMatch(myId: string, otherId: string) {
-    const { data: theirSwipe } = await supabase
-      .from("swipes")
-      .select("id")
-      .eq("from_id", otherId)
-      .eq("to_id", myId)
-      .in("action",["like", "super_like"])
-      .maybeSingle();
+    const { data: theirSwipe } = await supabase.from("swipes").select("id").eq("from_id", otherId).eq("to_id", myId).in("action", ["like", "super_like"]).maybeSingle();
     if (!theirSwipe) return null;
-    const { data: existing } = await supabase
-      .from("matches")
-      .select("id")
-      .or(`and(user_a.eq.${myId},user_b.eq.${otherId}),and(user_a.eq.${otherId},user_b.eq.${myId})`)
-      .maybeSingle();
+    const { data: existing } = await supabase.from("matches").select("id").or(`and(user_a.eq.${myId},user_b.eq.${otherId}),and(user_a.eq.${otherId},user_b.eq.${myId})`).maybeSingle();
     if (existing?.id) return existing.id;
-    const { data: created } = await supabase
-      .from("matches")
-      .insert({ user_a: myId, user_b: otherId })
-      .select("id")
-      .single();
+    const { data: created } = await supabase.from("matches").insert({ user_a: myId, user_b: otherId }).select("id").single();
     return created?.id ?? null;
   }
 
   const advanceCard = () => {
-    setPreviousTop(top);
-    setExpandedProfile(false);
-    setLiveProfileData(null); // ვასუფთავებთ ლაივ დატას შემდეგი იუზერისთვის
-    if (nextTop) {
-      setTop(nextTop);
-      setNextTop(null);
-    } else setTop(null);
+    setPreviousTop(top); 
+    setExpandedProfile(false); 
+    setLiveProfileData(null);
+    if (nextTop) { setTop(nextTop); setNextTop(null); } 
+    else setTop(null);
   };
 
   const onLike = async () => {
@@ -150,11 +117,7 @@ export default function FeedPage() {
     advanceCard();
     await supabase.from("swipes").insert({ from_id: me.user_id, to_id: cur.user_id, action: "like" });
     const mid = await checkAndCreateMatch(me.user_id, cur.user_id);
-    if (mid) {
-      setMatchedUser(cur);
-      setMatchId(mid);
-      setShowMatch(true);
-    }
+    if (mid) { setMatchedUser(cur); setMatchId(mid); setShowMatch(true); }
     loadTop(me);
   };
 
@@ -166,24 +129,20 @@ export default function FeedPage() {
     loadTop(me);
   };
 
-  // 🔥 REWIND (დაბრუნების ლოგიკა)
+  // 🔥 REWIND (უკან დაბრუნება / Plus შემოწმება)
   const onRewind = async () => {
     if (!previousTop) return;
-    
-    // თუ არაა პრემიუმი, გადავა პრემიუმის გვერდზე
-    if (!me?.is_premium) {
-      router.push("/premium");
-      return;
-    }
-
-    // თუ პრემიუმია, ვაბრუნებთ უკან და ვშლით სვაიპს ბაზიდან
+    if (!me?.is_premium) { 
+      router.push("/premium"); 
+      return; 
+    } 
     setNextTop(top);
     setTop(previousTop);
     setPreviousTop(null);
-    setExpandedProfile(false);
     await supabase.from("swipes").delete().eq("from_id", me.user_id).eq("to_id", previousTop.user_id);
   };
 
+  // 🔥 SUPER LIKE
   const handleSuperLikeClick = async () => {
     if (superLikesLeft > 0) {
       if (!me || !top) return;
@@ -192,17 +151,14 @@ export default function FeedPage() {
       await supabase.from("swipes").insert({ from_id: me.user_id, to_id: cur.user_id, action: "super_like" });
       setSuperLikesLeft((prev) => prev - 1);
       const mid = await checkAndCreateMatch(me.user_id, cur.user_id);
-      if (mid) {
-        setMatchedUser(cur);
-        setMatchId(mid);
-        setShowMatch(true);
-      }
+      if (mid) { setMatchedUser(cur); setMatchId(mid); setShowMatch(true); }
       loadTop(me);
     } else {
       setShowSLPaywall(true);
     }
   };
 
+  // 🔥 FIRST IMPRESSION (SEND MESSAGE)
   const handleOpenMessageModal = () => setShowFIInput(true);
 
   const handleSendMessage = async () => {
@@ -214,36 +170,21 @@ export default function FeedPage() {
       await supabase.from("swipes").insert({ from_id: me.user_id, to_id: cur.user_id, action: "like" });
       await supabase.from("messages").insert({ from_id: me.user_id, to_id: cur.user_id, message: msgText });
       setFirstImpressionsLeft((prev) => prev - 1);
-      setShowFIInput(false);
-      setMsgText("");
+      setShowFIInput(false); setMsgText("");
       const mid = await checkAndCreateMatch(me.user_id, cur.user_id);
-      if (mid) {
-        setMatchedUser(cur);
-        setMatchId(mid);
-        setShowMatch(true);
-      }
+      if (mid) { setMatchedUser(cur); setMatchId(mid); setShowMatch(true); }
       loadTop(me);
     } else {
-      setShowFIInput(false);
-      setShowFIPaywall(true);
+      setShowFIInput(false); setShowFIPaywall(true);
     }
   };
 
-  // 🔥 როცა ისარს აწვება, ეგრევე ბაზიდან იღებს ფრეშ მონაცემებს (Bio, Intent)
+  // 🔥 პროფილის გახსნა ლაივ მონაცემებით
   const handleOpenProfile = async () => {
     if (!top?.user_id) return;
     setExpandedProfile(true);
-    
-    // ლაივ რეჟიმში ვიღებთ ინფორმაციას 
-    const { data } = await supabase
-      .from("profiles")
-      .select("bio, intent, city")
-      .eq("user_id", top.user_id)
-      .single();
-      
-    if (data) {
-      setLiveProfileData(data);
-    }
+    const { data } = await supabase.from("profiles").select("bio, intent, city").eq("user_id", top.user_id).single();
+    if (data) setLiveProfileData(data);
   };
 
   useEffect(() => {
@@ -253,7 +194,7 @@ export default function FeedPage() {
       await loadTop(my);
       setIsInitialLoad(false);
     })();
-  },[loadMe, loadTop]);
+  }, [loadMe, loadTop]);
 
   const cardUser = useMemo(() => {
     if (!top) return null;
@@ -262,16 +203,16 @@ export default function FeedPage() {
       dist = haversineKm(me.lat, me.lng, top.lat, top.lng);
     }
     return {
-      id: top.user_id,
+      id: top.user_id, 
       user_id: top.user_id,
       nickname: top.first_name ?? (top.nickname?.startsWith("User_") ? "Anonymous" : top.nickname) ?? "Anonymous",
-      age: top.age ?? 18,
+      age: top.age ?? 18, 
       city: top.city || undefined,
-      distanceKm: dist,
+      distanceKm: dist, 
       photo_url: top.photo1_url ? photoSrc(top.photo1_url) : null,
       photo1_url: top.photo1_url,
     };
-  },[top, me]);
+  }, [top, me]);
 
   const fiPackages =[
     { id: 3, count: 3, price: "2.49", total: 7.47, label: null, save: null },
@@ -284,17 +225,14 @@ export default function FeedPage() {
     { id: 10, count: 10, price: "2.49", total: 24.90, label: L("პოპულარული", "Popular") },
   ];
 
-  if (isInitialLoad) {
-    return <div className="bg-black min-h-[100dvh]" />;
-  }
+  if (isInitialLoad) return <div className="bg-black min-h-[100dvh]" />;
 
-  // ვიყენებთ ლაივ მონაცემებს თუ ჩაიტვირთა, თუ არა ძველს
   const displayBio = liveProfileData?.bio !== undefined ? liveProfileData.bio : top?.bio;
   const displayIntent = liveProfileData?.intent !== undefined ? liveProfileData.intent : top?.intent;
   const displayCity = liveProfileData?.city !== undefined ? liveProfileData.city : top?.city;
 
   return (
-    <div className="bg-black min-h-screen flex justify-center overflow-hidden">
+    <div className="bg-[#11141a] min-h-screen flex justify-center overflow-hidden">
       <div className="w-full max-w-lg relative" style={{ height: "100dvh" }}>
         
         <TinderCard
@@ -305,93 +243,113 @@ export default function FeedPage() {
           onLike={onLike}
           onSkip={onSkip}
           onRewind={onRewind}
-          onSuperLike={handleSuperLikeClick}
-          onSendMessage={handleOpenMessageModal}
+          onSuperLike={handleSuperLikeClick} 
+          onSendMessage={handleOpenMessageModal} 
           messagesLeft={firstImpressionsLeft}
           superLikesLeft={superLikesLeft}
-          onOpenProfile={handleOpenProfile} // 🔥 ვაწვდით ჩვენს ახალ ფუნქციას
+          onOpenProfile={handleOpenProfile} 
           externalMatchId={matchId}
           externalShowMatch={showMatch}
-          onCloseMatch={() => {
-            setShowMatch(false);
-            setMatchId(null);
-            setMatchedUser(null);
-          }}
+          onCloseMatch={() => { setShowMatch(false); setMatchId(null); setMatchedUser(null); }}
           onOpenChat={() => matchId && router.push(`/chat/${matchId}`)}
           matchedUserName={matchedUser?.first_name ?? matchedUser?.nickname ?? undefined}
           matchedUserPhoto={matchedUser?.photo1_url ?? undefined}
           isInitialLoad={isInitialLoad}
         />
 
-        {/* ================= პროფილის ჩამოშლა (Live Data & Smooth Overlay) ================= */}
+        {/* ================= პროფილის ჩამოშლა (სქრინის იდენტური დიზაინით) ================= */}
         {expandedProfile && cardUser && (
-          <div className="absolute inset-x-0 bottom-0 z-50 bg-[#0f172a] rounded-t-3xl overflow-y-auto max-h-[85vh] animate-in slide-in-from-bottom-full duration-300 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] pb-32">
-            
-            {/* Header / Arrow Down */}
-            <div className="sticky top-0 w-full flex justify-center pt-4 pb-2 bg-gradient-to-b from-[#0f172a] to-transparent z-10">
+          <div className="absolute inset-0 z-50 bg-[#161a23] overflow-y-auto animate-in slide-in-from-bottom-full duration-300 pb-32">
+            <div className="relative">
+              <img src={cardUser.photo_url || ""} className="w-full h-[65vh] object-cover" alt="" />
+              {/* გრადიენტი, რომელიც სურათს აბნელებს ქვემოთ */}
+              <div className="absolute inset-0 bg-gradient-to-t from-[#161a23] via-[#161a23]/30 to-transparent" />
+              
+              {/* პატარა თეთრი ისარი ქვემოთ (იასამნისფერის მაგივრად) */}
               <button 
                 onClick={() => setExpandedProfile(false)} 
-                className="w-12 h-12 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition backdrop-blur-md"
+                className="absolute bottom-4 right-6 w-10 h-10 bg-white/10 border border-white/20 backdrop-blur-md text-white rounded-full flex items-center justify-center shadow-lg z-10 hover:bg-white/20 transition"
               >
-                {/* პატარა თეთრი ისარი დაბლა */}
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="6 9 12 15 18 9"></polyline>
                 </svg>
               </button>
-            </div>
 
-            <div className="px-6 pt-2 space-y-6">
-              
-              <div className="border-b border-white/10 pb-4">
-                <h1 className="text-3xl font-black text-white">
-                  {cardUser.nickname} <span className="font-light text-white/80">{cardUser.age}</span>
+              <div className="absolute bottom-4 left-6">
+                <h1 className="text-4xl font-black text-white drop-shadow-md">
+                  {cardUser.nickname} <span className="font-light text-white/90">{cardUser.age}</span>
                 </h1>
               </div>
-
-              {displayBio && (
-                <div>
-                  <h3 className="text-white/50 font-bold text-[13px] mb-2 uppercase tracking-wide">{L("ჩემ შესახებ", "About Me")}</h3>
-                  <p className="text-white/90 text-[16px] leading-relaxed bg-white/5 p-4 rounded-2xl">{displayBio}</p>
-                </div>
-              )}
-
-              {displayIntent && (
-                <div>
-                  <h3 className="text-white/50 font-bold text-[13px] mb-2 uppercase tracking-wide">{L("ვეძებ", "Looking for")}</h3>
-                  <div className="inline-flex items-center gap-2 bg-pink-500/20 border border-pink-500/30 px-4 py-2 rounded-xl text-pink-100 font-medium">
-                    <span>💝</span> {displayIntent}
-                  </div>
-                </div>
-              )}
-              
+            </div>
+            
+            <div className="px-6 pt-6 space-y-7">
+              {/* ვეძებ */}
               <div>
-                <h3 className="text-white/50 font-bold text-[13px] mb-2 uppercase tracking-wide">{L("ძირითადი", "Essentials")}</h3>
-                <div className="flex flex-col gap-3 bg-white/5 p-4 rounded-2xl">
-                  <div className="flex items-center gap-3 text-white/90 text-[15px]">
+                <h3 className="text-white/50 font-semibold text-[14px] mb-3">{L("ვეძებ", "Looking for")}</h3>
+                <div className="inline-flex items-center gap-2 bg-[#212631] px-4 py-2 rounded-xl text-white text-[15px]">
+                  <span>💝</span> {displayIntent || "short_term"}
+                </div>
+              </div>
+
+              {/* ძირითადი */}
+              <div>
+                <h3 className="text-white/50 font-semibold text-[14px] mb-3">{L("ძირითადი", "Essentials")}</h3>
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center gap-3 text-white/90 text-[16px]">
                     <span className="text-xl">📍</span> {displayCity || L("თბილისი", "Tbilisi")}
                   </div>
                   {cardUser.distanceKm != null && (
-                    <div className="flex items-center gap-3 text-white/90 text-[15px]">
+                    <div className="flex items-center gap-3 text-white/90 text-[16px]">
                       <span className="text-xl">📏</span> {cardUser.distanceKm < 1 ? L("1 კმ-ზე ნაკლები", "Less than 1 km away") : `${cardUser.distanceKm} ${L("კმ", "km away")}`}
                     </div>
                   )}
                 </div>
               </div>
 
+              {/* ჩემ შესახებ */}
+              {displayBio && (
+                <div>
+                  <h3 className="text-white/50 font-semibold text-[14px] mb-3">{L("ჩემ შესახებ", "About me")}</h3>
+                  <p className="text-white/90 text-[16px] leading-relaxed">{displayBio}</p>
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        {/* ... (First Impressions & Paywalls კოდი რჩება უცვლელი როგორც გქონდა) ... */}
-        
-        {/* ================= First Impressions მოდალი ================= */}
+        {/* ... (დანარჩენი მოდალები იგივეა რაც გქონდა) ... */}
         {showFIInput && cardUser && (
-           <div className="absolute inset-0 z-[60] bg-[#0b101a] flex flex-col animate-in fade-in slide-in-from-bottom-4">
-           {/* ... (შენი ძველი მოდალის კოდი) ... */}
-           </div>
+          <div className="absolute inset-0 z-[60] bg-[#0b101a] flex flex-col animate-in fade-in slide-in-from-bottom-4">
+            <div className="p-4 flex items-center justify-between">
+              <button onClick={() => setShowFIInput(false)} className="text-white/50 text-2xl font-bold">✕</button>
+              <div className="w-6 h-6 flex items-center justify-center rounded-full bg-[#1e293b] text-blue-500 font-bold text-xs">{firstImpressionsLeft}</div>
+            </div>
+            <div className="px-6 flex flex-col flex-1 pb-6">
+              <div className="text-blue-500 font-bold text-[13px] mb-2 flex items-center gap-2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                {L("5x გაზარდე მეჩის შანსი", "Up to 5x your chances to match")}
+              </div>
+              <h2 className="text-[17px] font-bold text-white mb-6 leading-snug">
+                {L("გამოირჩიე პირველი შთაბეჭდილებით. გააგზავნე მესიჯი. ნახე თუ იქნება მეჩი.", "Stand out with First Impressions. Send a message. See if it's a match.")}
+              </h2>
+              <div className="relative w-full max-h-[45vh] aspect-[4/5] rounded-[24px] overflow-hidden bg-zinc-800 shadow-2xl mx-auto">
+                {cardUser.photo_url && <img src={cardUser.photo_url} alt="" className="w-full h-full object-cover" />}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent" />
+                <div className="absolute bottom-5 left-5 font-bold text-2xl text-white drop-shadow-md">{cardUser.nickname}, {cardUser.age}</div>
+              </div>
+              <div className="mt-auto pt-6">
+                <div className="flex bg-[#1e293b] rounded-full p-1 pl-4 items-center">
+                  <input type="text" value={msgText} onChange={(e) => setMsgText(e.target.value)} placeholder={L("შენი მესიჯი", "Your message")} className="flex-1 bg-transparent text-white text-[15px] outline-none placeholder-zinc-500" autoFocus />
+                  <button onClick={handleSendMessage} disabled={!msgText.trim()} className={`font-bold px-5 py-3 rounded-full transition-colors ${msgText.trim() ? "text-blue-500" : "text-zinc-600"}`}>
+                    {L("გაგზავნა", "Send")}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
-        {/* ================= Paywalls ================= */}
+        {/* ... (Paywalls) ... */}
         {showFIPaywall && ( <div className="absolute inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-end animate-in fade-in">...</div> )}
         {showSLPaywall && ( <div className="absolute inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-end animate-in fade-in">...</div> )}
 
