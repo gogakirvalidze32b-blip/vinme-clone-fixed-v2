@@ -139,9 +139,11 @@ export default function TinderCard({
     const quick = Date.now() - downAt.current < 200;
     const thr = quick ? threshold * 0.7 : threshold;
     
+    // 🔥 შესწორება: თუ 0 აქვს, ჯერ აბრუნებს ბარათს ცენტრში, და მერე ხსნის Paywall-ს!
     if (isSuperDir) {
       if (superLikesLeft > 0) return void finish("super_like");
       else {
+        setX(0); setY(0); setRot(0); 
         onSuperLike?.(); 
         return;
       }
@@ -149,22 +151,25 @@ export default function TinderCard({
     
     if (x > thr) return void finish("like");
     if (x < -thr) return void finish("skip");
+    
+    // ნებისმიერ სხვა შემთხვევაში ბრუნდება ცენტრში
     setX(0); setY(0); setRot(0);
   }
  
   return (
-    <div className="relative w-full bg-black text-white flex flex-col h-[100dvh]">
+    // ფონი გახდა ოდნავ რბილი შავი, რომ ფოტოს გრადიენტს შეერწყას
+    <div className="relative w-full bg-[#11141a] text-white flex flex-col h-[100dvh]">
  
       {/* CARD */}
       <div className="flex-1 w-full px-2 pt-2 flex justify-center items-center overflow-hidden">
         <div
-          className="relative overflow-hidden bg-zinc-900 shadow-2xl w-full h-full max-w-md"
+          // 🔥 გაიზარდა სიგანე max-w-lg (რაც კომპიუტერზე უფრო განიერს გამოაჩენს)
+          className="relative overflow-hidden bg-zinc-900 shadow-2xl w-full h-full max-w-lg"
           style={{
             borderRadius: "20px",
             transform: `translateX(${x}px) translateY(${y}px) rotate(${rot}deg)`,
             transition: dragging ? "none" : "transform 200ms ease-out",
             willChange: "transform",
-            // 🔥 სწორედ ეს ხსნის მობაილზე ზევით სვაიპის (Super Like) პრობლემას
             touchAction: "none", 
             userSelect: "none",
             WebkitUserSelect: "none",
@@ -180,16 +185,17 @@ export default function TinderCard({
             ? <Image src={imgSrc} alt="" fill draggable={false}
                 className="object-cover object-center select-none pointer-events-none"
                 onDragStart={e => e.preventDefault()}
-                sizes="(max-width: 460px) 100vw, 460px"
+                sizes="(max-width: 512px) 100vw, 512px"
                 priority unoptimized={false} />
             : <div className="absolute inset-0 bg-zinc-800 flex items-center justify-center text-7xl">👤</div>
           }
  
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent from-50% to-black/85" />
+          {/* 🔥 შეუმჩნეველი გადაბმა: მუქი ფონიდან გამჭვირვალეზე რბილი გადასვლა */}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#11141a] via-[#11141a]/60 to-transparent pointer-events-none" />
  
           {dir === "right" && (
             <div className="absolute top-10 left-5 z-30" style={{ opacity: Math.min(progress * 1.8, 1), transform: "rotate(-22deg)" }}>
-              <div className="border-4 border-[#00E08F] rounded-lg px-4 py-1">
+              <div className="border-4 border-[#00E08F] rounded-lg px-4 py-1 bg-black/20 backdrop-blur-sm">
                 <span className="text-[#00E08F] text-3xl font-black tracking-[0.15em]">LIKE</span>
               </div>
             </div>
@@ -197,7 +203,7 @@ export default function TinderCard({
  
           {dir === "left" && (
             <div className="absolute top-10 right-5 z-30" style={{ opacity: Math.min(progress * 1.8, 1), transform: "rotate(22deg)" }}>
-              <div className="border-4 border-[#FF4458] rounded-lg px-4 py-1">
+              <div className="border-4 border-[#FF4458] rounded-lg px-4 py-1 bg-black/20 backdrop-blur-sm">
                 <span className="text-[#FF4458] text-3xl font-black tracking-[0.15em]">NOPE</span>
               </div>
             </div>
@@ -206,7 +212,7 @@ export default function TinderCard({
           {(isSuperDir || superLikeAnim) && (
             <div className="absolute inset-x-0 top-1/3 z-30 flex justify-center transition-opacity duration-200"
               style={{ opacity: superLikeAnim ? 1 : Math.min(upProgress * 2, 1) }}>
-              <div className="border-4 border-[#00B4E4] rounded-lg px-6 py-2">
+              <div className="border-4 border-[#00B4E4] rounded-lg px-6 py-2 bg-black/20 backdrop-blur-sm">
                 <span className="text-[#00B4E4] text-3xl font-black tracking-[0.15em]">SUPER LIKE</span>
               </div>
             </div>
@@ -242,7 +248,7 @@ export default function TinderCard({
                 onClick={onOpenProfile}
                 onPointerDown={e => e.stopPropagation()} 
                 onPointerUp={e => e.stopPropagation()}
-                className="w-10 h-10 mb-1 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 transition shadow-xl shrink-0 border border-white/10"
+                className="w-10 h-10 mb-1 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/50 transition shadow-xl shrink-0 border border-white/10"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="18 15 12 9 6 15"></polyline>
@@ -259,14 +265,12 @@ export default function TinderCard({
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 72px)" }}
         onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()}>
  
-        {/* REWIND */}
         <ActionBtn size="sm" disabled={animating} color="#F7BB00" onClick={() => onRewind && onRewind()}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/>
           </svg>
         </ActionBtn>
  
-        {/* SKIP */}
         <ActionBtn size="lg" disabled={animating} color="#FF4458"
           style={{ opacity: dir === "left" ? 0.65 + progress * 0.35 : 1, transform: dir === "left" ? `translateY(${-progress * 14}px) scale(${1 + progress * 0.08})` : undefined }}
           onClick={() => finish("skip")}>
@@ -275,7 +279,6 @@ export default function TinderCard({
           </svg>
         </ActionBtn>
  
-        {/* SUPER LIKE */}
         <ActionBtn size="sm" disabled={animating} color="#00B4E4"
           onClick={() => {
             if ((superLikesLeft ?? 0) > 0) {
@@ -290,7 +293,6 @@ export default function TinderCard({
           </svg>
         </ActionBtn>
  
-        {/* LIKE */}
         <ActionBtn size="lg" disabled={animating} color="#00E08F"
           style={{ opacity: dir === "right" ? 0.65 + progress * 0.35 : 1, transform: dir === "right" ? `translateY(${-progress * 14}px) scale(${1 + progress * 0.08})` : undefined }}
           onClick={() => finish("like")}>
@@ -299,7 +301,6 @@ export default function TinderCard({
           </svg>
         </ActionBtn>
  
-        {/* SEND */}
         <ActionBtn size="sm" disabled={animating} color="#3b82f6"
           onClick={() => { if (onSendMessage) onSendMessage(""); }}
           badge={(messagesLeft ?? 0) > 0 ? String(messagesLeft) : undefined}>
@@ -309,7 +310,6 @@ export default function TinderCard({
         </ActionBtn>
       </div>
       
-      {/* MATCH MODAL */}
       {externalShowMatch && externalMatchId && (
         <MatchModal
           onClose={onCloseMatch ?? (() => {})}
@@ -333,8 +333,8 @@ function ActionBtn({ size, color, onClick, disabled, children, style, badge }: {
   return (
     <div className="relative">
       <button type="button" onClick={onClick} disabled={disabled}
-        className={`${dim} rounded-full flex items-center justify-center shadow-xl disabled:opacity-30 active:scale-90 transition-all duration-150`}
-        style={{ ...style, background: `${color}18`, borderWidth: 2, borderStyle: "solid", borderColor: `${color}60`, color, backdropFilter: "blur(8px)" }}>
+        className={`${dim} rounded-full flex items-center justify-center shadow-lg disabled:opacity-30 active:scale-90 transition-all duration-150`}
+        style={{ ...style, background: `${color}20`, borderWidth: 2, borderStyle: "solid", borderColor: `${color}80`, color, backdropFilter: "blur(12px)" }}>
         {children}
       </button>
       {badge && (
@@ -350,12 +350,12 @@ function ActionBtn({ size, color, onClick, disabled, children, style, badge }: {
 function TinderEmpty({ onOpenProfile, lang }: { onOpenProfile?: () => void; lang: "ka" | "en" }) {
   const router = useRouter();
   return (
-    <div className="w-full flex flex-col items-center justify-center bg-black text-white px-8 gap-4" style={{ height: "100dvh" }}>
-      <div className="text-6xl">😅</div>
+    <div className="w-full flex flex-col items-center justify-center bg-[#11141a] text-white px-8 gap-4" style={{ height: "100dvh" }}>
+      <div className="text-6xl animate-bounce">😅</div>
       <h2 className="text-xl font-black text-center">{t("no_more", lang)}</h2>
       <p className="text-sm text-white/40 text-center">{t("no_more_sub", lang)}</p>
       <button onClick={() => router.push("/feed")}
-        className="mt-2 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 px-8 py-3 font-bold text-white shadow-lg">
+        className="mt-2 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 px-8 py-3 font-bold text-white shadow-lg active:scale-95 transition">
         {t("refresh", lang)}
       </button>
     </div>
