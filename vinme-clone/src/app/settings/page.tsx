@@ -198,11 +198,11 @@ export default function SettingsPage() {
     : null;
 
   return (
-    <div className="min-h-[100dvh] bg-zinc-950 text-white flex justify-center">
+<div className="min-h-[100dvh] bg-[#0b0e14] text-white flex justify-center">
       <div className="w-full max-w-lg">
 
         {/* HEADER */}
-        <div className="sticky top-0 z-20 bg-zinc-950/90 backdrop-blur border-b border-white/8 px-4 py-3 flex items-center gap-3">
+<div className="sticky top-0 z-20 bg-[#0b0e14]/90 backdrop-blur border-b border-white/5 px-4 py-3 flex items-center gap-3">
           <button onClick={() => router.back()} className="rounded-full bg-white/8 px-4 py-2 text-sm font-semibold hover:bg-white/12 transition">
             {L("← უკან", "← Back")}
           </button>

@@ -13,7 +13,7 @@ export default function BottomNav({ chatBadge }: { chatBadge?: number } = {}) {
   if (pathname.match(/^\/chat\/.+/)) return null;
 
   const [unreadPeople, setUnreadPeople] = useState(0);
-  const [lang, setLang] = useState<"ka"|"en">("ka");
+  const[lang, setLang] = useState<"ka"|"en">("ka");
   const pathname2 = usePathname();
 
   useEffect(() => {
@@ -21,14 +21,14 @@ export default function BottomNav({ chatBadge }: { chatBadge?: number } = {}) {
     router.prefetch("/feed");
     router.prefetch("/chat");
     router.prefetch("/likes");
-  }, []);
+  },[]);
 
   useEffect(() => {
     setLang(getLang());
     const sync = () => setLang(getLang());
     window.addEventListener("app:lang", sync);
     return () => window.removeEventListener("app:lang", sync);
-  }, []);
+  },[]);
 
   useEffect(() => {
     if (chatBadge !== undefined) return;
@@ -83,7 +83,12 @@ export default function BottomNav({ chatBadge }: { chatBadge?: number } = {}) {
   const ka = lang !== "en";
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
-  const items = [
+  // 🌟 ფერების დინამიური ლოგიკა 🌟
+  const isFeed = pathname === "/feed";
+  const outerBg = isFeed ? "bg-black" : "bg-[#0b0e14]";
+  const innerBg = isFeed ? "bg-black/95" : "bg-[#0b0e14]/95";
+
+  const items =[
     {
       href: "/feed",
       label: ka ? "სვაიპი" : "Swipe",
@@ -128,8 +133,8 @@ export default function BottomNav({ chatBadge }: { chatBadge?: number } = {}) {
   ];
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 bg-zinc-950">
-      <div className="bg-zinc-950/97 backdrop-blur border-t border-white/8" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+    <div className={`fixed inset-x-0 bottom-0 z-50 ${outerBg} transition-colors duration-300`}>
+      <div className={`${innerBg} backdrop-blur border-t border-white/5 transition-colors duration-300`} style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
         <div className="mx-auto w-full max-w-lg">
           <div className="flex items-center justify-around px-2 py-2">
             {items.map((item) => {
@@ -145,7 +150,7 @@ export default function BottomNav({ chatBadge }: { chatBadge?: number } = {}) {
                       </span>
                     )}
                   </div>
-                  <span className={`text-[10px] font-medium ${active ? "text-white" : "text-white/40"}`}>
+                  <span className={`text-[10px] font-medium transition-colors ${active ? "text-white" : "text-white/40"}`}>
                     {item.label}
                   </span>
                 </Link>
