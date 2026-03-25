@@ -26,6 +26,7 @@ type Props = {
   loading?: boolean;
   onLike?: () => void | Promise<void>;
   onSkip?: () => void | Promise<void>;
+    onRewind?: () => void | Promise<void>; // ✅ აუცილებლად ჩაამატე ეს ხაზი
   onSuperLike?: () => void | Promise<void>;
   onSendMessage: (message: string) => void;
   messagesLeft: number;
@@ -39,6 +40,8 @@ type Props = {
   matchedUserName?: string;
   matchedUserPhoto?: string | null;
   onOpenProfile?: () => void;
+    isInitialLoad?: boolean;                   // ✅ აქ დაემატა
+
 };
  
 export default function TinderCard({
@@ -49,6 +52,7 @@ export default function TinderCard({
   superLikesLeft = 0, firstImpressionsLeft = 0,
   externalMatchId, externalShowMatch, onCloseMatch, onOpenChat,
   matchedUserName, matchedUserPhoto, onOpenProfile,
+    isInitialLoad                              // ✅ და აქაც დაემატა
 }: Props) {
   const router = useRouter();
   const lang = getLang();
@@ -213,41 +217,47 @@ export default function TinderCard({
           )}
  
           <div className="absolute bottom-0 left-0 right-0 z-20 px-4 pb-4">
-            <div className="flex items-end justify-between">
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-[1.75rem] font-black text-white leading-tight drop-shadow-lg">{user.nickname}</h2>
-                  <span className="text-[1.6rem] font-light text-white/90">{user.age}</span>
-                  {user.recentlyActive && (
-                    <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-black text-black">●</span>
-                  )}
-                </div>
-                <p className="text-[13px] text-white/75 mt-0.5 drop-shadow flex items-center gap-1">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 opacity-80">
-                    <path d="M10 20S3 10.87 3 7a7 7 0 1 1 14 0c0 3.87-7 13-7 13zm0-11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/>
-                  </svg>
-                  {user.city || (ka ? "უცნობი ადგილი" : "Unknown location")}
-                  {user.distanceKm != null && (
-                    <span className="text-white/55 ml-1">
-                      · {user.distanceKm < 1
-                          ? (ka ? "1 კმ-ზე ნაკლები" : "Less than 1 km")
-                          : `${user.distanceKm} ${ka ? "კმ" : "km away"}`}
-                    </span>
-                  )}
-                </p>
-              </div>
-              <button type="button" onClick={onOpenProfile}
-                onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()}
-                className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/30 transition border border-white/20 shrink-0">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
+  <div className="flex items-end justify-between">
+    <div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <h2 className="text-[1.75rem] font-black text-white leading-tight drop-shadow-lg">{user.nickname}</h2>
+        <span className="text-[1.6rem] font-light text-white/90">{user.age}</span>
+        {user.recentlyActive && (
+          <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-black text-black">●</span>
+        )}
       </div>
- 
+      <p className="text-[13px] text-white/75 mt-0.5 drop-shadow flex items-center gap-1">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 opacity-80">
+          <path d="M10 20S3 10.87 3 7a7 7 0 1 1 14 0c0 3.87-7 13-7 13zm0-11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/>
+        </svg>
+        {user.city || (ka ? "უცნობი ადგილი" : "Unknown location")}
+        {user.distanceKm != null && (
+          <span className="text-white/55 ml-1">
+            · {user.distanceKm < 1
+                ? (ka ? "1 კმ-ზე ნაკლები" : "Less than 1 km")
+                : `${user.distanceKm} ${ka ? "კმ" : "km away"}`}
+          </span>
+        )}
+      </p>
+    </div>
+
+    {/* 🔥 შეცვლილი ღილაკი: თეთრი ისარი მაღლა */}
+    <button 
+      type="button" 
+      onClick={onOpenProfile}
+      onPointerDown={e => e.stopPropagation()} 
+      onPointerUp={e => e.stopPropagation()}
+      className="w-10 h-10 mb-1 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 transition shadow-xl shrink-0 border border-white/10"
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="18 15 12 9 6 15"></polyline>
+      </svg>
+    </button>
+    
+  </div>
+</div>
+</div>
+</div>
       {/* ACTION BUTTONS */}
       <div className="shrink-0 flex items-center justify-center gap-4 py-1.5"
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 72px)" }}
