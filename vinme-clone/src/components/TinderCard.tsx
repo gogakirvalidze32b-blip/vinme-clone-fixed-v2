@@ -41,7 +41,7 @@ type Props = {
   matchedUserPhoto?: string | null;
   onOpenProfile?: () => void;
   isInitialLoad?: boolean;
-  isBackground?: boolean; // 🔥 დაემატა ფონზე მყოფი ბარათისთვის
+  isBackground?: boolean; 
 };
  
 export default function TinderCard({
@@ -88,12 +88,12 @@ export default function TinderCard({
   }, [otherUserId]);
  
   if (!user) {
-    if (isBackground) return null; // ფონზე 😅 არ გვინდა აჩვენოს
+    if (isBackground) return null;
     return <TinderEmpty onOpenProfile={onOpenProfile} lang={lang} />;
   }
  
   function onPointerDown(e: React.PointerEvent) {
-    if (animating || isBackground) return; // ფონის ბარათს ხელს ვერ მოკიდებ
+    if (animating || isBackground) return; 
     setDragging(true);
     downAt.current = Date.now();
     startX.current = e.clientX;
@@ -144,7 +144,6 @@ export default function TinderCard({
     const quick = Date.now() - downAt.current < 200;
     const thr = quick ? threshold * 0.7 : threshold;
     
-    // 🔥 Super Like-ის Paywall-ის ამოგდებამდე ბარათს ვაბრუნებთ ცენტრში
     if (isSuperDir) {
       if (superLikesLeft > 0) return void finish("super_like");
       else {
@@ -161,23 +160,23 @@ export default function TinderCard({
   }
  
   return (
-    <div className="relative w-full text-white flex flex-col h-[100dvh]">
+    <div className="absolute inset-0 w-full h-full pointer-events-none flex flex-col">
  
-      {/* CARD */}
-      <div className={`flex-1 w-full px-2 pt-2 flex justify-center items-center overflow-hidden ${isBackground ? "pb-[90px]" : "pb-4"}`}>
+      {/* 🌟 მთავარი ბარათის კონტეინერი (3D ეფექტით) */}
+      <div className="flex-1 w-full flex justify-center items-start pt-2 px-2 pb-[10px]">
         <div
-          // 🔥 გავაფართოვეთ (max-w-[500px]) და მივეცით სიმაღლეში სრულად შევსება
-          className="relative overflow-hidden bg-black shadow-2xl w-full h-full max-w-[500px]"
+          className="relative w-full h-full max-w-[480px] overflow-hidden pointer-events-auto"
           style={{
-            borderRadius: "24px", // სრულყოფილი მომრგვალება
+            borderRadius: "24px",
             transform: `translateX(${x}px) translateY(${y}px) rotate(${rot}deg)`,
             transition: dragging ? "none" : "transform 200ms ease-out",
+            backgroundColor: "#161a23", // 🔥 ნაცრისფერ/შავი ფონი, რომელიც ფოტოს დაბლა გრძელდება
             willChange: "transform",
             touchAction: "none", 
             userSelect: "none",
             WebkitUserSelect: "none",
             cursor: dragging ? "grabbing" : (isBackground ? "default" : "grab"),
-            boxShadow: isSuperDir ? "0 25px 60px rgba(0,180,228,0.5)" : "0 25px 60px rgba(0,0,0,0.7)",
+            boxShadow: isSuperDir ? "0 25px 60px rgba(0,180,228,0.5)" : "0 10px 40px rgba(0,0,0,0.8)",
           }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -188,14 +187,14 @@ export default function TinderCard({
             ? <Image src={imgSrc} alt="" fill draggable={false}
                 className="object-cover object-center pointer-events-none select-none w-full h-full"
                 onDragStart={e => e.preventDefault()}
-                sizes="(max-width: 600px) 100vw, 500px" // ხარისხი და ოპტიმიზაცია
+                sizes="(max-width: 600px) 100vw, 480px" 
                 priority={!isBackground} 
                 quality={90} />
-            : <div className="absolute inset-0 bg-zinc-900 flex items-center justify-center text-7xl">👤</div>
+            : <div className="absolute inset-0 bg-zinc-800 flex items-center justify-center text-7xl">👤</div>
           }
  
-          {/* 🔥 სუფთა და რბილი შავი გრადიენტი, რომელიც არ სცდება სურათს */}
-          <div className="absolute inset-x-0 bottom-0 h-[45%] bg-gradient-to-t from-black/95 via-black/40 to-transparent pointer-events-none" />
+          {/* 🔥 გრადიენტი რომელიც აერთებს ფოტოს ქვედა ნაცრისფერ ფონთან */}
+          <div className="absolute inset-x-0 bottom-0 h-[60%] bg-gradient-to-t from-[#161a23] via-[#161a23]/60 to-transparent pointer-events-none" />
  
           {dir === "right" && !isBackground && (
             <div className="absolute top-10 left-5 z-30" style={{ opacity: Math.min(progress * 1.8, 1), transform: "rotate(-22deg)" }}>
@@ -222,7 +221,8 @@ export default function TinderCard({
             </div>
           )}
  
-          <div className="absolute bottom-0 left-0 right-0 z-20 px-5 pb-5">
+          {/* ინფორმაცია აწეულია ოდნავ მაღლა, რათა ღილაკებმა არ დაფაროს */}
+          <div className="absolute bottom-[85px] left-5 right-5 z-20">
             <div className="flex items-end justify-between">
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -247,7 +247,6 @@ export default function TinderCard({
                 </p>
               </div>
 
-              {/* ღილაკი მხოლოდ წინა ბარათზე მუშაობს */}
               <button 
                 type="button" 
                 onClick={(e) => { e.stopPropagation(); if(!isBackground && onOpenProfile) onOpenProfile(); }}
@@ -259,60 +258,43 @@ export default function TinderCard({
                   <polyline points="18 15 12 9 6 15"></polyline>
                 </svg>
               </button>
-              
             </div>
           </div>
         </div>
       </div>
 
-      {/* ACTION BUTTONS (მხოლოდ მთავარი/წინა ბარათისთვის ჩანს) */}
+      {/* 🌟 ACTION BUTTONS: ტივტივებს ბარათის ფსკერზე */}
       {!isBackground && (
-        <div className="shrink-0 flex items-center justify-center gap-4 py-2"
-          style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 84px)" }}
-          onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()}>
-   
+        <div className="absolute bottom-6 left-0 right-0 flex justify-center items-center gap-4 z-40 pointer-events-auto pb-1">
           <ActionBtn size="sm" disabled={animating} color="#F7BB00" onClick={() => onRewind && onRewind()}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/>
-            </svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>
           </ActionBtn>
    
           <ActionBtn size="lg" disabled={animating} color="#FF4458"
             style={{ opacity: dir === "left" ? 0.65 + progress * 0.35 : 1, transform: dir === "left" ? `translateY(${-progress * 14}px) scale(${1 + progress * 0.08})` : undefined }}
             onClick={() => finish("skip")}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-            </svg>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
           </ActionBtn>
    
           <ActionBtn size="sm" disabled={animating} color="#00B4E4"
             onClick={() => {
-              if ((superLikesLeft ?? 0) > 0) {
-                finish("super_like");
-              } else {
-                if (onSuperLike) onSuperLike(); 
-              }
+              if ((superLikesLeft ?? 0) > 0) finish("super_like");
+              else if (onSuperLike) onSuperLike(); 
             }}
             badge={(superLikesLeft ?? 0) > 0 ? String(superLikesLeft) : undefined}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
-            </svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
           </ActionBtn>
    
           <ActionBtn size="lg" disabled={animating} color="#00E08F"
             style={{ opacity: dir === "right" ? 0.65 + progress * 0.35 : 1, transform: dir === "right" ? `translateY(${-progress * 14}px) scale(${1 + progress * 0.08})` : undefined }}
             onClick={() => finish("like")}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 21.593c-5.63-5.539-11-10.297-11-14.402 0-3.791 3.068-5.191 5.281-5.191 1.312 0 4.151.501 5.719 4.457 1.59-3.968 4.464-4.447 5.726-4.447 2.54 0 5.274 1.621 5.274 5.181 0 4.069-5.136 8.625-11 14.402z"/>
-            </svg>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.593c-5.63-5.539-11-10.297-11-14.402 0-3.791 3.068-5.191 5.281-5.191 1.312 0 4.151.501 5.719 4.457 1.59-3.968 4.464-4.447 5.726-4.447 2.54 0 5.274 1.621 5.274 5.181 0 4.069-5.136 8.625-11 14.402z"/></svg>
           </ActionBtn>
    
           <ActionBtn size="sm" disabled={animating} color="#3b82f6"
             onClick={() => { if (onSendMessage) onSendMessage(""); }}
             badge={(messagesLeft ?? 0) > 0 ? String(messagesLeft) : undefined}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="ml-0.5 mt-0.5">
-              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-            </svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="ml-0.5 mt-0.5"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
           </ActionBtn>
         </div>
       )}
@@ -361,9 +343,8 @@ function TinderEmpty({ onOpenProfile, lang }: { onOpenProfile?: () => void; lang
       <div className="text-6xl animate-bounce">😅</div>
       <h2 className="text-xl font-black text-center">{t("no_more", lang)}</h2>
       <p className="text-sm text-white/40 text-center">{t("no_more_sub", lang)}</p>
-      {/* შეცდომის თავიდან ასაცილებლად უბრალოდ არაფერს აკეთებს, რადგან Native Back-მა უნდა იმუშაოს */}
       <button onClick={() => { localStorage.removeItem("feed_top_cache"); window.location.reload(); }}
-        className="mt-2 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 px-8 py-3 font-bold text-white shadow-lg active:scale-95 transition">
+        className="mt-2 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 px-8 py-3 font-bold text-white shadow-lg active:scale-95 transition pointer-events-auto">
         {t("refresh", lang)}
       </button>
     </div>

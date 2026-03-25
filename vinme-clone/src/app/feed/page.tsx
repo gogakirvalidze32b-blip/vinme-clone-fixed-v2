@@ -31,7 +31,7 @@ export default function FeedPage() {
     }
     return null;
   });
-  const [top, setTop] = useState<any>(() => {
+  const[top, setTop] = useState<any>(() => {
     if (typeof window !== "undefined") {
       const cached = localStorage.getItem("feed_top_cache");
       return cached ? JSON.parse(cached) : null;
@@ -76,32 +76,19 @@ export default function FeedPage() {
   const loadingTopRef = useRef(false);
   const meRef = useRef<any>(me);
 
-  // Browser History ლოგიკა Native Back Swipe-სთვის
-  const openOverlay = useCallback((setter: React.Dispatch<React.SetStateAction<boolean>>) => {
-    window.history.pushState({ isModal: true }, "");
-    setter(true);
-  },[]);
-
-  const closeOverlay = useCallback((setter: React.Dispatch<React.SetStateAction<boolean>>) => {
-    setter(false);
-    if (window.history.state?.isModal) {
-      window.history.back();
+  // 🔥 SIDEBACK LOGIC
+  const touchStartX = useRef(0);
+  const handleTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const touchEndX = e.changedTouches[0].clientX;
+    if (touchStartX.current < 40 && touchEndX - touchStartX.current > 100) {
+      if (showSLPaywall) setShowSLPaywall(false);
+      else if (showFIPaywall) setShowFIPaywall(false);
+      else if (showFIInput) setShowFIInput(false);
+      else if (expandedProfile) setExpandedProfile(false);
+      else if (showMatch) { setShowMatch(false); setMatchId(null); setMatchedUser(null); }
     }
-  },[]);
-
-  useEffect(() => {
-    const handlePopState = () => {
-      setShowSLPaywall(false);
-      setShowFIPaywall(false);
-      setShowFIInput(false);
-      setExpandedProfile(false);
-      setShowMatch(false);
-      setMatchId(null);
-      setMatchedUser(null);
-    };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  },[]);
+  };
 
   const loadMe = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
@@ -178,7 +165,7 @@ export default function FeedPage() {
     advanceCard();
     await supabase.from("swipes").insert({ from_id: me.user_id, to_id: cur.user_id, action: "like" });
     const mid = await checkAndCreateMatch(me.user_id, cur.user_id);
-    if (mid) { setMatchedUser(cur); setMatchId(mid); openOverlay(setShowMatch); }
+    if (mid) { setMatchedUser(cur); setMatchId(mid); setShowMatch(true); }
     loadTop(me);
   };
 
@@ -211,14 +198,14 @@ export default function FeedPage() {
       await supabase.from("swipes").insert({ from_id: me.user_id, to_id: cur.user_id, action: "super_like" });
       setSuperLikesLeft((prev) => prev - 1);
       const mid = await checkAndCreateMatch(me.user_id, cur.user_id);
-      if (mid) { setMatchedUser(cur); setMatchId(mid); openOverlay(setShowMatch); }
+      if (mid) { setMatchedUser(cur); setMatchId(mid); setShowMatch(true); }
       loadTop(me);
     } else {
-      openOverlay(setShowSLPaywall);
+      setShowSLPaywall(true);
     }
   };
 
-  const handleOpenMessageModal = () => openOverlay(setShowFIInput);
+  const handleOpenMessageModal = () => setShowFIInput(true);
 
   const handleSendMessage = async () => {
     if (!msgText.trim()) return;
@@ -229,20 +216,20 @@ export default function FeedPage() {
       await supabase.from("swipes").insert({ from_id: me.user_id, to_id: cur.user_id, action: "like" });
       await supabase.from("messages").insert({ from_id: me.user_id, to_id: cur.user_id, message: msgText });
       setFirstImpressionsLeft((prev) => prev - 1);
-      closeOverlay(setShowFIInput);
+      setShowFIInput(false);
       setMsgText("");
       const mid = await checkAndCreateMatch(me.user_id, cur.user_id);
-      if (mid) { setMatchedUser(cur); setMatchId(mid); openOverlay(setShowMatch); }
+      if (mid) { setMatchedUser(cur); setMatchId(mid); setShowMatch(true); }
       loadTop(me);
     } else {
-      closeOverlay(setShowFIInput);
-      setTimeout(() => openOverlay(setShowFIPaywall), 50);
+      setShowFIInput(false);
+      setTimeout(() => setShowFIPaywall(true), 50);
     }
   };
 
   const handleOpenProfile = async () => {
     if (!top?.user_id) return;
-    openOverlay(setExpandedProfile);
+    setExpandedProfile(true);
     const { data } = await supabase.from("profiles").select("bio, intent, city").eq("user_id", top.user_id).single();
     if (data) setLiveProfileData(data);
   };
@@ -272,9 +259,8 @@ export default function FeedPage() {
       photo_url: top.photo1_url ? photoSrc(top.photo1_url) : null,
       photo1_url: top.photo1_url,
     };
-  }, [top, me]);
+  },[top, me]);
 
-  // 🔥 ვამზადებთ მომდევნო ბარათს, რათა უკან გამოჩნდეს სვაიპის დროს
   const nextCardUser = useMemo(() => {
     if (!nextTop) return null;
     let dist: number | undefined = undefined;
@@ -311,12 +297,18 @@ export default function FeedPage() {
   const displayCity = liveProfileData?.city !== undefined ? liveProfileData.city : top?.city;
 
   return (
-    <div className="bg-[#0b0e14] min-h-screen flex justify-center overflow-hidden overscroll-none">
-      <div className="w-full relative mx-auto" style={{ height: "100dvh" }}>
+    // 🌟 მთლიანი ეკრანის კონტეინერი Flex-ით
+    <div 
+      className="bg-[#0b0e14] h-[100dvh] flex flex-col overflow-hidden overscroll-none"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* 🌟 ბარათების ზონა, რომელიც იკავებს სივრცეს პანელის ზემოთ */}
+      <div className="flex-1 w-full relative">
         
-        {/* 🔥 უკანა ფონის (მომდევნო) ბარათი - ოდნავ დაპატარავებული (scale-95) და ჩამუქებული */}
+        {/* უკანა ბარათი - 100% იმალება წინა ბარათის უკან */}
         {nextCardUser && (
-          <div className="absolute inset-0 z-0 pointer-events-none scale-[0.96] opacity-90 transition-transform duration-300">
+          <div className="absolute inset-0 z-0">
             <TinderCard
               key={nextCardUser.id + "_bg"}
               user={nextCardUser}
@@ -324,12 +316,12 @@ export default function FeedPage() {
               myProfile={me}
               onSendMessage={() => {}} 
               messagesLeft={0}
-              isBackground={true} // სპეციალური პროფესი ღილაკების დასამალად
+              isBackground={true} 
             />
           </div>
         )}
 
-        {/* 🌟 წინა (მთავარი) ბარათი */}
+        {/* წინა ბარათი */}
         <div className="absolute inset-0 z-10">
           <TinderCard
             key={cardUser?.id ?? "empty"}
@@ -346,7 +338,7 @@ export default function FeedPage() {
             onOpenProfile={handleOpenProfile} 
             externalMatchId={matchId}
             externalShowMatch={showMatch}
-            onCloseMatch={() => { closeOverlay(setShowMatch); setMatchId(null); setMatchedUser(null); }}
+            onCloseMatch={() => { setShowMatch(false); setMatchId(null); setMatchedUser(null); }}
             onOpenChat={() => matchId && router.push(`/chat/${matchId}`)}
             matchedUserName={matchedUser?.first_name ?? matchedUser?.nickname ?? undefined}
             matchedUserPhoto={matchedUser?.photo1_url ?? undefined}
@@ -355,45 +347,46 @@ export default function FeedPage() {
           />
         </div>
 
-        {/* ================= პროფილის ჩამოშლა ================= */}
+        {/* ================= პროფილის ჩამოშლა (Tinder Style Down Arrow) ================= */}
         {expandedProfile && cardUser && (
-          <div className="absolute inset-0 z-50 bg-[#11141a] overflow-y-auto animate-in slide-in-from-bottom-full duration-300 pb-32">
-            <div className="relative">
-              <img src={cardUser.photo_url || ""} className="w-full h-[65vh] object-cover" alt="" />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#11141a] via-[#11141a]/40 to-transparent" />
+          <div className="absolute inset-0 z-[50] bg-[#11141a] overflow-y-auto pb-28 animate-in slide-in-from-bottom-full duration-300">
+            <div className="relative w-full aspect-[3/4] max-h-[70vh]">
+              <img src={cardUser.photo_url || ""} className="w-full h-full object-cover" alt="" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#11141a] via-[#11141a]/20 to-transparent" />
               
+              {/* 🔥 წითელ-ვარდისფერი დაბლა ჩამოსასვლელი ღილაკი */}
               <button 
-                onClick={() => closeOverlay(setExpandedProfile)} 
-                className="absolute bottom-4 right-6 w-10 h-10 bg-white/10 border border-white/20 backdrop-blur-md text-white rounded-full flex items-center justify-center shadow-lg z-10 hover:bg-white/20 transition"
+                onClick={() => setExpandedProfile(false)} 
+                className="absolute -bottom-7 right-6 w-14 h-14 bg-gradient-to-tr from-pink-500 to-rose-500 rounded-full flex items-center justify-center shadow-[0_10px_25px_rgba(236,72,153,0.4)] z-10 text-white active:scale-90 transition"
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="6 9 12 15 18 9"></polyline>
                 </svg>
               </button>
 
-              <div className="absolute bottom-4 left-6">
-                <h1 className="text-4xl font-black text-white drop-shadow-md">
+              <div className="absolute bottom-6 left-6">
+                <h1 className="text-4xl font-black text-white drop-shadow-lg">
                   {cardUser.nickname} <span className="font-light text-white/90">{cardUser.age}</span>
                 </h1>
               </div>
             </div>
             
-            <div className="px-6 pt-6 space-y-7">
+            <div className="px-6 pt-12 space-y-7">
               <div>
-                <h3 className="text-white/50 font-semibold text-[14px] mb-3">{L("ვეძებ", "Looking for")}</h3>
-                <div className="inline-flex items-center gap-2 bg-[#1a1f2b] px-4 py-2 rounded-xl text-white text-[15px]">
+                <h3 className="text-white/40 font-bold text-[13px] uppercase tracking-wider mb-3">{L("ვეძებ", "Looking for")}</h3>
+                <div className="inline-flex items-center gap-2 bg-[#1a1f2b] border border-white/5 px-4 py-2 rounded-xl text-white text-[15px] font-medium">
                   <span>💝</span> {displayIntent || "short_term"}
                 </div>
               </div>
 
               <div>
-                <h3 className="text-white/50 font-semibold text-[14px] mb-3">{L("ძირითადი", "Essentials")}</h3>
+                <h3 className="text-white/40 font-bold text-[13px] uppercase tracking-wider mb-3">{L("ძირითადი", "Essentials")}</h3>
                 <div className="flex flex-col gap-3">
-                  <div className="flex items-center gap-3 text-white/90 text-[16px]">
+                  <div className="flex items-center gap-3 text-white/90 text-[16px] font-medium">
                     <span className="text-xl">📍</span> {displayCity || L("თბილისი", "Tbilisi")}
                   </div>
                   {cardUser.distanceKm != null && (
-                    <div className="flex items-center gap-3 text-white/90 text-[16px]">
+                    <div className="flex items-center gap-3 text-white/90 text-[16px] font-medium">
                       <span className="text-xl">📏</span> {cardUser.distanceKm < 1 ? L("1 კმ-ზე ნაკლები", "Less than 1 km away") : `${cardUser.distanceKm} ${L("კმ", "km away")}`}
                     </div>
                   )}
@@ -402,8 +395,8 @@ export default function FeedPage() {
 
               {displayBio && (
                 <div>
-                  <h3 className="text-white/50 font-semibold text-[14px] mb-3">{L("ჩემ შესახებ", "About me")}</h3>
-                  <p className="text-white/90 text-[16px] leading-relaxed">{displayBio}</p>
+                  <h3 className="text-white/40 font-bold text-[13px] uppercase tracking-wider mb-3">{L("ჩემ შესახებ", "About me")}</h3>
+                  <p className="text-white/80 text-[16px] leading-relaxed">{displayBio}</p>
                 </div>
               )}
             </div>
@@ -414,7 +407,7 @@ export default function FeedPage() {
         {showFIInput && cardUser && (
           <div className="absolute inset-0 z-[60] bg-[#0b0e14] flex flex-col animate-in fade-in slide-in-from-bottom-4">
             <div className="p-4 flex items-center justify-between">
-              <button onClick={() => closeOverlay(setShowFIInput)} className="text-white/50 text-2xl font-bold">✕</button>
+              <button onClick={() => setShowFIInput(false)} className="text-white/50 text-2xl font-bold">✕</button>
               <div className="w-6 h-6 flex items-center justify-center rounded-full bg-[#1e293b] text-blue-500 font-bold text-xs">{firstImpressionsLeft}</div>
             </div>
             <div className="px-6 flex flex-col flex-1 pb-6">
@@ -447,7 +440,7 @@ export default function FeedPage() {
           <div className="absolute inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-end animate-in fade-in">
             <div className="bg-[#11141a] w-full rounded-t-3xl pt-6 pb-8 px-5 shadow-2xl slide-in-from-bottom-full border-t border-white/5">
               <div className="flex justify-between items-center mb-4">
-                <button onClick={() => closeOverlay(setShowFIPaywall)} className="text-white/50 text-2xl font-bold">✕</button>
+                <button onClick={() => setShowFIPaywall(false)} className="text-white/50 text-2xl font-bold">✕</button>
                 <div className="text-blue-500 font-bold flex items-center gap-2">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
                   {L("შეიძინე პირველი შთაბეჭდილება", "Get First Impressions")}
@@ -495,7 +488,7 @@ export default function FeedPage() {
           <div className="absolute inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-end animate-in fade-in">
             <div className="bg-[#11141a] w-full rounded-t-3xl pt-6 pb-8 px-5 shadow-2xl slide-in-from-bottom-full border-t border-white/5">
               <div className="flex justify-between items-center mb-4">
-                <button onClick={() => closeOverlay(setShowSLPaywall)} className="text-white/50 text-2xl font-bold">✕</button>
+                <button onClick={() => setShowSLPaywall(false)} className="text-white/50 text-2xl font-bold">✕</button>
                 <div className="text-blue-400 font-bold flex items-center gap-2">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
                   {L("შეიძინე Super Likes", "Get Super Likes")}
