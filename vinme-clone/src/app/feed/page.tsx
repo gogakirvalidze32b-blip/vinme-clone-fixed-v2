@@ -111,6 +111,13 @@ export default function FeedPage() {
     setMe(row);
     meRef.current = row;
     localStorage.setItem("feed_me_cache", JSON.stringify(row));
+
+    // /ჩამატებულია
+    
+      setSuperLikesLeft(row?.super_likes_count || 0);
+    setFirstImpressionsLeft(row?.first_impressions_count || 0);
+
+
     return row;
   }, [router]);
 
