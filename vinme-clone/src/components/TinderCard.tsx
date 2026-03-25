@@ -11,7 +11,7 @@ import Image from "next/image";
 type CardUser = {
   user_id: string;
   nickname: string;
-  age: number;
+  age: number | null; // 🔥 აქ დაემატა null (რადგან ვაწვდით null-ს როცა მალავს)
   city?: string;
   distanceKm?: number;
   recentlyActive?: boolean;
@@ -60,7 +60,7 @@ export default function TinderCard({
   const ka = lang !== "en";
  
   const[x, setX] = useState(0);
-  const [y, setY] = useState(0);
+  const[y, setY] = useState(0);
   const [rot, setRot] = useState(0);
   const[dragging, setDragging] = useState(false);
   const[animating, setAnimating] = useState(false);
@@ -162,7 +162,7 @@ export default function TinderCard({
   return (
     <div className="absolute inset-0 w-full h-full pointer-events-none flex flex-col">
  
-      {/* 🌟 მთავარი ბარათის კონტეინერი (3D ეფექტით) */}
+      {/* 🌟 მთავარი ბარათის კონტეინერი */}
       <div className="flex-1 w-full flex justify-center items-start pt-2 px-2 pb-[10px]">
         <div
           className="relative w-full h-full max-w-[480px] overflow-hidden pointer-events-auto"
@@ -170,7 +170,7 @@ export default function TinderCard({
             borderRadius: "24px",
             transform: `translateX(${x}px) translateY(${y}px) rotate(${rot}deg)`,
             transition: dragging ? "none" : "transform 200ms ease-out",
-            backgroundColor: "#161a23", // 🔥 ნაცრისფერ/შავი ფონი, რომელიც ფოტოს დაბლა გრძელდება
+            backgroundColor: "#161a23", 
             willChange: "transform",
             touchAction: "none", 
             userSelect: "none",
@@ -193,7 +193,6 @@ export default function TinderCard({
             : <div className="absolute inset-0 bg-zinc-800 flex items-center justify-center text-7xl">👤</div>
           }
  
-          {/* 🔥 გრადიენტი რომელიც აერთებს ფოტოს ქვედა ნაცრისფერ ფონთან */}
           <div className="absolute inset-x-0 bottom-0 h-[60%] bg-gradient-to-t from-[#161a23] via-[#161a23]/60 to-transparent pointer-events-none" />
  
           {dir === "right" && !isBackground && (
@@ -221,13 +220,13 @@ export default function TinderCard({
             </div>
           )}
  
-          {/* ინფორმაცია აწეულია ოდნავ მაღლა, რათა ღილაკებმა არ დაფაროს */}
-<div className="absolute bottom-[170px] left-5 right-5 z-20">
+          <div className="absolute bottom-[170px] left-5 right-5 z-20">
             <div className="flex items-end justify-between">
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="text-[2rem] font-black text-white leading-tight drop-shadow-md">{user.nickname}</h2>
-                  <span className="text-[1.7rem] font-light text-white/90">{user.age}</span>
+                  {/* 🔥 აქ დავმალეთ ასაკი თუ ის null-ია */}
+                  {user.age ? <span className="text-[1.7rem] font-light text-white/90">{user.age}</span> : null}
                   {user.recentlyActive && (
                     <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-black text-black">●</span>
                   )}
@@ -237,6 +236,7 @@ export default function TinderCard({
                     <path d="M10 20S3 10.87 3 7a7 7 0 1 1 14 0c0 3.87-7 13-7 13zm0-11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/>
                   </svg>
                   {user.city || (ka ? "უცნობი ადგილი" : "Unknown location")}
+                  {/* 🔥 მანძილის დამალვის ლოგიკა */}
                   {user.distanceKm != null && (
                     <span className="text-white/60 ml-1">
                       · {user.distanceKm < 1
@@ -263,9 +263,8 @@ export default function TinderCard({
         </div>
       </div>
 
-      {/* 🌟 ACTION BUTTONS: ტივტივებს ბარათის ფსკერზე */}
       {!isBackground && (
-  <div className="absolute bottom-[90px] left-0 right-0 flex justify-center items-center gap-4 z-40 pointer-events-auto pb-1">
+        <div className="absolute bottom-[90px] left-0 right-0 flex justify-center items-center gap-4 z-40 pointer-events-auto pb-1">
           <ActionBtn size="sm" disabled={animating} color="#F7BB00" onClick={() => onRewind && onRewind()}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>
           </ActionBtn>
