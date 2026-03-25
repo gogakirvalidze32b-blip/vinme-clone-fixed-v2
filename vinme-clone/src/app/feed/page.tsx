@@ -31,7 +31,7 @@ export default function FeedPage() {
     }
     return null;
   });
-  const [top, setTop] = useState<any>(() => {
+  const[top, setTop] = useState<any>(() => {
     if (typeof window !== "undefined") {
       const cached = localStorage.getItem("feed_top_cache");
       return cached ? JSON.parse(cached) : null;
@@ -112,11 +112,8 @@ export default function FeedPage() {
     meRef.current = row;
     localStorage.setItem("feed_me_cache", JSON.stringify(row));
 
-    // /ჩამატებულია
-    
-      setSuperLikesLeft(row?.super_likes_count || 0);
+    setSuperLikesLeft(row?.super_likes_count || 0);
     setFirstImpressionsLeft(row?.first_impressions_count || 0);
-
 
     return row;
   }, [router]);
@@ -134,7 +131,8 @@ export default function FeedPage() {
 
     let query = supabase
       .from("profiles")
-      .select("user_id,first_name,nickname,age,city,photo1_url,last_seen,lat,lng,seeking,gender,onboarding_completed,bio,intent")
+      // აქ დაემატა პრემიუმის და დამალვის ველები
+      .select("user_id,first_name,nickname,age,city,photo1_url,last_seen,lat,lng,seeking,gender,onboarding_completed,bio,intent,is_premium,hide_age,hide_distance")
       .eq("onboarding_completed", true)
       .neq("user_id", myId)
       .not("photo1_url", "is", null);
@@ -261,19 +259,25 @@ export default function FeedPage() {
       await loadTop(my);
       setIsInitialLoad(false);
     })();
-  }, [loadMe, loadTop]);
+  },[loadMe, loadTop]);
 
   const cardUser = useMemo(() => {
     if (!top) return null;
     let dist: number | undefined = undefined;
-    if (me?.lat && me?.lng && top.lat && top.lng) {
+
+    // ვამოწმებთ სხვას აქვს თუ არა პრემიუმი და დამალული ხომ არ აქვს 
+    const shouldHideDistance = top.hide_distance && top.is_premium;
+    const shouldHideAge = top.hide_age && top.is_premium;
+
+    if (me?.lat && me?.lng && top.lat && top.lng && !shouldHideDistance) {
       dist = haversineKm(me.lat, me.lng, top.lat, top.lng);
     }
+
     return {
       id: top.user_id, 
       user_id: top.user_id,
       nickname: top.first_name ?? (top.nickname?.startsWith("User_") ? "Anonymous" : top.nickname) ?? "Anonymous",
-      age: top.age ?? 18, 
+      age: shouldHideAge ? null : (top.age ?? 18), 
       city: top.city || undefined,
       distanceKm: dist, 
       photo_url: top.photo1_url ? photoSrc(top.photo1_url) : null,
@@ -281,18 +285,21 @@ export default function FeedPage() {
     };
   }, [top, me]);
 
-  // 🔥 ვამზადებთ მომდევნო ბარათს, რათა უკან გამოჩნდეს სვაიპის დროს
   const nextCardUser = useMemo(() => {
     if (!nextTop) return null;
     let dist: number | undefined = undefined;
-    if (me?.lat && me?.lng && nextTop.lat && nextTop.lng) {
+
+    const shouldHideDistance = nextTop.hide_distance && nextTop.is_premium;
+    const shouldHideAge = nextTop.hide_age && nextTop.is_premium;
+
+    if (me?.lat && me?.lng && nextTop.lat && nextTop.lng && !shouldHideDistance) {
       dist = haversineKm(me.lat, me.lng, nextTop.lat, nextTop.lng);
     }
     return {
       id: nextTop.user_id, 
       user_id: nextTop.user_id,
       nickname: nextTop.first_name ?? (nextTop.nickname?.startsWith("User_") ? "Anonymous" : nextTop.nickname) ?? "Anonymous",
-      age: nextTop.age ?? 18, 
+      age: shouldHideAge ? null : (nextTop.age ?? 18), 
       city: nextTop.city || undefined,
       distanceKm: dist, 
       photo_url: nextTop.photo1_url ? photoSrc(nextTop.photo1_url) : null,
@@ -321,7 +328,6 @@ export default function FeedPage() {
     <div className="bg-[#0b0e14] min-h-screen flex justify-center overflow-hidden overscroll-none">
       <div className="w-full relative mx-auto" style={{ height: "100dvh" }}>
         
-        {/* 🔥 უკანა ფონის (მომდევნო) ბარათი - ოდნავ დაპატარავებული (scale-95) და ჩამუქებული */}
         {nextCardUser && (
           <div className="absolute inset-0 z-0 pointer-events-none scale-[0.96] opacity-90 transition-transform duration-300">
             <TinderCard
@@ -331,12 +337,11 @@ export default function FeedPage() {
               myProfile={me}
               onSendMessage={() => {}} 
               messagesLeft={0}
-              isBackground={true} // სპეციალური პროფესი ღილაკების დასამალად
+              isBackground={true} 
             />
           </div>
         )}
 
-        {/* 🌟 წინა (მთავარი) ბარათი */}
         <div className="absolute inset-0 z-10">
           <TinderCard
             key={cardUser?.id ?? "empty"}
@@ -380,7 +385,7 @@ export default function FeedPage() {
 
               <div className="absolute bottom-4 left-6">
                 <h1 className="text-4xl font-black text-white drop-shadow-md">
-                  {cardUser.nickname} <span className="font-light text-white/90">{cardUser.age}</span>
+                  {cardUser.nickname} {cardUser.age && <span className="font-light text-white/90">{cardUser.age}</span>}
                 </h1>
               </div>
             </div>
@@ -435,7 +440,9 @@ export default function FeedPage() {
               <div className="relative w-full max-h-[45vh] aspect-[4/5] rounded-[24px] overflow-hidden bg-zinc-800 shadow-2xl mx-auto">
                 {cardUser.photo_url && <img src={cardUser.photo_url} alt="" className="w-full h-full object-cover" />}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent" />
-                <div className="absolute bottom-5 left-5 font-bold text-2xl text-white drop-shadow-md">{cardUser.nickname}, {cardUser.age}</div>
+                <div className="absolute bottom-5 left-5 font-bold text-2xl text-white drop-shadow-md">
+                  {cardUser.nickname}{cardUser.age ? `, ${cardUser.age}` : ""}
+                </div>
               </div>
               <div className="mt-auto pt-6">
                 <div className="flex bg-[#1a1f2b] rounded-full p-1 pl-4 items-center">

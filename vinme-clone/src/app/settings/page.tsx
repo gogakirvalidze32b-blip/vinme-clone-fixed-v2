@@ -87,15 +87,15 @@ export default function SettingsPage() {
   
   const [enableDiscovery, setEnableDiscovery] = useState(true);
   const[distanceKm, setDistanceKm] = useState(50);
-  const [ageMin, setAgeMin] = useState(18);
+  const[ageMin, setAgeMin] = useState(18);
   const [ageMax, setAgeMax] = useState(45);
   const [photoVerifiedOnly, setPhotoVerifiedOnly] = useState(false);
   
   // 🌟 Premium State-ები 🌟
   const [isPremium, setIsPremium] = useState(false);
   const[hideAge, setHideAge] = useState(false);
-  const [hideDistance, setHideDistance] = useState(false);
-  const [incognitoMode, setIncognitoMode] = useState(false);
+  const[hideDistance, setHideDistance] = useState(false);
+  const[incognitoMode, setIncognitoMode] = useState(false);
   const [readReceipts, setReadReceipts] = useState(false);
 
   // სისტემური State-ები
@@ -103,7 +103,7 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const[pauseSaving, setPauseSaving] = useState(false);
-  const [scheduledDeletion, setScheduledDeletion] = useState<string | null>(null);
+  const[scheduledDeletion, setScheduledDeletion] = useState<string | null>(null);
 
   // Modal State ტექსტის ჩასაწერად
   const[editModal, setEditModal] = useState<{ field: "phone" | "email" | "city"; title: string; value: string } | null>(null);
@@ -140,7 +140,7 @@ export default function SettingsPage() {
     })();
   },[]);
 
-  // მონაცემების ბაზაში შენახვა
+  // მონაცემების ბაზაში შენახვა ღილაკით
   async function handleSave() {
     setSaving(true);
     await saveProfilePatch({ 
@@ -157,6 +157,12 @@ export default function SettingsPage() {
       read_receipts: readReceipts
     });
     setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2000);
+  }
+
+  // 🌟 ახალი: პარამეტრის მყისიერი შენახვა Toggle-ზე დაჭერისას
+  async function toggleSetting(field: string, val: boolean, setter: React.Dispatch<React.SetStateAction<boolean>>) {
+    setter(val); // UI სწრაფად განახლდება
+    await saveProfilePatch({ [field]: val }); // ბაზაშიც იმ წამსვე შეინახება
   }
 
   async function handlePauseToggle(val: boolean) {
@@ -276,17 +282,23 @@ export default function SettingsPage() {
             <PremiumToggleRow 
               label={L("ინკოგნიტო რეჟიმი", "Incognito Mode")}
               sub={L("გამოუჩნდი მხოლოდ მათ, ვინც მოგწონს", "Only show me to people I like")}
-              isPremium={isPremium} checked={incognitoMode} onToggle={setIncognitoMode} onPaywall={() => router.push("/premium")}
+              isPremium={isPremium} checked={incognitoMode} 
+              onToggle={(v) => toggleSetting("incognito_mode", v, setIncognitoMode)} 
+              onPaywall={() => router.push("/premium")}
             />
             <PremiumToggleRow 
               label={L("ასაკის დამალვა", "Hide My Age")}
               sub={L("არ გამოაჩინო ასაკი პროფილზე", "Don't show age on my profile")}
-              isPremium={isPremium} checked={hideAge} onToggle={setHideAge} onPaywall={() => router.push("/premium")}
+              isPremium={isPremium} checked={hideAge} 
+              onToggle={(v) => toggleSetting("hide_age", v, setHideAge)} 
+              onPaywall={() => router.push("/premium")}
             />
             <PremiumToggleRow 
               label={L("მანძილის დამალვა", "Hide My Distance")}
               sub={L("არ გამოაჩინო დისტანცია", "Don't show how far away I am")}
-              isPremium={isPremium} checked={hideDistance} onToggle={setHideDistance} onPaywall={() => router.push("/premium")}
+              isPremium={isPremium} checked={hideDistance} 
+              onToggle={(v) => toggleSetting("hide_distance", v, setHideDistance)} 
+              onPaywall={() => router.push("/premium")}
             />
           </Card>
 
@@ -345,21 +357,13 @@ export default function SettingsPage() {
                 className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
                 style={{ background: `linear-gradient(to right, #f43f5e ${((ageMax - 18) / 62) * 100}%, rgba(255,255,255,0.1) ${((ageMax - 18) / 62) * 100}%)`, accentColor: "#f43f5e" }} />
             </div>
-            
-            {/* 🌟 Advanced Filters Teaser 🌟 */}
-            <Row 
-              label={L("გაფართოებული ფილტრები", "Advanced Filters")} 
-              sub={L("სიმაღლე, რელიგია და სხვა", "Height, religion & more")} 
-              onClick={() => router.push("/premium")} 
-              isPremiumLock={true} 
-            />
 
             <div className="px-4 py-3 flex items-center justify-between">
               <div>
                 <div className="text-sm font-medium">{L("ძიების ჩართვა", "Enable Discovery")}</div>
                 <div className="text-xs text-white/40">{L("გამორთვით დაიმალები", "Turn off to hide your profile")}</div>
               </div>
-              <Toggle checked={enableDiscovery} onChange={setEnableDiscovery} />
+              <Toggle checked={enableDiscovery} onChange={(v) => toggleSetting("enable_discovery", v, setEnableDiscovery)} />
             </div>
           </Card>
 
@@ -370,7 +374,9 @@ export default function SettingsPage() {
             <PremiumToggleRow 
               label={L("წაკითხვის სტატუსი", "Read Receipts")}
               sub={L("გამორთვით შეხვედრები ვერ ნახავენ რომ წაიკითხე", "Prevent matches from seeing read status")}
-              isPremium={isPremium} checked={readReceipts} onToggle={setReadReceipts} onPaywall={() => router.push("/premium")}
+              isPremium={isPremium} checked={readReceipts} 
+              onToggle={(v) => toggleSetting("read_receipts", v, setReadReceipts)} 
+              onPaywall={() => router.push("/premium")}
             />
             {/* ვერიფიცირებული ჩათი - უფასო */}
             <div className="px-4 py-3.5 flex items-center justify-between hover:bg-white/5 transition">
@@ -378,7 +384,7 @@ export default function SettingsPage() {
                 <div className="text-sm font-medium">{L("ფოტო-ვერიფიცირებული ჩათი", "Photo Verified Chat")}</div>
                 <div className="text-xs text-white/40 mt-0.5">{L("მიიღე მესიჯი მხოლოდ ვერიფიცირებულებისგან", "Only receive messages from verified profiles")}</div>
               </div>
-              <Toggle checked={photoVerifiedOnly} onChange={setPhotoVerifiedOnly} />
+              <Toggle checked={photoVerifiedOnly} onChange={(v) => toggleSetting("photo_verified_only", v, setPhotoVerifiedOnly)} />
             </div>
           </Card>
 
