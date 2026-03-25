@@ -1,451 +1,504 @@
 "use client";
-
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import TinderCard from "@/components/TinderCard";
 import { supabase } from "@/lib/supabase";
 import { photoSrc } from "@/lib/photos";
-import { getLang } from "@/lib/i18n";
-import { useUser } from "@/lib/userContext";
 import BottomNav from "@/components/BottomNav";
+import { getLang } from "@/lib/i18n";
 
-type Profile = { user_id: string; nickname: string | null; first_name: string | null; photo1_url: string | null; last_seen?: string | null; };
-
-type Match = {
-  id: string; user_a: string; user_b: string; created_at: string;
-  _unreadCount: number; _hasMessages: boolean;
-  last_message: string | null; last_message_time: string | null; last_sender_anon: string | null;
-  other: Profile;
-};
-
-function relativeTime(iso: string | null, ka: boolean): string {
-  if (!iso) return "";
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-  if (mins < 1) return ka ? "ახლახან" : "now";
-  if (mins < 60) return ka ? `${mins}წთ` : `${mins}m`;
-  if (hours < 24) return ka ? `${hours}სთ` : `${hours}h`;
-  return ka ? `${days}დღ` : `${days}d`;
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
-function onlineText(lastSeen: string | null, ka: boolean): string | null {
-  if (!lastSeen) return null;
-  const diff = Date.now() - new Date(lastSeen).getTime();
-  if (diff < 3 * 60 * 1000) return ka ? "ონლაინ" : "Online";
-  return null;
-}
-
-export default function ChatPage() {
+export default function FeedPage() {
   const router = useRouter();
   const lang = getLang();
-  const ka = lang !== "en";
-  const L = (k: string, e: string) => ka ? k : e;
+  const L = (ka: string, en: string) => (lang === "en" ? en : ka);
 
-  const[notifications, setNotifications] = useState<any[]>([]);
-  const[showNotifications, setShowNotifications] = useState(false);
-  const { anonId: ctxAnonId } = useUser();
-  const[ctxReady, setCtxReady] = useState(false);
-  const[matches, setMatches] = useState<Match[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [myId, setMyId] = useState<string | null>(null);
-  const[myAnonId, setMyAnonId] = useState<string | null>(null);
-  const loadingRef = useRef(false);
-  const[selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
-  const longPressRef = useRef<NodeJS.Timeout | null>(null);
+  // 🚀 ქეშირებული State-ები (რათა ეგრევე ჩაიტვირთოს)
+  const[me, setMe] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      const cached = localStorage.getItem("feed_me_cache");
+      return cached ? JSON.parse(cached) : null;
+    }
+    return null;
+  });
+  const [top, setTop] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      const cached = localStorage.getItem("feed_top_cache");
+      return cached ? JSON.parse(cached) : null;
+    }
+    return null;
+  });
+  const[nextTop, setNextTop] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      const cached = localStorage.getItem("feed_next_cache");
+      return cached ? JSON.parse(cached) : null;
+    }
+    return null;
+  });
+  
+  const[previousTop, setPreviousTop] = useState<any>(null); 
+  
+  const[isInitialLoad, setIsInitialLoad] = useState(() => {
+    if (typeof window !== "undefined") {
+      return !localStorage.getItem("feed_top_cache");
+    }
+    return true;
+  });
 
-  // 🔥 SIDEBACK: ეკრანის კიდიდან სვაიპით Feed-ზე დაბრუნება
+  const[matchId, setMatchId] = useState<string | null>(null);
+  const[showMatch, setShowMatch] = useState(false);
+  const[matchedUser, setMatchedUser] = useState<any>(null);
+
+  const [superLikesLeft, setSuperLikesLeft] = useState(0); 
+  const[firstImpressionsLeft, setFirstImpressionsLeft] = useState(0);
+
+  const[showFIInput, setShowFIInput] = useState(false);
+  const[showFIPaywall, setShowFIPaywall] = useState(false);
+  const[showSLPaywall, setShowSLPaywall] = useState(false);
+  
+  const[expandedProfile, setExpandedProfile] = useState(false); 
+  const[liveProfileData, setLiveProfileData] = useState<any>(null);
+  
+  const[msgText, setMsgText] = useState("");
+  const[selectedFIPack, setSelectedFIPack] = useState(12);
+  const[selectedSLPack, setSelectedSLPack] = useState(10);
+
+  const loadingTopRef = useRef(false);
+  const meRef = useRef<any>(me);
+
+  // 🔥 SIDEBACK: ეკრანის კიდიდან სვაიპით მოდალების/ფანჯრების დახურვა
   const touchStartX = useRef(0);
   const handleTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
   const handleTouchEnd = (e: React.TouchEvent) => {
     const touchEndX = e.changedTouches[0].clientX;
-    // თუ ეკრანის მარცხენა კიდიდან (პირველი 40px) გამოასრიალებს თითს მარჯვნივ 100px-ზე მეტით
+    // თუ მარცხენა კიდიდან გამოწია თითი მინიმუმ 100px-ით
     if (touchStartX.current < 40 && touchEndX - touchStartX.current > 100) {
-      router.push("/feed");
+      // ვამოწმებთ, არის თუ არა რაიმე ფანჯარა ღია და ვხურავთ
+      if (showSLPaywall) setShowSLPaywall(false);
+      else if (showFIPaywall) setShowFIPaywall(false);
+      else if (showFIInput) setShowFIInput(false);
+      else if (expandedProfile) setExpandedProfile(false);
+      else if (showMatch) { setShowMatch(false); setMatchId(null); setMatchedUser(null); }
     }
   };
 
-  useEffect(() => {
-    try {
-      const cachedMatches = localStorage.getItem("chat_list_cache");
-      if (cachedMatches) {
-        setMatches(JSON.parse(cachedMatches));
-        setLoading(false);
-      }
-    } catch (e) {
-      console.error("Cache error", e);
-    }
+  const loadMe = useCallback(async () => {
+    const { data } = await supabase.auth.getSession();
+    const user = data.session?.user;
+    if (!user) { router.replace("/login"); return null; }
+    const { data: row } = await supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle();
+    setMe(row);
+    meRef.current = row;
+    localStorage.setItem("feed_me_cache", JSON.stringify(row));
+    return row;
+  }, [router]);
+
+  const loadTop = useCallback(async (myProfile: any) => {
+    if (loadingTopRef.current) return;
+    loadingTopRef.current = true;
+
+    const myId = myProfile.user_id;
+    const mySeeking = myProfile.seeking || "everyone";
+    const myGender = myProfile.gender || null;
+
+    const { data: swiped } = await supabase.from("swipes").select("to_id").eq("from_id", myId);
+    const excludedIds = swiped?.map((s: any) => s.to_id) ??[];
+
+    let query = supabase
+      .from("profiles")
+      .select("user_id,first_name,nickname,age,city,photo1_url,last_seen,lat,lng,seeking,gender,onboarding_completed,bio,intent")
+      .eq("onboarding_completed", true)
+      .neq("user_id", myId)
+      .not("photo1_url", "is", null);
+
+    if (mySeeking !== "everyone" && mySeeking !== "both") query = query.eq("gender", mySeeking);
+    if (myGender) query = query.or(`seeking.eq.everyone,seeking.eq.both,seeking.eq.${myGender},seeking.is.null`);
+    if (excludedIds.length > 0) query = query.not("user_id", "in", `(${excludedIds.join(",")})`);
+
+    const { data, error } = await query.order("created_at", { ascending: false }).limit(2);
+    if (error) console.error("Feed Error:", error);
+
+    setTop(data?.[0] ?? null);
+    setNextTop(data?.[1] ?? null);
+    
+    // ქეშის განახლება
+    localStorage.setItem("feed_top_cache", JSON.stringify(data?.[0] || null));
+    localStorage.setItem("feed_next_cache", JSON.stringify(data?.[1] || null));
+
+    loadingTopRef.current = false;
   },[]);
 
-  useEffect(() => {
-    if (ctxAnonId !== null && !ctxReady) setCtxReady(true);
-  },[ctxAnonId]);
-
-  async function deleteMatch(matchId: string) {
-    await supabase.from("matches").delete().eq("id", matchId);
-    setMatches(prev => {
-      const updated = prev.filter(m => m.id !== matchId);
-      localStorage.setItem("chat_list_cache", JSON.stringify(updated));
-      return updated;
-    });
-    setSelectedMatchId(null);
+  async function checkAndCreateMatch(myId: string, otherId: string) {
+    const { data: theirSwipe } = await supabase.from("swipes").select("id").eq("from_id", otherId).eq("to_id", myId).in("action",["like", "super_like"]).maybeSingle();
+    if (!theirSwipe) return null;
+    const { data: existing } = await supabase.from("matches").select("id").or(`and(user_a.eq.${myId},user_b.eq.${otherId}),and(user_a.eq.${otherId},user_b.eq.${myId})`).maybeSingle();
+    if (existing?.id) return existing.id;
+    const { data: created } = await supabase.from("matches").insert({ user_a: myId, user_b: otherId }).select("id").single();
+    return created?.id ?? null;
   }
 
-  async function loadMatches(uid: string, anonId: string | null) {
-    if (loadingRef.current) return;
-    loadingRef.current = true;
+  const advanceCard = () => {
+    setPreviousTop(top); 
+    setExpandedProfile(false); 
+    setLiveProfileData(null);
+    if (nextTop) { 
+      setTop(nextTop); 
+      setNextTop(null); 
+      localStorage.setItem("feed_top_cache", JSON.stringify(nextTop));
+      localStorage.removeItem("feed_next_cache");
+    } else {
+      setTop(null);
+      localStorage.removeItem("feed_top_cache");
+    }
+  };
 
-    const { data: rows } = await supabase
-      .from("matches").select("*")
-      .or(`user_a.eq.${uid},user_b.eq.${uid}`)
-      .order("created_at", { ascending: false });
+  const onLike = async () => {
+    if (!me || !top) return;
+    const cur = { ...top };
+    advanceCard();
+    await supabase.from("swipes").insert({ from_id: me.user_id, to_id: cur.user_id, action: "like" });
+    const mid = await checkAndCreateMatch(me.user_id, cur.user_id);
+    if (mid) { setMatchedUser(cur); setMatchId(mid); setShowMatch(true); }
+    loadTop(me);
+  };
 
-    if (!rows) { setLoading(false); loadingRef.current = false; return; }
+  const onSkip = async () => {
+    if (!me || !top) return;
+    const cur = { ...top };
+    advanceCard();
+    await supabase.from("swipes").insert({ from_id: me.user_id, to_id: cur.user_id, action: "skip" });
+    loadTop(me);
+  };
 
-    const otherIds = rows.map((r: any) => r.user_a === uid ? r.user_b : r.user_a);
-    if (!otherIds.length) { 
-      setMatches([]); 
-      localStorage.removeItem("chat_list_cache");
-      setLoading(false); 
-      loadingRef.current = false; 
+  const onRewind = async () => {
+    if (!me?.is_premium) { 
+      router.push("/premium"); 
       return; 
-    }
-
-    const matchIds = rows.map((r: any) => r.id);
-
-    const[profilesRes, msgsRes] = await Promise.all([
-      supabase.from("profiles").select("user_id,nickname,first_name,photo1_url,last_seen").in("user_id", otherIds),
-      supabase.from("messages")
-        .select("id,match_id,content,created_at,type,sender_anon,read_at")
-        .in("match_id", matchIds)
-        .order("created_at", { ascending: false }),
-    ]);
-
-    const profileMap = new Map<string, Profile>();
-    (profilesRes.data ??[]).forEach((p: any) => profileMap.set(p.user_id, p));
-
-    const allMsgs = msgsRes.data;
-    const lastMsgMap = new Map<string, any>();
-    const unreadMap = new Map<string, number>();
-
-    for (const msg of (allMsgs ??[])) {
-      if (!lastMsgMap.has(msg.match_id)) lastMsgMap.set(msg.match_id, msg);
-      if (anonId && msg.sender_anon !== anonId) {
-        if (!unreadMap.has(msg.match_id)) {
-          unreadMap.set(msg.match_id, !msg.read_at ? 1 : 0);
-        }
-      }
-    }
-
-    const result: Match[] =[];
-    for (const row of rows) {
-      const otherId = row.user_a === uid ? row.user_b : row.user_a;
-      const profile = profileMap.get(otherId);
-      if (!profile) continue;
-      const lastMsg = lastMsgMap.get(row.id);
-      const unreadCount = unreadMap.get(row.id) ?? 0;
-      result.push({
-        ...row,
-        _unreadCount: unreadCount,
-        _hasMessages: !!lastMsg,
-        last_message: lastMsg?.type === "voice"
-          ? (ka ? "🎤 ხმოვანი" : "🎤 Voice")
-          : lastMsg?.type === "image"
-          ? (ka ? "📷 ფოტო" : "📷 Photo")
-          : (lastMsg?.content ?? null),
-        last_message_time: lastMsg?.created_at ?? null,
-        last_sender_anon: lastMsg?.sender_anon ?? null,
-        other: profile,
-      });
-    }
-
-    setMatches(result);
-    try {
-      localStorage.setItem("chat_list_cache", JSON.stringify(result));
-    } catch(e) {}
+    } 
+    if (!previousTop) return;
     
-    setLoading(false);
-    loadingRef.current = false;
-  }
+    setNextTop(top);
+    setTop(previousTop);
+    setPreviousTop(null);
+    await supabase.from("swipes").delete().eq("from_id", me.user_id).eq("to_id", previousTop.user_id);
+  };
+
+  const handleSuperLikeClick = async () => {
+    if (superLikesLeft > 0) {
+      if (!me || !top) return;
+      const cur = { ...top };
+      advanceCard();
+      await supabase.from("swipes").insert({ from_id: me.user_id, to_id: cur.user_id, action: "super_like" });
+      setSuperLikesLeft((prev) => prev - 1);
+      const mid = await checkAndCreateMatch(me.user_id, cur.user_id);
+      if (mid) { setMatchedUser(cur); setMatchId(mid); setShowMatch(true); }
+      loadTop(me);
+    } else {
+      setShowSLPaywall(true);
+    }
+  };
+
+  const handleOpenMessageModal = () => setShowFIInput(true);
+
+  const handleSendMessage = async () => {
+    if (!msgText.trim()) return;
+    if (firstImpressionsLeft > 0) {
+      if (!me || !top) return;
+      const cur = { ...top };
+      advanceCard();
+      await supabase.from("swipes").insert({ from_id: me.user_id, to_id: cur.user_id, action: "like" });
+      await supabase.from("messages").insert({ from_id: me.user_id, to_id: cur.user_id, message: msgText });
+      setFirstImpressionsLeft((prev) => prev - 1);
+      setShowFIInput(false); 
+      setMsgText("");
+      const mid = await checkAndCreateMatch(me.user_id, cur.user_id);
+      if (mid) { setMatchedUser(cur); setMatchId(mid); setShowMatch(true); }
+      loadTop(me);
+    } else {
+      setShowFIInput(false); 
+      setShowFIPaywall(true);
+    }
+  };
+
+  const handleOpenProfile = async () => {
+    if (!top?.user_id) return;
+    setExpandedProfile(true);
+    const { data } = await supabase.from("profiles").select("bio, intent, city").eq("user_id", top.user_id).single();
+    if (data) setLiveProfileData(data);
+  };
 
   useEffect(() => {
-    if (!ctxReady) return;
     (async () => {
-      const { data: sess } = await supabase.auth.getSession();
-      const uid = sess.session?.user?.id;
-      if (!uid) { router.replace("/login"); return; }
-      setMyId(uid);
-      setMyAnonId(ctxAnonId);
-      
-      await loadMatches(uid, ctxAnonId);
-
-      const { data: notifs } = await supabase
-        .from("notifications")
-        .select("*")
-        .eq("user_id", uid)
-        .neq("read", true)
-        .order("created_at", { ascending: false });
-
-      const fromUserIds = (notifs ??[]).map((n: any) => n.from_user).filter(Boolean);
-      const fromProfileMap: Record<string, {name: string, photo: string|null}> = {};
-      if (fromUserIds.length > 0) {
-        const { data: fps } = await supabase
-          .from("profiles")
-          .select("user_id, first_name, nickname, photo1_url")
-          .in("user_id", fromUserIds);
-        (fps ?? []).forEach((p: any) => {
-          fromProfileMap[p.user_id] = {
-            name: p.first_name ?? p.nickname ?? "ვინმე",
-            photo: p.photo1_url ?? null
-          };
-        });
-      }
-
-      setNotifications((notifs ??[]).map((n: any) => ({
-        ...n,
-        from_name: fromProfileMap[n.from_user]?.name ?? "ვინმე",
-        from_photo: fromProfileMap[n.from_user]?.photo ?? null
-      })));
+      const my = await loadMe();
+      if (!my) return;
+      await loadTop(my);
+      setIsInitialLoad(false);
     })();
-  },[ctxReady]);
-  
-  useEffect(() => {
-    if (!myId || !myAnonId) return;
-    const ch = supabase.channel(`chat-list-${Date.now()}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
-        const msg = payload.new as any;
-        setMatches(prev => {
-          const updated = prev.map(m => {
-            if (String(m.id) !== String(msg.match_id)) return m;
-            const isUnread = msg.sender_anon !== myAnonId;
-            return {
-              ...m,
-              _hasMessages: true,
-              last_message: msg.type === "voice" ? "🎤 Voice" : msg.type === "image" ? "📷 Photo" : msg.content,
-              last_message_time: msg.created_at,
-              last_sender_anon: msg.sender_anon,
-              _unreadCount: isUnread ? m._unreadCount + 1 : m._unreadCount,
-            };
-          });
-          localStorage.setItem("chat_list_cache", JSON.stringify(updated));
-          return updated;
-        });
-      })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "matches" }, (payload) => {
-        setMatches(prev => {
-          const updated = prev.filter(m => String(m.id) !== String(payload.old.id));
-          localStorage.setItem("chat_list_cache", JSON.stringify(updated));
-          return updated;
-        });
-      })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, (payload) => {
-        const msg = payload.new as any;
-        if (msg.read_at) {
-          setMatches(prev => {
-            const updated = prev.map(m => {
-              if (String(m.id) !== String(msg.match_id)) return m;
-              return { ...m, _unreadCount: 0 };
-            });
-            localStorage.setItem("chat_list_cache", JSON.stringify(updated));
-            return updated;
-          });
-        }
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  },[myId, myAnonId]);
+  }, [loadMe, loadTop]);
 
-  const newMatches = matches.filter(m => !m._hasMessages);
-  const conversations = matches
-    .filter(m => m._hasMessages)
-    .sort((a, b) => {
-      if (!a.last_message_time) return 1;
-      if (!b.last_message_time) return -1;
-      return new Date(b.last_message_time).getTime() - new Date(a.last_message_time).getTime();
-    });
-  const totalUnread = matches.reduce((sum, m) => sum + (m._unreadCount > 0 ? 1 : 0), 0);
+  const cardUser = useMemo(() => {
+    if (!top) return null;
+    let dist: number | undefined = undefined;
+    if (me?.lat && me?.lng && top.lat && top.lng) {
+      dist = haversineKm(me.lat, me.lng, top.lat, top.lng);
+    }
+    return {
+      id: top.user_id, 
+      user_id: top.user_id,
+      nickname: top.first_name ?? (top.nickname?.startsWith("User_") ? "Anonymous" : top.nickname) ?? "Anonymous",
+      age: top.age ?? 18, 
+      city: top.city || undefined,
+      distanceKm: dist, 
+      photo_url: top.photo1_url ? photoSrc(top.photo1_url) : null,
+      photo1_url: top.photo1_url,
+    };
+  }, [top, me]);
 
-  if (loading) return (
-    <main className="min-h-[100dvh] bg-[#11141a] text-white pb-28">
-      <div className="mx-auto w-full max-w-md px-4 pt-6">
-        <div className="h-8 w-32 bg-white/10 rounded-xl animate-pulse mb-6" />
-        <div className="h-3 w-24 bg-white/8 rounded animate-pulse mb-3" />
-        <div className="flex gap-4 mb-6">
-          {[1,2,3].map(i => <div key={i} className="flex flex-col items-center gap-1.5">
-            <div className="w-16 h-16 rounded-full bg-white/10 animate-pulse" />
-            <div className="w-12 h-2 bg-white/8 rounded animate-pulse" />
-          </div>)}
-        </div>
-        <div className="h-3 w-20 bg-white/8 rounded animate-pulse mb-3" />
-        {[1,2,3].map(i => <div key={i} className="flex items-center gap-3 py-3">
-          <div className="w-14 h-14 rounded-full bg-white/10 animate-pulse shrink-0" />
-          <div className="flex-1 space-y-2">
-            <div className="h-3 w-28 bg-white/10 rounded animate-pulse" />
-            <div className="h-2.5 w-48 bg-white/8 rounded animate-pulse" />
-          </div>
-        </div>)}
-      </div>
-      <BottomNav />
-    </main>
-  );
+  const fiPackages =[
+    { id: 3, count: 3, price: "2.49", total: 7.47, label: null, save: null },
+    { id: 12, count: 12, price: "1.99", total: 23.88, label: L("პოპულარული", "Popular"), save: "20%" },
+    { id: 25, count: 25, price: "1.59", total: 39.75, label: L("საუკეთესო ფასი", "Best Value"), save: "36%" },
+  ];
+
+  const slPackages =[
+    { id: 3, count: 3, price: "2.99", total: 8.97, label: null },
+    { id: 10, count: 10, price: "2.49", total: 24.90, label: L("პოპულარული", "Popular") },
+  ];
+
+  if (isInitialLoad) return <div className="bg-black min-h-[100dvh]" />;
+
+  const displayBio = liveProfileData?.bio !== undefined ? liveProfileData.bio : top?.bio;
+  const displayIntent = liveProfileData?.intent !== undefined ? liveProfileData.intent : top?.intent;
+  const displayCity = liveProfileData?.city !== undefined ? liveProfileData.city : top?.city;
 
   return (
-    <main 
-      className="min-h-[100dvh] bg-[#11141a] text-white pb-28 overflow-x-hidden"
+    // 🔥 აქ დაემატა overscroll-x-none და touch ივენთები
+    <div 
+      className="bg-[#11141a] min-h-screen flex justify-center overflow-hidden overscroll-x-none"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      <div className="mx-auto w-full max-w-md px-4 pt-6">
+      <div className="w-full max-w-lg relative" style={{ height: "100dvh" }}>
+        
+        <TinderCard
+          key={cardUser?.id ?? "empty"}
+          user={cardUser}
+          otherUserId={cardUser?.user_id}
+          myProfile={me}
+          onLike={onLike}
+          onSkip={onSkip}
+          onRewind={onRewind}
+          onSuperLike={handleSuperLikeClick} 
+          onSendMessage={handleOpenMessageModal} 
+          messagesLeft={firstImpressionsLeft}
+          superLikesLeft={superLikesLeft}
+          onOpenProfile={handleOpenProfile} 
+          externalMatchId={matchId}
+          externalShowMatch={showMatch}
+          onCloseMatch={() => { setShowMatch(false); setMatchId(null); setMatchedUser(null); }}
+          onOpenChat={() => matchId && router.push(`/chat/${matchId}`)}
+          matchedUserName={matchedUser?.first_name ?? matchedUser?.nickname ?? undefined}
+          matchedUserPhoto={matchedUser?.photo1_url ?? undefined}
+          isInitialLoad={isInitialLoad}
+        />
 
-        <div className="flex items-center justify-between mb-5">
-          <h1 className="text-2xl font-extrabold">{L("ჩათი", "Messages")}</h1>
-          <div className="flex items-center gap-2">
-            {totalUnread > 0 && (
-              <span className="rounded-full bg-pink-500 px-3 py-1 text-xs font-black text-white">
-                {totalUnread > 99 ? "99+" : totalUnread} {L("ახალი", "new")}
-              </span>
-            )}
-            <button
-              onClick={() => setShowNotifications(v => !v)}
-              className="relative w-10 h-10 flex items-center justify-center rounded-full bg-white/8 hover:bg-white/12 transition"
-            >
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-              {notifications.length > 0 && (
-                <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
-                  {notifications.length}
-                </span>
-              )}
-            </button>
-          </div>
-        </div>
+        {/* ================= პროფილის ჩამოშლა ================= */}
+        {expandedProfile && cardUser && (
+          <div className="absolute inset-0 z-50 bg-[#161a23] overflow-y-auto animate-in slide-in-from-bottom-full duration-300 pb-32">
+            <div className="relative">
+              <img src={cardUser.photo_url || ""} className="w-full h-[65vh] object-cover" alt="" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#161a23] via-[#161a23]/30 to-transparent" />
+              
+              <button 
+                onClick={() => setExpandedProfile(false)} 
+                className="absolute bottom-4 right-6 w-10 h-10 bg-white/10 border border-white/20 backdrop-blur-md text-white rounded-full flex items-center justify-center shadow-lg z-10 hover:bg-white/20 transition"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
 
-        {showNotifications && (
-          <div className="mb-4 space-y-2">
-            {notifications.length === 0 ? (
-              <div className="text-center text-white/40 text-sm py-3">შეტყობინება არ არის</div>
-            ) : (
-              notifications.map(n => (
-                <div key={n.id} className="flex items-start gap-3 rounded-2xl bg-[#1a1f2b] border border-white/5 px-4 py-3 shadow-lg">
-                  <div className="w-10 h-10 rounded-full bg-zinc-700 overflow-hidden shrink-0">
-                    {n.from_photo ? (
-                      <img src={photoSrc(n.from_photo)} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-lg">👤</div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-white">
-                      {n.from_name}-მ გააკეთა Unmatch
-                    </div>
-                    <div className="text-xs text-white/50 mt-0.5">{n.message}</div>
-                  </div>
-                  <button onClick={async () => {
-                    await supabase.from("notifications").update({ read: true }).eq("id", n.id);
-                    setNotifications(prev => prev.filter(x => x.id !== n.id));
-                  }} className="text-white/30 hover:text-white text-lg shrink-0">✕</button>
+              <div className="absolute bottom-4 left-6">
+                <h1 className="text-4xl font-black text-white drop-shadow-md">
+                  {cardUser.nickname} <span className="font-light text-white/90">{cardUser.age}</span>
+                </h1>
+              </div>
+            </div>
+            
+            <div className="px-6 pt-6 space-y-7">
+              <div>
+                <h3 className="text-white/50 font-semibold text-[14px] mb-3">{L("ვეძებ", "Looking for")}</h3>
+                <div className="inline-flex items-center gap-2 bg-[#212631] px-4 py-2 rounded-xl text-white text-[15px]">
+                  <span>💝</span> {displayIntent || "short_term"}
                 </div>
-              ))
-            )}
-          </div>
-        )}
+              </div>
 
-        {newMatches.length > 0 && (
-          <div className="mb-6">
-            <h2 className="text-xs text-white/40 uppercase tracking-wider mb-3">{L("ახალი შეხვედრები", "New Matches")}</h2>
-            <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
-              {newMatches.map(m => {
-                const name = m.other.first_name ?? m.other.nickname ?? "User";
-                const isOnline = !!onlineText(m.other.last_seen ?? null, ka);
-                return (
-                  <div key={m.id} className="flex flex-col items-center min-w-[68px] cursor-pointer shrink-0"
-                    onClick={() => router.push(`/chat/${m.id}`)}>
-                    <div className="relative">
-                      {photoSrc(m.other.photo1_url)
-                        ? <img src={photoSrc(m.other.photo1_url)} alt="" className="w-16 h-16 rounded-full object-cover ring-2 ring-pink-500/70"
-                            onError={e => { const t = e.target as HTMLImageElement; t.onerror=null; t.src=""; t.className=""; t.style.display="none"; }} />
-                        : <div className="w-16 h-16 rounded-full bg-zinc-700 ring-2 ring-pink-500/70 flex items-center justify-center text-2xl">👤</div>}
-                      {isOnline && <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-green-400 border-2 border-[#11141a]" />}
-                    </div>
-                    <span className="text-[11px] mt-1.5 text-white/70 truncate w-16 text-center">{name}</span>
+              <div>
+                <h3 className="text-white/50 font-semibold text-[14px] mb-3">{L("ძირითადი", "Essentials")}</h3>
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center gap-3 text-white/90 text-[16px]">
+                    <span className="text-xl">📍</span> {displayCity || L("თბილისი", "Tbilisi")}
                   </div>
-                );
-              })}
+                  {cardUser.distanceKm != null && (
+                    <div className="flex items-center gap-3 text-white/90 text-[16px]">
+                      <span className="text-xl">📏</span> {cardUser.distanceKm < 1 ? L("1 კმ-ზე ნაკლები", "Less than 1 km away") : `${cardUser.distanceKm} ${L("კმ", "km away")}`}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {displayBio && (
+                <div>
+                  <h3 className="text-white/50 font-semibold text-[14px] mb-3">{L("ჩემ შესახებ", "About me")}</h3>
+                  <p className="text-white/90 text-[16px] leading-relaxed">{displayBio}</p>
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        {conversations.length > 0 && (
-          <div>
-            <h2 className="text-xs text-white/40 uppercase tracking-wider mb-3">{L("მიმოწერა", "Messages")}</h2>
-            <div className="flex flex-col gap-0.5" style={{ WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none", touchAction: "manipulation" }}>
-              {conversations.map(m => {
-                const name = m.other.first_name ?? m.other.nickname ?? "User";
-                const isOnline = !!onlineText(m.other.last_seen ?? null, ka);
-                const isMine = m.last_sender_anon && m.last_sender_anon === myAnonId;
-                return (
-                  <div key={m.id}
-                    onClick={() => { if (!selectedMatchId) router.push(`/chat/${m.id}`); else setSelectedMatchId(null); }}
-                    onPointerDown={() => { longPressRef.current = setTimeout(() => setSelectedMatchId(m.id), 500); }}
-                    onPointerUp={() => { if (longPressRef.current) clearTimeout(longPressRef.current); }}
-                    onPointerLeave={() => { if (longPressRef.current) clearTimeout(longPressRef.current); }}
-                    onContextMenu={e => e.preventDefault()}
-                    style={{ WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none", touchAction: "manipulation" }}
-                    className={`relative flex items-center gap-3 px-3 py-3.5 rounded-2xl cursor-pointer transition ${selectedMatchId === m.id ? "bg-[#1a1f2b] ring-1 ring-red-500/40" : "hover:bg-[#1a1f2b]/50 active:bg-[#1a1f2b]"}`}>
-                    {selectedMatchId === m.id && (
-                      <button onClick={e => { e.stopPropagation(); deleteMatch(m.id); }}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 bg-red-500 rounded-full px-3 py-1.5 text-white text-xs font-bold z-10 shadow-lg">
-                        🗑 {ka ? "წაშლა" : "Delete"}
-                      </button>
-                    )}
-                    <div className="relative shrink-0">
-                      {photoSrc(m.other.photo1_url)
-                        ? <img src={photoSrc(m.other.photo1_url)} alt="" className="w-14 h-14 rounded-full object-cover"
-                            onError={e => { const t = e.target as HTMLImageElement; t.style.display="none"; t.parentElement && (t.parentElement.innerHTML = "<div class=\"w-14 h-14 rounded-full bg-zinc-700 flex items-center justify-center text-xl\">👤</div>"); }} />
-                        : <div className="w-14 h-14 rounded-full bg-zinc-700 flex items-center justify-center text-xl">👤</div>}
-                      {isOnline && <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-400 border-2 border-[#11141a]" />}
-                      {m._unreadCount > 0 && (
-                        <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-pink-500 px-1 text-[10px] font-black text-white text-center leading-[18px] shadow-sm">
-                          {m._unreadCount > 9 ? "9+" : m._unreadCount}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className={`font-semibold text-sm ${m._unreadCount > 0 ? "text-white" : "text-white/80"}`}>{name}</div>
-                      <div className={`text-xs truncate mt-0.5 ${m._unreadCount > 0 ? "text-white/70 font-medium" : "text-white/35"}`}>
-                        {isMine ? (ka ? "შენ: " : "You: ") : ""}{m.last_message}
+        {/* ================= First Impressions მოდალი ================= */}
+        {showFIInput && cardUser && (
+          <div className="absolute inset-0 z-[60] bg-[#0b101a] flex flex-col animate-in fade-in slide-in-from-bottom-4">
+            <div className="p-4 flex items-center justify-between">
+              <button onClick={() => setShowFIInput(false)} className="text-white/50 text-2xl font-bold">✕</button>
+              <div className="w-6 h-6 flex items-center justify-center rounded-full bg-[#1e293b] text-blue-500 font-bold text-xs">{firstImpressionsLeft}</div>
+            </div>
+            <div className="px-6 flex flex-col flex-1 pb-6">
+              <div className="text-blue-500 font-bold text-[13px] mb-2 flex items-center gap-2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                {L("5x გაზარდე მეჩის შანსი", "Up to 5x your chances to match")}
+              </div>
+              <h2 className="text-[17px] font-bold text-white mb-6 leading-snug">
+                {L("გამოირჩიე პირველი შთაბეჭდილებით. გააგზავნე მესიჯი. ნახე თუ იქნება მეჩი.", "Stand out with First Impressions. Send a message. See if it's a match.")}
+              </h2>
+              <div className="relative w-full max-h-[45vh] aspect-[4/5] rounded-[24px] overflow-hidden bg-zinc-800 shadow-2xl mx-auto">
+                {cardUser.photo_url && <img src={cardUser.photo_url} alt="" className="w-full h-full object-cover" />}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent" />
+                <div className="absolute bottom-5 left-5 font-bold text-2xl text-white drop-shadow-md">{cardUser.nickname}, {cardUser.age}</div>
+              </div>
+              <div className="mt-auto pt-6">
+                <div className="flex bg-[#1e293b] rounded-full p-1 pl-4 items-center">
+                  <input type="text" value={msgText} onChange={(e) => setMsgText(e.target.value)} placeholder={L("შენი მესიჯი", "Your message")} className="flex-1 bg-transparent text-white text-[15px] outline-none placeholder-zinc-500" autoFocus />
+                  <button onClick={handleSendMessage} disabled={!msgText.trim()} className={`font-bold px-5 py-3 rounded-full transition-colors ${msgText.trim() ? "text-blue-500" : "text-zinc-600"}`}>
+                    {L("გაგზავნა", "Send")}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ================= First Impressions Paywall ================= */}
+        {showFIPaywall && (
+          <div className="absolute inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-end animate-in fade-in">
+            <div className="bg-[#0f172a] w-full rounded-t-3xl pt-6 pb-8 px-5 shadow-2xl slide-in-from-bottom-full">
+              <div className="flex justify-between items-center mb-4">
+                <button onClick={() => setShowFIPaywall(false)} className="text-white/50 text-2xl font-bold">✕</button>
+                <div className="text-blue-500 font-bold flex items-center gap-2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                  {L("შეიძინე პირველი შთაბეჭდილება", "Get First Impressions")}
+                </div>
+                <div className="w-6"></div>
+              </div>
+              <h2 className="text-[17px] font-bold text-white mb-6 text-center leading-snug">
+                {L("გამოირჩიე პირველი შთაბეჭდილებით. შენ გაქვს 5x მეტი შანსი მიიღო მეჩი!", "Stand out with First Impressions. You're up to 5x more likely to get a match!")}
+              </h2>
+              <div className="space-y-3 mb-6">
+                {fiPackages.map((pack) => {
+                  const isSelected = selectedFIPack === pack.id;
+                  return (
+                    <button key={pack.id} onClick={() => setSelectedFIPack(pack.id)} 
+                      className={`w-full relative flex justify-between items-center p-4 rounded-xl border-2 transition ${isSelected ? "border-blue-500 bg-blue-500/10" : "border-zinc-700 bg-zinc-800"}`}>
+                      {pack.label && <span className={`absolute -top-2.5 left-4 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${isSelected ? "bg-blue-500 text-white" : "bg-zinc-700 text-zinc-300"}`}>{pack.label}</span>}
+                      {pack.save && <span className="absolute top-4 right-4 text-[11px] font-bold text-white bg-white/10 px-2 py-0.5 rounded-md">{L("დაზოგე", "Save")} {pack.save}</span>}
+                      <span className={`font-bold text-[16px] ${isSelected ? "text-white" : "text-zinc-200"}`}>{pack.count} First Impressions</span>
+                      <span className={`text-[14px] mt-6 ${isSelected ? "text-blue-400" : "text-zinc-400"}`}>{pack.price} {L("₾/ცალი", "₾/ea")}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="text-center mb-6 relative">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-700"></div></div>
+                <span className="bg-[#0f172a] px-4 text-xs font-bold text-zinc-500 uppercase relative">or</span>
+              </div>
+              <button onClick={() => router.push("/premium")} className="w-full bg-[#1e293b] border border-zinc-700 rounded-xl p-4 flex justify-between items-center mb-6 hover:bg-zinc-800 transition">
+                <div className="flex flex-col items-start">
+                  <span className="text-[10px] font-bold text-white/50 uppercase mb-1">{L("შეიცავს 3 უფასოს კვირაში", "Includes 3 free First Impressions a week")}</span>
+                  <div className="flex items-center gap-2"><span className="text-zinc-300 text-lg">🔥</span><span className="font-bold text-white">Get Shekhvdi Plus</span></div>
+                </div>
+                <span className="bg-zinc-700 px-4 py-1.5 rounded-full text-xs font-bold">Select</span>
+              </button>
+              <button onClick={() => router.push(`/checkout?product=first_impression&pack=${selectedFIPack}`)} 
+                className="w-full bg-blue-500 text-white font-bold text-[16px] py-4 rounded-full active:scale-95 transition">
+                {L(`გაგრძელება ${fiPackages.find(p=>p.id===selectedFIPack)?.total.toFixed(2)} ₾`, `Continue for ${fiPackages.find(p=>p.id===selectedFIPack)?.total.toFixed(2)} ₾ total`)}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ================= Super Like Paywall ================= */}
+        {showSLPaywall && (
+          <div className="absolute inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-end animate-in fade-in">
+            <div className="bg-[#0f172a] w-full rounded-t-3xl pt-6 pb-8 px-5 shadow-2xl slide-in-from-bottom-full">
+              <div className="flex justify-between items-center mb-4">
+                <button onClick={() => setShowSLPaywall(false)} className="text-white/50 text-2xl font-bold">✕</button>
+                <div className="text-blue-400 font-bold flex items-center gap-2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+                  {L("შეიძინე Super Likes", "Get Super Likes")}
+                </div>
+                <div className="w-6"></div>
+              </div>
+              <h2 className="text-[17px] font-bold text-white mb-8 text-center leading-snug px-4">
+                {L("გამოირჩიე Super Like-ით. შენ გაქვს 3x მეტი შანსი მიიღო მეჩი!", "Stand out with Super Like. You're 3x more likely to get a match!")}
+              </h2>
+              <div className="flex gap-3 justify-center mb-8">
+                {slPackages.map((pack) => {
+                  const isSelected = selectedSLPack === pack.id;
+                  return (
+                    <div key={pack.id} onClick={() => setSelectedSLPack(pack.id)} 
+                      className={`relative flex-1 rounded-2xl p-5 flex flex-col justify-between h-44 cursor-pointer transition border-2 ${isSelected ? "border-blue-500 bg-blue-500/10" : "border-zinc-700 bg-zinc-800"}`}>
+                      {pack.label && <span className={`absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] font-bold px-3 py-0.5 rounded-full uppercase whitespace-nowrap ${isSelected ? "bg-blue-500 text-white" : "bg-zinc-700 text-zinc-300"}`}>{pack.label}</span>}
+                      <span className={`text-[16px] font-bold text-center mt-2 ${isSelected ? "text-white" : "text-zinc-200"}`}>{pack.count} Super Likes</span>
+                      <div className="mt-auto">
+                        <div className={`text-center text-[13px] mb-3 ${isSelected ? "text-blue-400" : "text-zinc-400"}`}>{pack.price} {L("₾/ცალი", "₾/ea")}</div>
+                        <button onClick={(e) => { e.stopPropagation(); router.push(`/checkout?product=super_like&pack=${pack.id}`); }}
+                          className={`w-full font-bold py-2 rounded-full text-sm transition ${isSelected ? "bg-blue-500 text-white hover:bg-blue-600" : "bg-[#1e293b] text-blue-500 hover:bg-[#283548]"}`}>
+                          {L("არჩევა", "Select")}
+                        </button>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1 shrink-0">
-                      <span className="text-[10px] text-white/30">{relativeTime(m.last_message_time, ka)}</span>
-                      {isOnline && <span className="text-[9px] text-green-400">{ka ? "ონლაინ" : "online"}</span>}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+              <div className="text-center mb-6 relative">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-700"></div></div>
+                <span className="bg-[#0f172a] px-4 text-xs font-bold text-zinc-500 uppercase relative">or</span>
+              </div>
+              <button onClick={() => router.push("/premium")} className="w-full bg-gradient-to-r from-amber-400 to-yellow-600 rounded-xl p-4 flex justify-between items-center active:scale-95 transition">
+                <div className="flex flex-col items-start">
+                  <span className="text-[10px] font-bold text-black/70 uppercase mb-1">{L("შეიცავს 2 უფასო Super Like-ს კვირაში", "Includes 2 free Super Likes every week")}</span>
+                  <div className="flex items-center gap-2"><span className="text-black text-xl">💛</span><span className="font-bold text-black text-[16px]">Get Shekhvdi Plus</span></div>
+                </div>
+                <span className="bg-black/20 px-4 py-1.5 rounded-full text-xs font-bold text-black uppercase">Select</span>
+              </button>
             </div>
-          </div>
-        )}
-
-        {selectedMatchId && (
-          <div className="fixed inset-0 z-30" onClick={() => setSelectedMatchId(null)} />
-        )}
-
-        {matches.length === 0 && (
-          <div className="text-center text-white/40 mt-24">
-            <div className="text-5xl mb-4">💬</div>
-            <div className="font-semibold text-white/60">{L("შეხვედრა ჯერ არ არის", "No matches yet")}</div>
-            <div className="text-sm mt-1">{L("დაიწყე სვაიპი!", "Start swiping to get matches!")}</div>
-            <button onClick={() => router.push("/feed")}
-              className="mt-5 rounded-full bg-pink-500 px-6 py-2.5 text-sm font-semibold text-white active:scale-95 transition">
-              {L("შეხვედრის პოვნა →", "Find Matches →")}
-            </button>
           </div>
         )}
 
       </div>
       <BottomNav />
-    </main>
+    </div>
   );
 }
