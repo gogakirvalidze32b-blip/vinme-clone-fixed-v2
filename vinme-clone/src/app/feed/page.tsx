@@ -76,7 +76,7 @@ export default function FeedPage() {
   const loadingTopRef = useRef(false);
   const meRef = useRef<any>(me);
 
-  // 🔥 SIDEBACK LOGIC (Browser History-ს გამოყენებით ნატიური უკან დაბრუნება)
+  // Browser History ლოგიკა Native Back Swipe-სთვის
   const openOverlay = useCallback((setter: React.Dispatch<React.SetStateAction<boolean>>) => {
     window.history.pushState({ isModal: true }, "");
     setter(true);
@@ -91,7 +91,6 @@ export default function FeedPage() {
 
   useEffect(() => {
     const handlePopState = () => {
-      // ეკრანის გვერდიდან გამოწევისას (ან Back ღილაკზე) ყველა ფანჯარა იხურება
       setShowSLPaywall(false);
       setShowFIPaywall(false);
       setShowFIInput(false);
@@ -275,6 +274,25 @@ export default function FeedPage() {
     };
   }, [top, me]);
 
+  // 🔥 ვამზადებთ მომდევნო ბარათს, რათა უკან გამოჩნდეს სვაიპის დროს
+  const nextCardUser = useMemo(() => {
+    if (!nextTop) return null;
+    let dist: number | undefined = undefined;
+    if (me?.lat && me?.lng && nextTop.lat && nextTop.lng) {
+      dist = haversineKm(me.lat, me.lng, nextTop.lat, nextTop.lng);
+    }
+    return {
+      id: nextTop.user_id, 
+      user_id: nextTop.user_id,
+      nickname: nextTop.first_name ?? (nextTop.nickname?.startsWith("User_") ? "Anonymous" : nextTop.nickname) ?? "Anonymous",
+      age: nextTop.age ?? 18, 
+      city: nextTop.city || undefined,
+      distanceKm: dist, 
+      photo_url: nextTop.photo1_url ? photoSrc(nextTop.photo1_url) : null,
+      photo1_url: nextTop.photo1_url,
+    };
+  }, [nextTop, me]);
+
   const fiPackages =[
     { id: 3, count: 3, price: "2.49", total: 7.47, label: null, save: null },
     { id: 12, count: 12, price: "1.99", total: 23.88, label: L("პოპულარული", "Popular"), save: "20%" },
@@ -294,29 +312,48 @@ export default function FeedPage() {
 
   return (
     <div className="bg-[#0b0e14] min-h-screen flex justify-center overflow-hidden overscroll-none">
-      <div className="w-full max-w-lg relative" style={{ height: "100dvh" }}>
+      <div className="w-full relative mx-auto" style={{ height: "100dvh" }}>
         
-        <TinderCard
-          key={cardUser?.id ?? "empty"}
-          user={cardUser}
-          otherUserId={cardUser?.user_id}
-          myProfile={me}
-          onLike={onLike}
-          onSkip={onSkip}
-          onRewind={onRewind}
-          onSuperLike={handleSuperLikeClick} 
-          onSendMessage={handleOpenMessageModal} 
-          messagesLeft={firstImpressionsLeft}
-          superLikesLeft={superLikesLeft}
-          onOpenProfile={handleOpenProfile} 
-          externalMatchId={matchId}
-          externalShowMatch={showMatch}
-          onCloseMatch={() => { closeOverlay(setShowMatch); setMatchId(null); setMatchedUser(null); }}
-          onOpenChat={() => matchId && router.push(`/chat/${matchId}`)}
-          matchedUserName={matchedUser?.first_name ?? matchedUser?.nickname ?? undefined}
-          matchedUserPhoto={matchedUser?.photo1_url ?? undefined}
-          isInitialLoad={isInitialLoad}
-        />
+        {/* 🔥 უკანა ფონის (მომდევნო) ბარათი - ოდნავ დაპატარავებული (scale-95) და ჩამუქებული */}
+        {nextCardUser && (
+          <div className="absolute inset-0 z-0 pointer-events-none scale-[0.96] opacity-90 transition-transform duration-300">
+            <TinderCard
+              key={nextCardUser.id + "_bg"}
+              user={nextCardUser}
+              otherUserId={nextCardUser.user_id}
+              myProfile={me}
+              onSendMessage={() => {}} 
+              messagesLeft={0}
+              isBackground={true} // სპეციალური პროფესი ღილაკების დასამალად
+            />
+          </div>
+        )}
+
+        {/* 🌟 წინა (მთავარი) ბარათი */}
+        <div className="absolute inset-0 z-10">
+          <TinderCard
+            key={cardUser?.id ?? "empty"}
+            user={cardUser}
+            otherUserId={cardUser?.user_id}
+            myProfile={me}
+            onLike={onLike}
+            onSkip={onSkip}
+            onRewind={onRewind}
+            onSuperLike={handleSuperLikeClick} 
+            onSendMessage={handleOpenMessageModal} 
+            messagesLeft={firstImpressionsLeft}
+            superLikesLeft={superLikesLeft}
+            onOpenProfile={handleOpenProfile} 
+            externalMatchId={matchId}
+            externalShowMatch={showMatch}
+            onCloseMatch={() => { closeOverlay(setShowMatch); setMatchId(null); setMatchedUser(null); }}
+            onOpenChat={() => matchId && router.push(`/chat/${matchId}`)}
+            matchedUserName={matchedUser?.first_name ?? matchedUser?.nickname ?? undefined}
+            matchedUserPhoto={matchedUser?.photo1_url ?? undefined}
+            isInitialLoad={isInitialLoad}
+            isBackground={false}
+          />
+        </div>
 
         {/* ================= პროფილის ჩამოშლა ================= */}
         {expandedProfile && cardUser && (
