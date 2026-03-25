@@ -26,28 +26,27 @@ export default function FeedPage() {
 
   const [me, setMe] = useState<any>(null);
   const[top, setTop] = useState<any>(null);
-  const [nextTop, setNextTop] = useState<any>(null);
+  const[nextTop, setNextTop] = useState<any>(null);
   const [previousTop, setPreviousTop] = useState<any>(null); 
   
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   const[matchId, setMatchId] = useState<string | null>(null);
-  const [showMatch, setShowMatch] = useState(false);
+  const[showMatch, setShowMatch] = useState(false);
   const [matchedUser, setMatchedUser] = useState<any>(null);
 
   const [superLikesLeft, setSuperLikesLeft] = useState(0); 
   const[firstImpressionsLeft, setFirstImpressionsLeft] = useState(0);
 
-  const [showFIInput, setShowFIInput] = useState(false);
-  const [showFIPaywall, setShowFIPaywall] = useState(false);
+  const[showFIInput, setShowFIInput] = useState(false);
+  const[showFIPaywall, setShowFIPaywall] = useState(false);
   const [showSLPaywall, setShowSLPaywall] = useState(false);
   
-  // პროფილის ჩამოშლის და ლაივ მონაცემების State
   const[expandedProfile, setExpandedProfile] = useState(false); 
   const[liveProfileData, setLiveProfileData] = useState<any>(null);
   
   const [msgText, setMsgText] = useState("");
-  const [selectedFIPack, setSelectedFIPack] = useState(12);
+  const[selectedFIPack, setSelectedFIPack] = useState(12);
   const[selectedSLPack, setSelectedSLPack] = useState(10);
 
   const loadingTopRef = useRef(false);
@@ -95,7 +94,7 @@ export default function FeedPage() {
   },[]);
 
   async function checkAndCreateMatch(myId: string, otherId: string) {
-    const { data: theirSwipe } = await supabase.from("swipes").select("id").eq("from_id", otherId).eq("to_id", myId).in("action", ["like", "super_like"]).maybeSingle();
+    const { data: theirSwipe } = await supabase.from("swipes").select("id").eq("from_id", otherId).eq("to_id", myId).in("action",["like", "super_like"]).maybeSingle();
     if (!theirSwipe) return null;
     const { data: existing } = await supabase.from("matches").select("id").or(`and(user_a.eq.${myId},user_b.eq.${otherId}),and(user_a.eq.${otherId},user_b.eq.${myId})`).maybeSingle();
     if (existing?.id) return existing.id;
@@ -129,7 +128,7 @@ export default function FeedPage() {
     loadTop(me);
   };
 
-  // 🔥 REWIND (უკან დაბრუნება / Plus შემოწმება)
+  // 🔥 REWIND: თუ არ აქვს პრემიუმი, მიდის /premium-ზე
   const onRewind = async () => {
     if (!previousTop) return;
     if (!me?.is_premium) { 
@@ -142,7 +141,7 @@ export default function FeedPage() {
     await supabase.from("swipes").delete().eq("from_id", me.user_id).eq("to_id", previousTop.user_id);
   };
 
-  // 🔥 SUPER LIKE
+  // 🔥 SUPER LIKE: თუ 0 აქვს, ხსნის Paywall-ს
   const handleSuperLikeClick = async () => {
     if (superLikesLeft > 0) {
       if (!me || !top) return;
@@ -158,9 +157,10 @@ export default function FeedPage() {
     }
   };
 
-  // 🔥 FIRST IMPRESSION (SEND MESSAGE)
+  // 🔥 SEND (First Impression): ხსნის შეყვანის ფანჯარას
   const handleOpenMessageModal = () => setShowFIInput(true);
 
+  // 🔥 შეყვანის ფანჯარაში Send-ზე დაჭერისას: თუ 0 აქვს, ხსნის Paywall-ს
   const handleSendMessage = async () => {
     if (!msgText.trim()) return;
     if (firstImpressionsLeft > 0) {
@@ -170,16 +170,17 @@ export default function FeedPage() {
       await supabase.from("swipes").insert({ from_id: me.user_id, to_id: cur.user_id, action: "like" });
       await supabase.from("messages").insert({ from_id: me.user_id, to_id: cur.user_id, message: msgText });
       setFirstImpressionsLeft((prev) => prev - 1);
-      setShowFIInput(false); setMsgText("");
+      setShowFIInput(false); 
+      setMsgText("");
       const mid = await checkAndCreateMatch(me.user_id, cur.user_id);
       if (mid) { setMatchedUser(cur); setMatchId(mid); setShowMatch(true); }
       loadTop(me);
     } else {
-      setShowFIInput(false); setShowFIPaywall(true);
+      setShowFIInput(false); 
+      setShowFIPaywall(true);
     }
   };
 
-  // 🔥 პროფილის გახსნა ლაივ მონაცემებით
   const handleOpenProfile = async () => {
     if (!top?.user_id) return;
     setExpandedProfile(true);
@@ -257,15 +258,13 @@ export default function FeedPage() {
           isInitialLoad={isInitialLoad}
         />
 
-        {/* ================= პროფილის ჩამოშლა (სქრინის იდენტური დიზაინით) ================= */}
+        {/* ================= პროფილის ჩამოშლა ================= */}
         {expandedProfile && cardUser && (
           <div className="absolute inset-0 z-50 bg-[#161a23] overflow-y-auto animate-in slide-in-from-bottom-full duration-300 pb-32">
             <div className="relative">
               <img src={cardUser.photo_url || ""} className="w-full h-[65vh] object-cover" alt="" />
-              {/* გრადიენტი, რომელიც სურათს აბნელებს ქვემოთ */}
               <div className="absolute inset-0 bg-gradient-to-t from-[#161a23] via-[#161a23]/30 to-transparent" />
               
-              {/* პატარა თეთრი ისარი ქვემოთ (იასამნისფერის მაგივრად) */}
               <button 
                 onClick={() => setExpandedProfile(false)} 
                 className="absolute bottom-4 right-6 w-10 h-10 bg-white/10 border border-white/20 backdrop-blur-md text-white rounded-full flex items-center justify-center shadow-lg z-10 hover:bg-white/20 transition"
@@ -283,7 +282,6 @@ export default function FeedPage() {
             </div>
             
             <div className="px-6 pt-6 space-y-7">
-              {/* ვეძებ */}
               <div>
                 <h3 className="text-white/50 font-semibold text-[14px] mb-3">{L("ვეძებ", "Looking for")}</h3>
                 <div className="inline-flex items-center gap-2 bg-[#212631] px-4 py-2 rounded-xl text-white text-[15px]">
@@ -291,7 +289,6 @@ export default function FeedPage() {
                 </div>
               </div>
 
-              {/* ძირითადი */}
               <div>
                 <h3 className="text-white/50 font-semibold text-[14px] mb-3">{L("ძირითადი", "Essentials")}</h3>
                 <div className="flex flex-col gap-3">
@@ -306,7 +303,6 @@ export default function FeedPage() {
                 </div>
               </div>
 
-              {/* ჩემ შესახებ */}
               {displayBio && (
                 <div>
                   <h3 className="text-white/50 font-semibold text-[14px] mb-3">{L("ჩემ შესახებ", "About me")}</h3>
@@ -317,7 +313,7 @@ export default function FeedPage() {
           </div>
         )}
 
-        {/* ... (დანარჩენი მოდალები იგივეა რაც გქონდა) ... */}
+        {/* ================= First Impressions მოდალი ================= */}
         {showFIInput && cardUser && (
           <div className="absolute inset-0 z-[60] bg-[#0b101a] flex flex-col animate-in fade-in slide-in-from-bottom-4">
             <div className="p-4 flex items-center justify-between">
@@ -349,9 +345,102 @@ export default function FeedPage() {
           </div>
         )}
 
-        {/* ... (Paywalls) ... */}
-        {showFIPaywall && ( <div className="absolute inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-end animate-in fade-in">...</div> )}
-        {showSLPaywall && ( <div className="absolute inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-end animate-in fade-in">...</div> )}
+        {/* ================= First Impressions Paywall (აღდგენილი) ================= */}
+        {showFIPaywall && (
+          <div className="absolute inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-end animate-in fade-in">
+            <div className="bg-[#0f172a] w-full rounded-t-3xl pt-6 pb-8 px-5 shadow-2xl slide-in-from-bottom-full">
+              <div className="flex justify-between items-center mb-4">
+                <button onClick={() => setShowFIPaywall(false)} className="text-white/50 text-2xl font-bold">✕</button>
+                <div className="text-blue-500 font-bold flex items-center gap-2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                  {L("შეიძინე პირველი შთაბეჭდილება", "Get First Impressions")}
+                </div>
+                <div className="w-6"></div>
+              </div>
+              <h2 className="text-[17px] font-bold text-white mb-6 text-center leading-snug">
+                {L("გამოირჩიე პირველი შთაბეჭდილებით. შენ გაქვს 5x მეტი შანსი მიიღო მეჩი!", "Stand out with First Impressions. You're up to 5x more likely to get a match!")}
+              </h2>
+              <div className="space-y-3 mb-6">
+                {fiPackages.map((pack) => {
+                  const isSelected = selectedFIPack === pack.id;
+                  return (
+                    <button key={pack.id} onClick={() => setSelectedFIPack(pack.id)} 
+                      className={`w-full relative flex justify-between items-center p-4 rounded-xl border-2 transition ${isSelected ? "border-blue-500 bg-blue-500/10" : "border-zinc-700 bg-zinc-800"}`}>
+                      {pack.label && <span className={`absolute -top-2.5 left-4 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${isSelected ? "bg-blue-500 text-white" : "bg-zinc-700 text-zinc-300"}`}>{pack.label}</span>}
+                      {pack.save && <span className="absolute top-4 right-4 text-[11px] font-bold text-white bg-white/10 px-2 py-0.5 rounded-md">{L("დაზოგე", "Save")} {pack.save}</span>}
+                      <span className={`font-bold text-[16px] ${isSelected ? "text-white" : "text-zinc-200"}`}>{pack.count} First Impressions</span>
+                      <span className={`text-[14px] mt-6 ${isSelected ? "text-blue-400" : "text-zinc-400"}`}>{pack.price} {L("₾/ცალი", "₾/ea")}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="text-center mb-6 relative">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-700"></div></div>
+                <span className="bg-[#0f172a] px-4 text-xs font-bold text-zinc-500 uppercase relative">or</span>
+              </div>
+              <button onClick={() => router.push("/premium")} className="w-full bg-[#1e293b] border border-zinc-700 rounded-xl p-4 flex justify-between items-center mb-6 hover:bg-zinc-800 transition">
+                <div className="flex flex-col items-start">
+                  <span className="text-[10px] font-bold text-white/50 uppercase mb-1">{L("შეიცავს 3 უფასოს კვირაში", "Includes 3 free First Impressions a week")}</span>
+                  <div className="flex items-center gap-2"><span className="text-zinc-300 text-lg">🔥</span><span className="font-bold text-white">Get Shekhvdi Plus</span></div>
+                </div>
+                <span className="bg-zinc-700 px-4 py-1.5 rounded-full text-xs font-bold">Select</span>
+              </button>
+              <button onClick={() => router.push(`/checkout?product=first_impression&pack=${selectedFIPack}`)} 
+                className="w-full bg-blue-500 text-white font-bold text-[16px] py-4 rounded-full active:scale-95 transition">
+                {L(`გაგრძელება ${fiPackages.find(p=>p.id===selectedFIPack)?.total.toFixed(2)} ₾`, `Continue for ${fiPackages.find(p=>p.id===selectedFIPack)?.total.toFixed(2)} ₾ total`)}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ================= Super Like Paywall (აღდგენილი) ================= */}
+        {showSLPaywall && (
+          <div className="absolute inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-end animate-in fade-in">
+            <div className="bg-[#0f172a] w-full rounded-t-3xl pt-6 pb-8 px-5 shadow-2xl slide-in-from-bottom-full">
+              <div className="flex justify-between items-center mb-4">
+                <button onClick={() => setShowSLPaywall(false)} className="text-white/50 text-2xl font-bold">✕</button>
+                <div className="text-blue-400 font-bold flex items-center gap-2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+                  {L("შეიძინე Super Likes", "Get Super Likes")}
+                </div>
+                <div className="w-6"></div>
+              </div>
+              <h2 className="text-[17px] font-bold text-white mb-8 text-center leading-snug px-4">
+                {L("გამოირჩიე Super Like-ით. შენ გაქვს 3x მეტი შანსი მიიღო მეჩი!", "Stand out with Super Like. You're 3x more likely to get a match!")}
+              </h2>
+              <div className="flex gap-3 justify-center mb-8">
+                {slPackages.map((pack) => {
+                  const isSelected = selectedSLPack === pack.id;
+                  return (
+                    <div key={pack.id} onClick={() => setSelectedSLPack(pack.id)} 
+                      className={`relative flex-1 rounded-2xl p-5 flex flex-col justify-between h-44 cursor-pointer transition border-2 ${isSelected ? "border-blue-500 bg-blue-500/10" : "border-zinc-700 bg-zinc-800"}`}>
+                      {pack.label && <span className={`absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] font-bold px-3 py-0.5 rounded-full uppercase whitespace-nowrap ${isSelected ? "bg-blue-500 text-white" : "bg-zinc-700 text-zinc-300"}`}>{pack.label}</span>}
+                      <span className={`text-[16px] font-bold text-center mt-2 ${isSelected ? "text-white" : "text-zinc-200"}`}>{pack.count} Super Likes</span>
+                      <div className="mt-auto">
+                        <div className={`text-center text-[13px] mb-3 ${isSelected ? "text-blue-400" : "text-zinc-400"}`}>{pack.price} {L("₾/ცალი", "₾/ea")}</div>
+                        <button onClick={(e) => { e.stopPropagation(); router.push(`/checkout?product=super_like&pack=${pack.id}`); }}
+                          className={`w-full font-bold py-2 rounded-full text-sm transition ${isSelected ? "bg-blue-500 text-white hover:bg-blue-600" : "bg-[#1e293b] text-blue-500 hover:bg-[#283548]"}`}>
+                          {L("არჩევა", "Select")}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="text-center mb-6 relative">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-700"></div></div>
+                <span className="bg-[#0f172a] px-4 text-xs font-bold text-zinc-500 uppercase relative">or</span>
+              </div>
+              <button onClick={() => router.push("/premium")} className="w-full bg-gradient-to-r from-amber-400 to-yellow-600 rounded-xl p-4 flex justify-between items-center active:scale-95 transition">
+                <div className="flex flex-col items-start">
+                  <span className="text-[10px] font-bold text-black/70 uppercase mb-1">{L("შეიცავს 2 უფასო Super Like-ს კვირაში", "Includes 2 free Super Likes every week")}</span>
+                  <div className="flex items-center gap-2"><span className="text-black text-xl">💛</span><span className="font-bold text-black text-[16px]">Get Shekhvdi Plus</span></div>
+                </div>
+                <span className="bg-black/20 px-4 py-1.5 rounded-full text-xs font-bold text-black uppercase">Select</span>
+              </button>
+            </div>
+          </div>
+        )}
 
       </div>
       <BottomNav />

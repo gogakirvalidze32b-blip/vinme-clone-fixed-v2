@@ -259,20 +259,20 @@ export default function TinderCard({
 </div>
 </div>
 </div>
-      {/* ACTION BUTTONS */}
-  {/* ACTION BUTTONS */}
+
+{/* ACTION BUTTONS */}
       <div className="shrink-0 flex items-center justify-center gap-4 py-1.5"
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 72px)" }}
         onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()}>
  
-        {/* 🔥 REWIND ღილაკი */}
+        {/* REWIND */}
         <ActionBtn size="sm" disabled={animating} color="#F7BB00" onClick={() => onRewind && onRewind()}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/>
           </svg>
         </ActionBtn>
  
-        {/* SKIP ღილაკი */}
+        {/* SKIP */}
         <ActionBtn size="lg" disabled={animating} color="#FF4458"
           style={{ opacity: dir === "left" ? 0.65 + progress * 0.35 : 1, transform: dir === "left" ? `translateY(${-progress * 14}px) scale(${1 + progress * 0.08})` : undefined }}
           onClick={() => finish("skip")}>
@@ -281,26 +281,22 @@ export default function TinderCard({
           </svg>
         </ActionBtn>
  
-    {/* 🔥 SUPER LIKE ღილაკი */}
-        <ActionBtn 
-          size="sm" 
-          disabled={animating} 
-          color="#00B4E4"
+        {/* SUPER LIKE */}
+        <ActionBtn size="sm" disabled={animating} color="#00B4E4"
           onClick={() => {
             if ((superLikesLeft ?? 0) > 0) {
               finish("super_like");
             } else {
-              onSuperLike?.(); 
+              if (onSuperLike) onSuperLike(); 
             }
           }}
-          badge={(superLikesLeft ?? 0) > 0 ? String(superLikesLeft) : undefined}
-        >
+          badge={(superLikesLeft ?? 0) > 0 ? String(superLikesLeft) : undefined}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
           </svg>
         </ActionBtn>
  
-        {/* LIKE ღილაკი */}
+        {/* LIKE */}
         <ActionBtn size="lg" disabled={animating} color="#00E08F"
           style={{ opacity: dir === "right" ? 0.65 + progress * 0.35 : 1, transform: dir === "right" ? `translateY(${-progress * 14}px) scale(${1 + progress * 0.08})` : undefined }}
           onClick={() => finish("like")}>
@@ -309,16 +305,15 @@ export default function TinderCard({
           </svg>
         </ActionBtn>
  
-        {/* 🔥 SEND (MESSAGE) ღილაკი (ჩასწორებულია: იძახებს onSendMessage-ს) */}
-      {/* 🔥 SEND (MESSAGE) ღილაკი */}
+      {/* SEND */}
         <ActionBtn size="sm" disabled={animating} color="#3b82f6"
-          onClick={() => onSendMessage?.("")}
-          badge={messagesLeft && messagesLeft > 0 ? String(messagesLeft) : undefined}>
+          onClick={() => { if (onSendMessage) onSendMessage(""); }}
+          badge={(messagesLeft ?? 0) > 0 ? String(messagesLeft) : undefined}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="ml-0.5 mt-0.5">
             <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
           </svg>
         </ActionBtn>
-      </div>
+        </div>
       
       {/* MATCH MODAL */}
       {externalShowMatch && externalMatchId && (
