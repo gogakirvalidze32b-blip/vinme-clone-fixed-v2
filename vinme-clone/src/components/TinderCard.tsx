@@ -26,7 +26,7 @@ type Props = {
   loading?: boolean;
   onLike?: () => void | Promise<void>;
   onSkip?: () => void | Promise<void>;
-    onRewind?: () => void | Promise<void>; // ✅ აუცილებლად ჩაამატე ეს ხაზი
+  onRewind?: () => void | Promise<void>;
   onSuperLike?: () => void | Promise<void>;
   onSendMessage: (message: string) => void;
   messagesLeft: number;
@@ -40,20 +40,18 @@ type Props = {
   matchedUserName?: string;
   matchedUserPhoto?: string | null;
   onOpenProfile?: () => void;
-    isInitialLoad?: boolean;                   // ✅ აქ დაემატა
-
+  isInitialLoad?: boolean;
 };
  
 export default function TinderCard({
   user, otherUserId, myProfile, loading, 
-  onLike, onSkip, onRewind, onSuperLike, onFirstImpression, // <--- დაამატე onRewind აქ!
+  onLike, onSkip, onRewind, onSuperLike, onFirstImpression,
   onSendMessage,
   messagesLeft,
   superLikesLeft = 0, firstImpressionsLeft = 0,
   externalMatchId, externalShowMatch, onCloseMatch, onOpenChat,
   matchedUserName, matchedUserPhoto, onOpenProfile,
-  
-    isInitialLoad                              // ✅ და აქაც დაემატა
+  isInitialLoad
 }: Props) {
   const router = useRouter();
   const lang = getLang();
@@ -62,10 +60,10 @@ export default function TinderCard({
   const [x, setX] = useState(0);
   const [y, setY] = useState(0);
   const [rot, setRot] = useState(0);
-  const [dragging, setDragging] = useState(false);
+  const[dragging, setDragging] = useState(false);
   const[animating, setAnimating] = useState(false);
   const [otherUser, setOtherUser] = useState<any>(null);
-  const [superLikeAnim, setSuperLikeAnim] = useState(false);
+  const[superLikeAnim, setSuperLikeAnim] = useState(false);
  
   const startX = useRef(0);
   const startY = useRef(0);
@@ -77,8 +75,7 @@ export default function TinderCard({
   const upProgress = Math.min(Math.max(-y, 0) / 100, 1);
   const isSuperDir = y < -60 && Math.abs(x) < 60;
  
-  const imgSrc = useMemo(() => photoSrc(user?.photo1_url ?? user?.photo_url ?? null),
-    [user?.photo1_url, user?.photo_url]);
+  const imgSrc = useMemo(() => photoSrc(user?.photo1_url ?? user?.photo_url ?? null),[user?.photo1_url, user?.photo_url]);
  
   useEffect(() => {
     if (!otherUserId) { setOtherUser(null); return; }
@@ -108,6 +105,7 @@ export default function TinderCard({
     setRot(Math.max(-15, Math.min(15, dx / 14)));
   }
  
+  // 🔥 შეცვლილი ლოგიკა: 150-ის ნაცვლად 250ms, რომ ანიმაცია დასრულდეს
   async function finish(action: "like" | "skip" | "super_like") {
     if (animating) return;
     setAnimating(true);
@@ -115,7 +113,7 @@ export default function TinderCard({
     if (action === "super_like") {
       setSuperLikeAnim(true);
       setY(-window.innerHeight);
-      await new Promise((r) => setTimeout(r, 150));
+      await new Promise((r) => setTimeout(r, 250)); // <--- გაზრდილი დრო
       try { await onSuperLike?.(); }
       finally {
         setX(0); setY(0); setRot(0);
@@ -127,7 +125,7 @@ export default function TinderCard({
  
     setX(action === "like" ? window.innerWidth : -window.innerWidth);
     setRot(action === "like" ? 15 : -15);
-    await new Promise((r) => setTimeout(r, 120));
+    await new Promise((r) => setTimeout(r, 250)); // <--- გაზრდილი დრო
     try {
       if (action === "like") await onLike?.();
       else await onSkip?.();
@@ -142,7 +140,6 @@ export default function TinderCard({
     const quick = Date.now() - downAt.current < 200;
     const thr = quick ? threshold * 0.7 : threshold;
     
-    // თითით სვაიპის დროს ლიმიტის შემოწმება (თუ 0-ია ამოაგდებს Paywall-ს)
     if (isSuperDir) {
       if (superLikesLeft > 0) return void finish("super_like");
       else {
@@ -208,9 +205,10 @@ export default function TinderCard({
             </div>
           )}
  
+          {/* 🔥 შეცვლილი ლოგიკა: დამატებულია transition-opacity */}
           {(isSuperDir || superLikeAnim) && (
-            <div className="absolute inset-x-0 top-1/3 z-30 flex justify-center"
-              style={{ opacity: Math.min(upProgress * 2, 1) }}>
+            <div className="absolute inset-x-0 top-1/3 z-30 flex justify-center transition-opacity duration-200"
+              style={{ opacity: superLikeAnim ? 1 : Math.min(upProgress * 2, 1) }}>
               <div className="border-4 border-[#00B4E4] rounded-lg px-6 py-2">
                 <span className="text-[#00B4E4] text-3xl font-black tracking-[0.15em]">SUPER LIKE</span>
               </div>
@@ -218,49 +216,48 @@ export default function TinderCard({
           )}
  
           <div className="absolute bottom-0 left-0 right-0 z-20 px-4 pb-4">
-  <div className="flex items-end justify-between">
-    <div>
-      <div className="flex items-center gap-2 flex-wrap">
-        <h2 className="text-[1.75rem] font-black text-white leading-tight drop-shadow-lg">{user.nickname}</h2>
-        <span className="text-[1.6rem] font-light text-white/90">{user.age}</span>
-        {user.recentlyActive && (
-          <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-black text-black">●</span>
-        )}
+            <div className="flex items-end justify-between">
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-[1.75rem] font-black text-white leading-tight drop-shadow-lg">{user.nickname}</h2>
+                  <span className="text-[1.6rem] font-light text-white/90">{user.age}</span>
+                  {user.recentlyActive && (
+                    <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-black text-black">●</span>
+                  )}
+                </div>
+                <p className="text-[13px] text-white/75 mt-0.5 drop-shadow flex items-center gap-1">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 opacity-80">
+                    <path d="M10 20S3 10.87 3 7a7 7 0 1 1 14 0c0 3.87-7 13-7 13zm0-11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/>
+                  </svg>
+                  {user.city || (ka ? "უცნობი ადგილი" : "Unknown location")}
+                  {user.distanceKm != null && (
+                    <span className="text-white/55 ml-1">
+                      · {user.distanceKm < 1
+                          ? (ka ? "1 კმ-ზე ნაკლები" : "Less than 1 km")
+                          : `${user.distanceKm} ${ka ? "კმ" : "km away"}`}
+                    </span>
+                  )}
+                </p>
+              </div>
+
+              <button 
+                type="button" 
+                onClick={onOpenProfile}
+                onPointerDown={e => e.stopPropagation()} 
+                onPointerUp={e => e.stopPropagation()}
+                className="w-10 h-10 mb-1 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 transition shadow-xl shrink-0 border border-white/10"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="18 15 12 9 6 15"></polyline>
+                </svg>
+              </button>
+              
+            </div>
+          </div>
+        </div>
       </div>
-      <p className="text-[13px] text-white/75 mt-0.5 drop-shadow flex items-center gap-1">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 opacity-80">
-          <path d="M10 20S3 10.87 3 7a7 7 0 1 1 14 0c0 3.87-7 13-7 13zm0-11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/>
-        </svg>
-        {user.city || (ka ? "უცნობი ადგილი" : "Unknown location")}
-        {user.distanceKm != null && (
-          <span className="text-white/55 ml-1">
-            · {user.distanceKm < 1
-                ? (ka ? "1 კმ-ზე ნაკლები" : "Less than 1 km")
-                : `${user.distanceKm} ${ka ? "კმ" : "km away"}`}
-          </span>
-        )}
-      </p>
-    </div>
 
-    {/* 🔥 შეცვლილი ღილაკი: თეთრი ისარი მაღლა */}
-    <button 
-      type="button" 
-      onClick={onOpenProfile}
-      onPointerDown={e => e.stopPropagation()} 
-      onPointerUp={e => e.stopPropagation()}
-      className="w-10 h-10 mb-1 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 transition shadow-xl shrink-0 border border-white/10"
-    >
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="18 15 12 9 6 15"></polyline>
-      </svg>
-    </button>
-    
-  </div>
-</div>
-</div>
-</div>
-
-{/* ACTION BUTTONS */}
+      {/* ACTION BUTTONS */}
       <div className="shrink-0 flex items-center justify-center gap-4 py-1.5"
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 72px)" }}
         onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()}>
@@ -305,7 +302,7 @@ export default function TinderCard({
           </svg>
         </ActionBtn>
  
-      {/* SEND */}
+        {/* SEND */}
         <ActionBtn size="sm" disabled={animating} color="#3b82f6"
           onClick={() => { if (onSendMessage) onSendMessage(""); }}
           badge={(messagesLeft ?? 0) > 0 ? String(messagesLeft) : undefined}>
@@ -313,7 +310,7 @@ export default function TinderCard({
             <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
           </svg>
         </ActionBtn>
-        </div>
+      </div>
       
       {/* MATCH MODAL */}
       {externalShowMatch && externalMatchId && (

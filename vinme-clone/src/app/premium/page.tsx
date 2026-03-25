@@ -14,7 +14,7 @@ function PremiumContent() {
  
   const [selectedPlan, setSelectedPlan] = useState<"week" | "month" | "year">("week");
   const [loading, setLoading] = useState(false);
-  const [statusMsg, setStatusMsg] = useState<{ type: "success" | "fail"; text: string } | null>(null);
+  const[statusMsg, setStatusMsg] = useState<{ type: "success" | "fail"; text: string } | null>(null);
  
   const plans = {
     week:  { name: ka ? "1 კვირა"  : "1 Week",  price: "9.99",  days: 7,   popular: false  },
@@ -22,7 +22,7 @@ function PremiumContent() {
     year:  { name: ka ? "3 თვე"  : "3 Months",  price: "69.99", days: 90, popular: false },
   };
  
-  const features = [
+  const features =[
     ka ? "უსაზღვრო მოწონებები" : "Unlimited Likes",
     ka ? "ნახე ვის მოეწონე"    : "See Who Likes You",
     ka ? "გადატრიალება"        : "Unlimited Rewinds",

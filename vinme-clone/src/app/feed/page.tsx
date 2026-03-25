@@ -27,20 +27,20 @@ export default function FeedPage() {
   const [me, setMe] = useState<any>(null);
   const[top, setTop] = useState<any>(null);
   const[nextTop, setNextTop] = useState<any>(null);
-  const [previousTop, setPreviousTop] = useState<any>(null); 
+  const[previousTop, setPreviousTop] = useState<any>(null); 
   
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   const[matchId, setMatchId] = useState<string | null>(null);
   const[showMatch, setShowMatch] = useState(false);
-  const [matchedUser, setMatchedUser] = useState<any>(null);
+  const[matchedUser, setMatchedUser] = useState<any>(null);
 
   const [superLikesLeft, setSuperLikesLeft] = useState(0); 
   const[firstImpressionsLeft, setFirstImpressionsLeft] = useState(0);
 
   const[showFIInput, setShowFIInput] = useState(false);
   const[showFIPaywall, setShowFIPaywall] = useState(false);
-  const [showSLPaywall, setShowSLPaywall] = useState(false);
+  const[showSLPaywall, setShowSLPaywall] = useState(false);
   
   const[expandedProfile, setExpandedProfile] = useState(false); 
   const[liveProfileData, setLiveProfileData] = useState<any>(null);
@@ -128,13 +128,16 @@ export default function FeedPage() {
     loadTop(me);
   };
 
-  // 🔥 REWIND: თუ არ აქვს პრემიუმი, მიდის /premium-ზე
+  // 🔥 REWIND: შესწორებული ლოგიკა. ჯერ ამოწმებს პრემიუმს!
   const onRewind = async () => {
-    if (!previousTop) return;
+    // 1. თუ არ აქვს პრემიუმი, ნებისმიერ შემთხვევაში ვაგდებთ /premium-ზე
     if (!me?.is_premium) { 
       router.push("/premium"); 
       return; 
     } 
+    // 2. თუ აქვს პრემიუმი, მაგრამ ჯერ არავისთვის დაუსვაიპია, არაფერს ვაკეთებთ
+    if (!previousTop) return;
+    
     setNextTop(top);
     setTop(previousTop);
     setPreviousTop(null);
@@ -213,7 +216,7 @@ export default function FeedPage() {
       photo_url: top.photo1_url ? photoSrc(top.photo1_url) : null,
       photo1_url: top.photo1_url,
     };
-  }, [top, me]);
+  },[top, me]);
 
   const fiPackages =[
     { id: 3, count: 3, price: "2.49", total: 7.47, label: null, save: null },
@@ -345,7 +348,7 @@ export default function FeedPage() {
           </div>
         )}
 
-        {/* ================= First Impressions Paywall (აღდგენილი) ================= */}
+        {/* ================= First Impressions Paywall ================= */}
         {showFIPaywall && (
           <div className="absolute inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-end animate-in fade-in">
             <div className="bg-[#0f172a] w-full rounded-t-3xl pt-6 pb-8 px-5 shadow-2xl slide-in-from-bottom-full">
@@ -393,7 +396,7 @@ export default function FeedPage() {
           </div>
         )}
 
-        {/* ================= Super Like Paywall (აღდგენილი) ================= */}
+        {/* ================= Super Like Paywall ================= */}
         {showSLPaywall && (
           <div className="absolute inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-end animate-in fade-in">
             <div className="bg-[#0f172a] w-full rounded-t-3xl pt-6 pb-8 px-5 shadow-2xl slide-in-from-bottom-full">
