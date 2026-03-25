@@ -24,33 +24,58 @@ export default function FeedPage() {
   const lang = getLang();
   const L = (ka: string, en: string) => (lang === "en" ? en : ka);
 
-  const [me, setMe] = useState<any>(null);
-  const[top, setTop] = useState<any>(null);
-  const[nextTop, setNextTop] = useState<any>(null);
-  const[previousTop, setPreviousTop] = useState<any>(null); 
+  // 🚀 ტრიუკი 1: ამოვიღოთ State-ები ლოკალური ქეშიდან
+  const[me, setMe] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      const cached = localStorage.getItem("feed_me_cache");
+      return cached ? JSON.parse(cached) : null;
+    }
+    return null;
+  });
+  const [top, setTop] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      const cached = localStorage.getItem("feed_top_cache");
+      return cached ? JSON.parse(cached) : null;
+    }
+    return null;
+  });
+  const [nextTop, setNextTop] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      const cached = localStorage.getItem("feed_next_cache");
+      return cached ? JSON.parse(cached) : null;
+    }
+    return null;
+  });
   
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [previousTop, setPreviousTop] = useState<any>(null); 
+  
+  // თუ ქეშში უკვე დევს 'top', აღარ გვინდა საწყისი შავი ეკრანის დალოდება
+  const [isInitialLoad, setIsInitialLoad] = useState(() => {
+    if (typeof window !== "undefined") {
+      return !localStorage.getItem("feed_top_cache");
+    }
+    return true;
+  });
 
   const[matchId, setMatchId] = useState<string | null>(null);
   const[showMatch, setShowMatch] = useState(false);
   const[matchedUser, setMatchedUser] = useState<any>(null);
 
-  const [superLikesLeft, setSuperLikesLeft] = useState(0); 
+  const[superLikesLeft, setSuperLikesLeft] = useState(0); 
   const[firstImpressionsLeft, setFirstImpressionsLeft] = useState(0);
 
+  // ... დანარჩენი State-ები იგივე რჩება ...
   const[showFIInput, setShowFIInput] = useState(false);
   const[showFIPaywall, setShowFIPaywall] = useState(false);
   const[showSLPaywall, setShowSLPaywall] = useState(false);
-  
   const[expandedProfile, setExpandedProfile] = useState(false); 
   const[liveProfileData, setLiveProfileData] = useState<any>(null);
-  
   const [msgText, setMsgText] = useState("");
   const[selectedFIPack, setSelectedFIPack] = useState(12);
   const[selectedSLPack, setSelectedSLPack] = useState(10);
 
   const loadingTopRef = useRef(false);
-  const meRef = useRef<any>(null);
+  const meRef = useRef<any>(me);
 
   const loadMe = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
@@ -59,6 +84,7 @@ export default function FeedPage() {
     const { data: row } = await supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle();
     setMe(row);
     meRef.current = row;
+    localStorage.setItem("feed_me_cache", JSON.stringify(row)); // 💾 ქეში
     return row;
   }, [router]);
 
@@ -89,10 +115,15 @@ export default function FeedPage() {
 
     setTop(data?.[0] ?? null);
     setNextTop(data?.[1] ?? null);
+    
+    // 💾 ტრიუკი 2: ვინახავთ მომავლისთვის
+    localStorage.setItem("feed_top_cache", JSON.stringify(data?.[0] || null));
+    localStorage.setItem("feed_next_cache", JSON.stringify(data?.[1] || null));
 
     loadingTopRef.current = false;
   },[]);
 
+  // ... checkAndCreateMatch იგივე რჩება ...
   async function checkAndCreateMatch(myId: string, otherId: string) {
     const { data: theirSwipe } = await supabase.from("swipes").select("id").eq("from_id", otherId).eq("to_id", myId).in("action",["like", "super_like"]).maybeSingle();
     if (!theirSwipe) return null;
@@ -106,9 +137,19 @@ export default function FeedPage() {
     setPreviousTop(top); 
     setExpandedProfile(false); 
     setLiveProfileData(null);
-    if (nextTop) { setTop(nextTop); setNextTop(null); } 
-    else setTop(null);
+    if (nextTop) { 
+      setTop(nextTop); 
+      setNextTop(null); 
+      // ვაახლებთ ქეშს სვაიპის დროსაც!
+      localStorage.setItem("feed_top_cache", JSON.stringify(nextTop));
+      localStorage.removeItem("feed_next_cache");
+    } else {
+      setTop(null);
+      localStorage.removeItem("feed_top_cache");
+    }
   };
+
+  //... აქედან გრძელდება onLike, onSkip და მთლიანი return UI (ის რაც გქონდა) ...
 
   const onLike = async () => {
     if (!me || !top) return;

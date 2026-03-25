@@ -11,7 +11,7 @@ export default function LikesPage() {
   const lang = getLang();
   const L = (ka: string, en: string) => lang === "en" ? en : ka;
  
-  // Cache რიცხვისთვის (რომ ეგრევე გამოჩნდეს)
+  // 🚀 ტრიუკი 1: ვკითხულობთ ქეშს State-ების საწყისი მნიშვნელობებისთვის
   const [likeCount, setLikeCount] = useState(() => {
     if (typeof window !== "undefined") {
       const cached = localStorage.getItem("likes_count_cache");
@@ -20,9 +20,28 @@ export default function LikesPage() {
     return 0;
   });
   
-  const [isPremium, setIsPremium] = useState(false);
-  const [likers, setLikers] = useState<{ id: string; name: string; age: number; photo: string }[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isPremium, setIsPremium] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("likes_premium_cache") === "true";
+    }
+    return false;
+  });
+
+  const [likers, setLikers] = useState<{ id: string; name: string; age: number; photo: string }[]>(() => {
+    if (typeof window !== "undefined") {
+      const cached = localStorage.getItem("likes_list_cache");
+      return cached ? JSON.parse(cached) : [];
+    }
+    return[];
+  });
+
+  // თუ ქეშში უკვე გვაქვს მონაცემები, Loading-ს ეგრევე False-ზე ვაყენებთ!
+  const [loading, setLoading] = useState(() => {
+    if (typeof window !== "undefined") {
+      return !localStorage.getItem("likes_list_cache");
+    }
+    return true;
+  });
  
   useEffect(() => {
     let alive = true;
@@ -49,6 +68,7 @@ export default function LikesPage() {
 
         const premium = profile?.is_premium === true && (!profile?.premium_until || new Date(profile.premium_until) > new Date());
         setIsPremium(premium);
+        localStorage.setItem("likes_premium_cache", premium ? "true" : "false"); // 💾 ქეში
 
         const excludeIds = new Set([
           ...(myMatches || []).map((m: any) => m.user_a === uid ? m.user_b : m.user_a),
@@ -61,9 +81,11 @@ export default function LikesPage() {
 
         const realCount = actionableIds.length;
         setLikeCount(realCount);
-        localStorage.setItem("likes_count_cache", String(realCount));
+        localStorage.setItem("likes_count_cache", String(realCount)); // 💾 ქეში
 
         if (realCount === 0) {
+          setLikers([]);
+          localStorage.removeItem("likes_list_cache");
           setLoading(false);
           return;
         }
@@ -78,12 +100,15 @@ export default function LikesPage() {
 
         const STORAGE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL + "/storage/v1/object/public/";
         if (profiles) {
-          setLikers(profiles.map((p: any) => ({
+          const formattedLikers = profiles.map((p: any) => ({
             id: p.user_id,
             name: p.nickname || "?",
             age: p.age || 0,
             photo: p.photo1_url ? (p.photo1_url.startsWith("http") ? p.photo1_url : STORAGE_URL + p.photo1_url) : "",
-          })));
+          }));
+          
+          setLikers(formattedLikers);
+          localStorage.setItem("likes_list_cache", JSON.stringify(formattedLikers)); // 💾 ქეში
         }
 
       } catch (err) {
@@ -102,8 +127,17 @@ export default function LikesPage() {
     const uid = sess.session?.user?.id;
     if (!uid) return;
 
-    setLikers(prev => prev.filter(l => l.id !== targetId));
-    setLikeCount(prev => Math.max(0, prev - 1));
+    // ლოკალურად წაშლა და ქეშის განახლება
+    setLikers(prev => {
+      const updated = prev.filter(l => l.id !== targetId);
+      localStorage.setItem("likes_list_cache", JSON.stringify(updated));
+      return updated;
+    });
+    setLikeCount(prev => {
+      const newCount = Math.max(0, prev - 1);
+      localStorage.setItem("likes_count_cache", String(newCount));
+      return newCount;
+    });
 
     await supabase.from("swipes").insert({ from_id: uid, to_id: targetId, action: action });
     if (action === "like") {
@@ -130,7 +164,7 @@ export default function LikesPage() {
         </div>
 
         {loading ? (
-          /* LOADING მდგომარეობა: გამოჩნდება ბლარ-ჩარჩოები (Skeletons) */
+          /* LOADING მდგომარეობა (გამოჩნდება მხოლოდ მაშინ, თუ ქეში საერთოდ ცარიელია) */
           <div className="grid grid-cols-2 gap-3">
             {skeletons.map((_, i) => (
               <div key={i} className="relative aspect-[3/4] rounded-lg overflow-hidden bg-zinc-900 select-none">
@@ -139,7 +173,7 @@ export default function LikesPage() {
             ))}
           </div>
         ) : isPremium ? (
-          /* ================= PREMIUM იუზერები (არანაირი სარეკლამო ღილაკი) ================= */
+          /* ================= PREMIUM იუზერები ================= */
           likeCount === 0 ? (
             <div className="text-center text-white/40 mt-20">
               {L("ჯერ არავის მოუწონებია შენი პროფილი", "No new likes yet")}
@@ -175,12 +209,10 @@ export default function LikesPage() {
           /* ================= არა-PREMIUM იუზერები ================= */
           <div className="relative">
             {likeCount === 0 ? (
-              /* თუ 0 ლაიქია - სქრინის დიზაინი შუაში გულით */
               <div className="flex flex-col items-center justify-center mt-12 px-2 text-center">
                 <p className="text-white/80 text-[15px] mb-10 leading-relaxed">
                   {L("გააქტიურე Premium-ი, რომ ნახო ადამიანები, რომლებმაც უკვე დაგალაიქეს.", "Upgrade to Premium to see people who have already liked you.")}
                 </p>
-                {/* მოოქროსფრო გულის აიქონი (სქრინის მსგავსად) */}
                 <div className="text-7xl mb-10 drop-shadow-[0_0_15px_rgba(251,191,36,0.3)] select-none">
                   💛
                 </div>
@@ -189,7 +221,6 @@ export default function LikesPage() {
                 </p>
               </div>
             ) : (
-              /* თუ არის ლაიქები - დაბლარული პროფილები */
               <div className="grid grid-cols-2 gap-3">
                 {likers.map((liker) => (
                   <div key={liker.id} className="relative aspect-[3/4] rounded-lg overflow-hidden bg-zinc-900 select-none">
@@ -213,7 +244,6 @@ export default function LikesPage() {
         )}
       </div>
 
-      {/* ================= გადახდის STICKY ღილაკი (მხოლოდ არა-PREMIUM-ზე, ყოველთვის ჩანს) ================= */}
       {!loading && !isPremium && (
         <div className="fixed bottom-[100px] left-0 right-0 px-6 z-40 flex justify-center">
           <button

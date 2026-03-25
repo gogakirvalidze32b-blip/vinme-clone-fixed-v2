@@ -105,7 +105,6 @@ export default function TinderCard({
     setRot(Math.max(-15, Math.min(15, dx / 14)));
   }
  
-  // 🔥 შეცვლილი ლოგიკა: 150-ის ნაცვლად 250ms, რომ ანიმაცია დასრულდეს
   async function finish(action: "like" | "skip" | "super_like") {
     if (animating) return;
     setAnimating(true);
@@ -113,7 +112,7 @@ export default function TinderCard({
     if (action === "super_like") {
       setSuperLikeAnim(true);
       setY(-window.innerHeight);
-      await new Promise((r) => setTimeout(r, 250)); // <--- გაზრდილი დრო
+      await new Promise((r) => setTimeout(r, 250)); 
       try { await onSuperLike?.(); }
       finally {
         setX(0); setY(0); setRot(0);
@@ -125,7 +124,7 @@ export default function TinderCard({
  
     setX(action === "like" ? window.innerWidth : -window.innerWidth);
     setRot(action === "like" ? 15 : -15);
-    await new Promise((r) => setTimeout(r, 250)); // <--- გაზრდილი დრო
+    await new Promise((r) => setTimeout(r, 250));
     try {
       if (action === "like") await onLike?.();
       else await onSkip?.();
@@ -154,20 +153,19 @@ export default function TinderCard({
   }
  
   return (
-    <div className="relative w-full bg-black text-white flex flex-col" style={{ height: "100dvh" }}>
+    <div className="relative w-full bg-black text-white flex flex-col h-[100dvh]">
  
       {/* CARD */}
-      <div className="flex-1 flex items-start justify-center pt-2 px-3 overflow-hidden">
+      <div className="flex-1 w-full px-2 pt-2 flex justify-center items-center overflow-hidden">
         <div
-          className="relative overflow-hidden bg-zinc-900 shadow-2xl w-full"
+          className="relative overflow-hidden bg-zinc-900 shadow-2xl w-full h-full max-w-md"
           style={{
-            maxWidth: "420px",
-            height: "min(calc(100dvh - 130px), 680px)",
             borderRadius: "20px",
             transform: `translateX(${x}px) translateY(${y}px) rotate(${rot}deg)`,
             transition: dragging ? "none" : "transform 200ms ease-out",
             willChange: "transform",
-            touchAction: "pan-y",
+            // 🔥 სწორედ ეს ხსნის მობაილზე ზევით სვაიპის (Super Like) პრობლემას
+            touchAction: "none", 
             userSelect: "none",
             WebkitUserSelect: "none",
             cursor: dragging ? "grabbing" : "grab",
@@ -205,7 +203,6 @@ export default function TinderCard({
             </div>
           )}
  
-          {/* 🔥 შეცვლილი ლოგიკა: დამატებულია transition-opacity */}
           {(isSuperDir || superLikeAnim) && (
             <div className="absolute inset-x-0 top-1/3 z-30 flex justify-center transition-opacity duration-200"
               style={{ opacity: superLikeAnim ? 1 : Math.min(upProgress * 2, 1) }}>
@@ -258,7 +255,7 @@ export default function TinderCard({
       </div>
 
       {/* ACTION BUTTONS */}
-      <div className="shrink-0 flex items-center justify-center gap-4 py-1.5"
+      <div className="shrink-0 flex items-center justify-center gap-4 py-2"
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 72px)" }}
         onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()}>
  
