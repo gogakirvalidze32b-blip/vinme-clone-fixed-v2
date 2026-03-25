@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import BottomNav from "@/components/BottomNav";
 import { getLang } from "@/lib/i18n";
 
+// ბაზაში მონაცემების შენახვის დამხმარე ფუნქცია
 async function saveProfilePatch(patch: Record<string, any>) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: new Error("No user") };
@@ -14,12 +15,39 @@ async function saveProfilePatch(patch: Record<string, any>) {
   return { error };
 }
 
+// უფასო / სტანდარტული Toggle
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <button type="button" onClick={() => onChange(!checked)}
       className={`relative inline-flex h-7 w-12 items-center rounded-full transition-all duration-200 ${checked ? "bg-rose-500" : "bg-white/15"}`}>
       <span className={`inline-block h-5 w-5 rounded-full bg-white shadow-lg transition-all duration-200 transform ${checked ? "translate-x-6" : "translate-x-1"}`} />
     </button>
+  );
+}
+
+// 🌟 PREMIUM Toggle (თუ არ აქვს პრემიუმი, უჩვენებს ბოქლომს და აგდებს ყიდვაზე)
+function PremiumToggleRow({ label, sub, checked, isPremium, onToggle, onPaywall }: { 
+  label: string; sub: string; checked: boolean; isPremium: boolean; onToggle: (v: boolean) => void; onPaywall: () => void;
+}) {
+  return (
+    <div className="px-4 py-3.5 flex items-center justify-between hover:bg-white/5 transition" 
+         onClick={() => !isPremium ? onPaywall() : null}
+         style={{ cursor: !isPremium ? "pointer" : "default" }}>
+      <div>
+        <div className="text-sm font-medium flex items-center gap-2">
+          {label}
+          {!isPremium && <span className="text-[9px] bg-gradient-to-r from-rose-500 to-orange-400 px-1.5 py-0.5 rounded text-white uppercase font-bold tracking-wider">Premium</span>}
+        </div>
+        <div className="text-xs text-white/40 mt-0.5">{sub}</div>
+      </div>
+      <div className="flex items-center gap-2">
+        {!isPremium ? (
+          <span className="text-xl opacity-70">🔒</span>
+        ) : (
+          <Toggle checked={checked} onChange={onToggle} />
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -31,15 +59,18 @@ function Card({ children }: { children: React.ReactNode }) {
   return <div className="rounded-2xl bg-white/5 ring-1 ring-white/8 overflow-hidden divide-y divide-white/5">{children}</div>;
 }
 
-function Row({ label, sub, onClick, right }: { label: string; sub?: string; onClick?: () => void; right?: React.ReactNode }) {
+function Row({ label, sub, onClick, right, isPremiumLock }: { label: string; sub?: string; onClick?: () => void; right?: React.ReactNode; isPremiumLock?: boolean }) {
   return (
     <button type="button" onClick={onClick}
       className="w-full text-left flex items-center justify-between gap-3 px-4 py-3.5 hover:bg-white/5 active:bg-white/8 transition">
       <div className="min-w-0">
-        <div className="text-sm font-medium text-white">{label}</div>
+        <div className="text-sm font-medium text-white flex items-center gap-2">
+          {label}
+          {isPremiumLock && <span className="text-[9px] bg-gradient-to-r from-rose-500 to-orange-400 px-1.5 py-0.5 rounded text-white uppercase font-bold tracking-wider">Premium</span>}
+        </div>
         {sub && <div className="mt-0.5 text-xs text-white/40">{sub}</div>}
       </div>
-      {right ?? <span className="text-white/25 text-xl shrink-0">›</span>}
+      {right ?? (isPremiumLock ? <span className="text-xl opacity-70">🔒</span> : <span className="text-white/25 text-xl shrink-0">›</span>)}
     </button>
   );
 }
@@ -50,38 +81,67 @@ export default function SettingsPage() {
   const ka = lang !== "en";
   const L = (k: string, e: string) => ka ? k : e;
 
+  // 1. ძირითადი State-ები
   const [enableDiscovery, setEnableDiscovery] = useState(true);
-  const [readReceipts, setReadReceipts] = useState(true);
-  const [photoVerifiedOnly, setPhotoVerifiedOnly] = useState(false);
+  const[readReceipts, setReadReceipts] = useState(true);
+  const[photoVerifiedOnly, setPhotoVerifiedOnly] = useState(false);
   const [distanceKm, setDistanceKm] = useState(50);
   const [ageMin, setAgeMin] = useState(18);
-  const [ageMax, setAgeMax] = useState(45);
+  const[ageMax, setAgeMax] = useState(45);
+  
+  // 2. 🌟 Premium State-ები 🌟
+  const [isPremium, setIsPremium] = useState(false);
+  const[hideAge, setHideAge] = useState(false);
+  const [hideDistance, setHideDistance] = useState(false);
+  const [incognitoMode, setIncognitoMode] = useState(false);
+
+  // 3. სისტემური State-ები
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const[saved, setSaved] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [pauseSaving, setPauseSaving] = useState(false);
-  const [scheduledDeletion, setScheduledDeletion] = useState<string | null>(null);
+  const[scheduledDeletion, setScheduledDeletion] = useState<string | null>(null);
 
+  // მონაცემების წამოღება
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const { data } = await supabase.from("profiles")
-        .select("max_distance_km,min_age,max_age,is_paused").eq("user_id", user.id).maybeSingle();
+        // დავამატე პრემიუმ ველები სელექთში
+        .select("max_distance_km, min_age, max_age, is_paused, is_premium, hide_age, hide_distance, incognito_mode")
+        .eq("user_id", user.id).maybeSingle();
+      
       if (!data) return;
+      
       if (data.max_distance_km) setDistanceKm(data.max_distance_km);
       if (data.min_age) setAgeMin(data.min_age);
       if (data.max_age) setAgeMax(data.max_age);
       setIsPaused(data.is_paused ?? false);
+      
+      // პრემიუმ მონაცემების მინიჭება
+      setIsPremium(data.is_premium ?? false);
+      setHideAge(data.hide_age ?? false);
+      setHideDistance(data.hide_distance ?? false);
+      setIncognitoMode(data.incognito_mode ?? false);
+
       const { data: del } = await supabase.from("scheduled_deletions")
         .select("scheduled_for").eq("user_id", user.id).maybeSingle();
       if (del) setScheduledDeletion(del.scheduled_for);
     })();
-  }, []);
+  },[]);
 
+  // ყველაფრის შენახვა (მათ შორის პრემიუმ სეთინგების)
   async function handleSave() {
     setSaving(true);
-    await saveProfilePatch({ max_distance_km: distanceKm, min_age: ageMin, max_age: ageMax });
+    await saveProfilePatch({ 
+      max_distance_km: distanceKm, 
+      min_age: ageMin, 
+      max_age: ageMax,
+      hide_age: hideAge,
+      hide_distance: hideDistance,
+      incognito_mode: incognitoMode
+    });
     setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2000);
   }
 
@@ -150,13 +210,23 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* PREMIUM */}
-          <div className="rounded-2xl bg-gradient-to-r from-rose-500/20 to-orange-400/20 ring-1 ring-rose-500/30 p-4 flex items-center justify-between mt-2">
-            <div>
-              <div className="font-extrabold">Shekhvdi+</div>
-              <div className="text-xs text-white/50 mt-0.5">{L("პრიორიტეტული მოწონება, ნახე ვინ მოგწონს", "Priority Likes, See who Likes you")}</div>
+          {/* 🌟 PREMIUM BANNER 🌟 */}
+          {!isPremium ? (
+            <div className="rounded-2xl bg-gradient-to-r from-rose-500/20 to-orange-400/20 ring-1 ring-rose-500/30 p-4 flex items-center justify-between mt-2">
+              <div>
+                <div className="font-extrabold">Shekhvdi+</div>
+                <div className="text-xs text-white/50 mt-0.5">{L("პრიორიტეტული მოწონება, ნახე ვინ მოგწონს", "Priority Likes, See who Likes you")}</div>
+              </div>
+              <button onClick={() => router.push("/premium")} className="rounded-full bg-rose-500 px-4 py-2 text-sm font-bold text-white shrink-0">Upgrade</button>          
             </div>
-<button onClick={() => router.push("/premium")} className="rounded-full bg-rose-500 px-4 py-2 text-sm font-bold text-white shrink-0">Upgrade</button>          </div>
+          ) : (
+            <div className="rounded-2xl bg-white/5 ring-1 ring-rose-500/30 p-4 flex items-center justify-between mt-2">
+              <div>
+                <div className="font-extrabold text-rose-400">✨ Premium Active</div>
+                <div className="text-xs text-white/50 mt-0.5">{L("თქვენ გაქვთ სრული წვდომა", "You have full access")}</div>
+              </div>
+            </div>
+          )}
 
           {/* ACCOUNT */}
           <SectionLabel>{L("ანგარიშის პარამეტრები", "Account Settings")}</SectionLabel>
@@ -164,19 +234,47 @@ export default function SettingsPage() {
             <Row label={L("ტელეფონის ნომერი", "Phone Number")} sub={L("დამატება / შეცვლა", "Add / Change")} />
             <Row label={L("ელ.ფოსტა", "Email")} sub={L("დამატება / შეცვლა", "Add / Change")} />
             <Row label={L("ენა", "Language")} sub={ka ? "ქართული" : "English"} onClick={() => {
-  const newLang = ka ? "en" : "ka";
-  localStorage.setItem("lang", newLang);
-  window.dispatchEvent(new Event("app:lang"));
-  window.location.reload();
-}} right={
-  <div className="flex items-center gap-2">
-    <span className={`text-xs font-bold ${ka ? "text-rose-400" : "text-white/30"}`}>KA</span>
-    <span className="text-white/20">/</span>
-    <span className={`text-xs font-bold ${!ka ? "text-rose-400" : "text-white/30"}`}>EN</span>
-  </div>
-} />
+              const newLang = ka ? "en" : "ka";
+              localStorage.setItem("lang", newLang);
+              window.dispatchEvent(new Event("app:lang"));
+              window.location.reload();
+            }} right={
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-bold ${ka ? "text-rose-400" : "text-white/30"}`}>KA</span>
+                <span className="text-white/20">/</span>
+                <span className={`text-xs font-bold ${!ka ? "text-rose-400" : "text-white/30"}`}>EN</span>
+              </div>
+            } />
             <Row label={L("პროფილის რედაქტირება", "Edit Profile")} onClick={() => router.push("/profile/edit")} />
-              
+          </Card>
+
+          {/* 🌟 PRIVACY & PREMIUM CONTROLS 🌟 */}
+          <SectionLabel>{L("კონფიდენციალურობა (Premium)", "Privacy & Control")}</SectionLabel>
+          <Card>
+            <PremiumToggleRow 
+              label={L("ინკოგნიტო რეჟიმი", "Incognito Mode")}
+              sub={L("გამოუჩნდი მხოლოდ მათ, ვინც მოგწონს", "Only show me to people I like")}
+              isPremium={isPremium}
+              checked={incognitoMode}
+              onToggle={setIncognitoMode}
+              onPaywall={() => router.push("/premium")}
+            />
+            <PremiumToggleRow 
+              label={L("ასაკის დამალვა", "Hide My Age")}
+              sub={L("არ გამოაჩინო ასაკი პროფილზე", "Don't show age on my profile")}
+              isPremium={isPremium}
+              checked={hideAge}
+              onToggle={setHideAge}
+              onPaywall={() => router.push("/premium")}
+            />
+            <PremiumToggleRow 
+              label={L("მანძილის დამალვა", "Hide My Distance")}
+              sub={L("არ გამოაჩინო დისტანცია", "Don't show how far away I am")}
+              isPremium={isPremium}
+              checked={hideDistance}
+              onToggle={setHideDistance}
+              onPaywall={() => router.push("/premium")}
+            />
           </Card>
 
           {/* PAUSE */}
@@ -201,7 +299,6 @@ export default function SettingsPage() {
           {/* DISCOVERY */}
           <SectionLabel>{L("ძიების პარამეტრები", "Discovery Settings")}</SectionLabel>
           <Card>
-            {/* Location row */}
             <div className="px-4 py-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-rose-500/15 flex items-center justify-center shrink-0">
@@ -217,58 +314,37 @@ export default function SettingsPage() {
               <span className="text-white/25 text-xl">›</span>
             </div>
 
-            {/* Distance slider */}
             <div className="px-4 py-4">
               <div className="flex justify-between text-sm mb-3">
                 <span className="text-white/70 font-medium">{L("მაქსიმალური დისტანცია", "Maximum Distance")}</span>
                 <span className="font-bold text-white">{distanceKm} km</span>
               </div>
-              <input
-                type="range" min={1} max={200} value={distanceKm}
-                onChange={e => setDistanceKm(+e.target.value)}
+              <input type="range" min={1} max={200} value={distanceKm} onChange={e => setDistanceKm(+e.target.value)}
                 className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
-                style={{
-                  background: `linear-gradient(to right, #f43f5e ${distanceKm / 2}%, rgba(255,255,255,0.1) ${distanceKm / 2}%)`,
-                  accentColor: "#f43f5e"
-                }}
-              />
-              <div className="flex justify-between text-xs text-white/30 mt-1.5">
-                <span>1 km</span>
-                <span>200 km</span>
-              </div>
+                style={{ background: `linear-gradient(to right, #f43f5e ${distanceKm / 2}%, rgba(255,255,255,0.1) ${distanceKm / 2}%)`, accentColor: "#f43f5e" }} />
             </div>
 
-            {/* Age range */}
             <div className="px-4 py-4">
               <div className="flex justify-between text-sm mb-3">
                 <span className="text-white/70 font-medium">{L("ასაკის დიაპაზონი", "Age Range")}</span>
                 <span className="font-bold text-white">{ageMin}–{ageMax}</span>
               </div>
-              <input
-                type="range" min={18} max={80} value={ageMin}
-                onChange={e => setAgeMin(Math.min(+e.target.value, ageMax - 1))}
+              <input type="range" min={18} max={80} value={ageMin} onChange={e => setAgeMin(Math.min(+e.target.value, ageMax - 1))}
                 className="w-full h-1.5 rounded-full appearance-none cursor-pointer mb-3"
-               style={{
-  background: `linear-gradient(to right, #f43f5e ${((ageMin - 18) / 62) * 100}%, rgba(255,255,255,0.1) ${((ageMin - 18) / 62) * 100}%)`,
-  accentColor: "#f43f5e"
-}}
-              />
-              <input
-                type="range" min={18} max={80} value={ageMax}
-                onChange={e => setAgeMax(Math.max(+e.target.value, ageMin + 1))}
+                style={{ background: `linear-gradient(to right, #f43f5e ${((ageMin - 18) / 62) * 100}%, rgba(255,255,255,0.1) ${((ageMin - 18) / 62) * 100}%)`, accentColor: "#f43f5e" }} />
+              <input type="range" min={18} max={80} value={ageMax} onChange={e => setAgeMax(Math.max(+e.target.value, ageMin + 1))}
                 className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
-              style={{
-  background: `linear-gradient(to right, #f43f5e ${((ageMax - 18) / 62) * 100}%, rgba(255,255,255,0.1) ${((ageMax - 18) / 62) * 100}%)`,
-  accentColor: "#f43f5e"
-}}
-              />
-              <div className="flex justify-between text-xs text-white/30 mt-1.5">
-                <span>18</span>
-                <span>80</span>
-              </div>
+                style={{ background: `linear-gradient(to right, #f43f5e ${((ageMax - 18) / 62) * 100}%, rgba(255,255,255,0.1) ${((ageMax - 18) / 62) * 100}%)`, accentColor: "#f43f5e" }} />
             </div>
+            
+            {/* 🌟 Advanced Filters Teaser 🌟 */}
+            <Row 
+              label={L("გაფართოებული ფილტრები", "Advanced Filters")} 
+              sub={L("სიმაღლე, რელიგია და სხვა", "Height, religion & more")} 
+              onClick={() => router.push("/premium")} 
+              isPremiumLock={true} 
+            />
 
-            {/* Discovery toggle */}
             <div className="px-4 py-3 flex items-center justify-between">
               <div>
                 <div className="text-sm font-medium">{L("ძიების ჩართვა", "Enable Discovery")}</div>
@@ -297,37 +373,14 @@ export default function SettingsPage() {
             </div>
           </Card>
 
-          {/* CONTACT */}
+          {/* CONTACT & LEGAL... */}
           <SectionLabel>{L("კონტაქტი", "Contact Us")}</SectionLabel>
           <Card>
-<Row label={L("დახმარება", "Help & Support")} onClick={() => router.push("/help")} />
+            <Row label={L("დახმარება", "Help & Support")} onClick={() => router.push("/help")} />
             <Row label={L("პრობლემის შეტყობინება", "Report a problem")} onClick={() => {}} />
           </Card>
 
-          {/* COMMUNITY */}
-          <SectionLabel>{L("საზოგადოება", "Community")}</SectionLabel>
-          <Card>
-            <Row label={L("საზოგადოების წესები", "Community Guidelines")} onClick={() => {}} />
-            <Row label={L("უსაფრთხოების რჩევები", "Safety Tips")} onClick={() => {}} />
-            <Row label={L("უსაფრთხოების ცენტრი", "Safety Center")} onClick={() => {}} />
-          </Card>
-
-          {/* PRIVACY */}
-          <SectionLabel>{L("კონფიდენციალურობა", "Privacy")}</SectionLabel>
-          <Card>
-            <Row label={L("ქუქი-პოლიტიკა", "Cookie Policy")} onClick={() => router.push("/legal/cookies")} />
-            <Row label={L("კონფიდენციალურობის პოლიტიკა", "Privacy Policy")} onClick={() => router.push("/legal/privacy")} />
-            <Row label={L("კონფიდენციალურობის პარამეტრები", "Privacy Preferences")} onClick={() => router.push("/legal/privacy-prefs")} />
-          </Card>
-
-          {/* LEGAL */}
-          <SectionLabel>{L("სამართლებრივი", "Legal")}</SectionLabel>
-          <Card>
-            <Row label={L("ლიცენზიები", "Licenses")} onClick={() => router.push("/legal/licenses")} />
-            <Row label={L("გამოყენების პირობები", "Terms of Service")} onClick={() => router.push("/legal/terms")} />
-          </Card>
-
-          {/* SAVE */}
+          {/* SAVE BUTTON */}
           <button type="button" onClick={handleSave} disabled={saving}
             className="mt-5 w-full rounded-2xl bg-rose-500 py-4 font-bold text-white disabled:opacity-60 active:scale-[0.99] transition">
             {saved ? "✓ " + L("შენახულია!", "Saved!") : saving ? "..." : L("შენახვა", "Save")}
@@ -339,7 +392,6 @@ export default function SettingsPage() {
             {L("გასვლა", "Logout")}
           </button>
 
-          {/* VERSION + LOGO */}
           <div className="flex flex-col items-center py-6 gap-2">
             <div className="w-12 h-12 rounded-full bg-gradient-to-b from-rose-500 to-orange-400" />
             <div className="text-xs text-white/25">{L("ვერსია", "Version")} 1.0.0</div>
