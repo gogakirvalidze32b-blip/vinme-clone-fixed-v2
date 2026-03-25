@@ -57,12 +57,12 @@ export default function TinderCard({
   const lang = getLang();
   const ka = lang !== "en";
  
-  const [x, setX] = useState(0);
+  const[x, setX] = useState(0);
   const [y, setY] = useState(0);
   const [rot, setRot] = useState(0);
   const[dragging, setDragging] = useState(false);
   const[animating, setAnimating] = useState(false);
-  const [otherUser, setOtherUser] = useState<any>(null);
+  const[otherUser, setOtherUser] = useState<any>(null);
   const[superLikeAnim, setSuperLikeAnim] = useState(false);
  
   const startX = useRef(0);
@@ -139,11 +139,11 @@ export default function TinderCard({
     const quick = Date.now() - downAt.current < 200;
     const thr = quick ? threshold * 0.7 : threshold;
     
-    // 🔥 შესწორება: თუ 0 აქვს, ჯერ აბრუნებს ბარათს ცენტრში, და მერე ხსნის Paywall-ს!
+    // 🔥 შესწორება: თუ 0 აქვს, ჯერ აბრუნებს ბარათს ცენტრში და მერე ხსნის Paywall-ს
     if (isSuperDir) {
       if (superLikesLeft > 0) return void finish("super_like");
       else {
-        setX(0); setY(0); setRot(0); 
+        setX(0); setY(0); setRot(0);
         onSuperLike?.(); 
         return;
       }
@@ -157,16 +157,15 @@ export default function TinderCard({
   }
  
   return (
-    // ფონი გახდა ოდნავ რბილი შავი, რომ ფოტოს გრადიენტს შეერწყას
-    <div className="relative w-full bg-[#11141a] text-white flex flex-col h-[100dvh]">
+    <div className="relative w-full text-white flex flex-col h-[100dvh]">
  
       {/* CARD */}
       <div className="flex-1 w-full px-2 pt-2 flex justify-center items-center overflow-hidden">
         <div
-          // 🔥 გაიზარდა სიგანე max-w-lg (რაც კომპიუტერზე უფრო განიერს გამოაჩენს)
-          className="relative overflow-hidden bg-zinc-900 shadow-2xl w-full h-full max-w-lg"
+          // 🔥 გაიზარდა max-w-[480px] კომპიუტერისთვის
+          className="relative overflow-hidden bg-black shadow-2xl w-full h-full max-w-[480px]"
           style={{
-            borderRadius: "20px",
+            borderRadius: "24px", // 🔥 ლამაზი მომრგვალება
             transform: `translateX(${x}px) translateY(${y}px) rotate(${rot}deg)`,
             transition: dragging ? "none" : "transform 200ms ease-out",
             willChange: "transform",
@@ -187,11 +186,11 @@ export default function TinderCard({
                 onDragStart={e => e.preventDefault()}
                 sizes="(max-width: 512px) 100vw, 512px"
                 priority unoptimized={false} />
-            : <div className="absolute inset-0 bg-zinc-800 flex items-center justify-center text-7xl">👤</div>
+            : <div className="absolute inset-0 bg-zinc-900 flex items-center justify-center text-7xl">👤</div>
           }
  
-          {/* 🔥 შეუმჩნეველი გადაბმა: მუქი ფონიდან გამჭვირვალეზე რბილი გადასვლა */}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#11141a] via-[#11141a]/60 to-transparent pointer-events-none" />
+          {/* 🔥 შეუმჩნეველი გადაბმა: შავი რბილი გრადიენტი, რომელიც ფოტოს ეკვრის */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
  
           {dir === "right" && (
             <div className="absolute top-10 left-5 z-30" style={{ opacity: Math.min(progress * 1.8, 1), transform: "rotate(-22deg)" }}>
@@ -218,23 +217,23 @@ export default function TinderCard({
             </div>
           )}
  
-          <div className="absolute bottom-0 left-0 right-0 z-20 px-4 pb-4">
+          <div className="absolute bottom-0 left-0 right-0 z-20 px-5 pb-5">
             <div className="flex items-end justify-between">
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-[1.75rem] font-black text-white leading-tight drop-shadow-lg">{user.nickname}</h2>
+                  <h2 className="text-[1.8rem] font-black text-white leading-tight drop-shadow-md">{user.nickname}</h2>
                   <span className="text-[1.6rem] font-light text-white/90">{user.age}</span>
                   {user.recentlyActive && (
                     <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-black text-black">●</span>
                   )}
                 </div>
-                <p className="text-[13px] text-white/75 mt-0.5 drop-shadow flex items-center gap-1">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 opacity-80">
+                <p className="text-[13.5px] text-white/80 mt-1 drop-shadow flex items-center gap-1.5 font-medium">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 opacity-80">
                     <path d="M10 20S3 10.87 3 7a7 7 0 1 1 14 0c0 3.87-7 13-7 13zm0-11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/>
                   </svg>
                   {user.city || (ka ? "უცნობი ადგილი" : "Unknown location")}
                   {user.distanceKm != null && (
-                    <span className="text-white/55 ml-1">
+                    <span className="text-white/60 ml-1">
                       · {user.distanceKm < 1
                           ? (ka ? "1 კმ-ზე ნაკლები" : "Less than 1 km")
                           : `${user.distanceKm} ${ka ? "კმ" : "km away"}`}
@@ -248,7 +247,7 @@ export default function TinderCard({
                 onClick={onOpenProfile}
                 onPointerDown={e => e.stopPropagation()} 
                 onPointerUp={e => e.stopPropagation()}
-                className="w-10 h-10 mb-1 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/50 transition shadow-xl shrink-0 border border-white/10"
+                className="w-10 h-10 mb-1 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/50 transition shadow-xl shrink-0 border border-white/20"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="18 15 12 9 6 15"></polyline>
@@ -261,8 +260,8 @@ export default function TinderCard({
       </div>
 
       {/* ACTION BUTTONS */}
-      <div className="shrink-0 flex items-center justify-center gap-4 py-2"
-        style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 72px)" }}
+      <div className="shrink-0 flex items-center justify-center gap-4 py-3"
+        style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 80px)" }}
         onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()}>
  
         <ActionBtn size="sm" disabled={animating} color="#F7BB00" onClick={() => onRewind && onRewind()}>
@@ -329,16 +328,16 @@ function ActionBtn({ size, color, onClick, disabled, children, style, badge }: {
   disabled?: boolean; children: React.ReactNode;
   style?: React.CSSProperties; badge?: string;
 }) {
-  const dim = size === "lg" ? "w-14 h-14" : "w-11 h-11";
+  const dim = size === "lg" ? "w-[60px] h-[60px]" : "w-[44px] h-[44px]";
   return (
     <div className="relative">
       <button type="button" onClick={onClick} disabled={disabled}
         className={`${dim} rounded-full flex items-center justify-center shadow-lg disabled:opacity-30 active:scale-90 transition-all duration-150`}
-        style={{ ...style, background: `${color}20`, borderWidth: 2, borderStyle: "solid", borderColor: `${color}80`, color, backdropFilter: "blur(12px)" }}>
+        style={{ ...style, background: `${color}15`, borderWidth: 2, borderStyle: "solid", borderColor: `${color}80`, color, backdropFilter: "blur(12px)" }}>
         {children}
       </button>
       {badge && (
-        <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black text-white shadow"
+        <div className="absolute -top-1 -right-1 w-[18px] h-[18px] rounded-full flex items-center justify-center text-[10px] font-black text-white shadow-md"
           style={{ background: color }}>
           {badge}
         </div>
@@ -350,11 +349,11 @@ function ActionBtn({ size, color, onClick, disabled, children, style, badge }: {
 function TinderEmpty({ onOpenProfile, lang }: { onOpenProfile?: () => void; lang: "ka" | "en" }) {
   const router = useRouter();
   return (
-    <div className="w-full flex flex-col items-center justify-center bg-[#11141a] text-white px-8 gap-4" style={{ height: "100dvh" }}>
+    <div className="w-full flex flex-col items-center justify-center text-white px-8 gap-4" style={{ height: "100dvh" }}>
       <div className="text-6xl animate-bounce">😅</div>
       <h2 className="text-xl font-black text-center">{t("no_more", lang)}</h2>
       <p className="text-sm text-white/40 text-center">{t("no_more_sub", lang)}</p>
-      <button onClick={() => router.push("/feed")}
+      <button onClick={() => window.location.reload()}
         className="mt-2 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 px-8 py-3 font-bold text-white shadow-lg active:scale-95 transition">
         {t("refresh", lang)}
       </button>

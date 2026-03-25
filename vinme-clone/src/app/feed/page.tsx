@@ -24,7 +24,6 @@ export default function FeedPage() {
   const lang = getLang();
   const L = (ka: string, en: string) => (lang === "en" ? en : ka);
 
-  // 🚀 ქეშირებული State-ები (რათა ეგრევე ჩაიტვირთოს)
   const[me, setMe] = useState<any>(() => {
     if (typeof window !== "undefined") {
       const cached = localStorage.getItem("feed_me_cache");
@@ -60,7 +59,7 @@ export default function FeedPage() {
   const[showMatch, setShowMatch] = useState(false);
   const[matchedUser, setMatchedUser] = useState<any>(null);
 
-  const [superLikesLeft, setSuperLikesLeft] = useState(0); 
+  const[superLikesLeft, setSuperLikesLeft] = useState(0); 
   const[firstImpressionsLeft, setFirstImpressionsLeft] = useState(0);
 
   const[showFIInput, setShowFIInput] = useState(false);
@@ -77,21 +76,33 @@ export default function FeedPage() {
   const loadingTopRef = useRef(false);
   const meRef = useRef<any>(me);
 
-  // 🔥 SIDEBACK: ეკრანის კიდიდან სვაიპით მოდალების/ფანჯრების დახურვა
-  const touchStartX = useRef(0);
-  const handleTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    const touchEndX = e.changedTouches[0].clientX;
-    // თუ მარცხენა კიდიდან გამოწია თითი მინიმუმ 100px-ით
-    if (touchStartX.current < 40 && touchEndX - touchStartX.current > 100) {
-      // ვამოწმებთ, არის თუ არა რაიმე ფანჯარა ღია და ვხურავთ
-      if (showSLPaywall) setShowSLPaywall(false);
-      else if (showFIPaywall) setShowFIPaywall(false);
-      else if (showFIInput) setShowFIInput(false);
-      else if (expandedProfile) setExpandedProfile(false);
-      else if (showMatch) { setShowMatch(false); setMatchId(null); setMatchedUser(null); }
+  // 🔥 SIDEBACK LOGIC (Browser History-ს გამოყენებით ნატიური უკან დაბრუნება)
+  const openOverlay = useCallback((setter: React.Dispatch<React.SetStateAction<boolean>>) => {
+    window.history.pushState({ isModal: true }, "");
+    setter(true);
+  },[]);
+
+  const closeOverlay = useCallback((setter: React.Dispatch<React.SetStateAction<boolean>>) => {
+    setter(false);
+    if (window.history.state?.isModal) {
+      window.history.back();
     }
-  };
+  },[]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      // ეკრანის გვერდიდან გამოწევისას (ან Back ღილაკზე) ყველა ფანჯარა იხურება
+      setShowSLPaywall(false);
+      setShowFIPaywall(false);
+      setShowFIInput(false);
+      setExpandedProfile(false);
+      setShowMatch(false);
+      setMatchId(null);
+      setMatchedUser(null);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  },[]);
 
   const loadMe = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
@@ -132,7 +143,6 @@ export default function FeedPage() {
     setTop(data?.[0] ?? null);
     setNextTop(data?.[1] ?? null);
     
-    // ქეშის განახლება
     localStorage.setItem("feed_top_cache", JSON.stringify(data?.[0] || null));
     localStorage.setItem("feed_next_cache", JSON.stringify(data?.[1] || null));
 
@@ -169,7 +179,7 @@ export default function FeedPage() {
     advanceCard();
     await supabase.from("swipes").insert({ from_id: me.user_id, to_id: cur.user_id, action: "like" });
     const mid = await checkAndCreateMatch(me.user_id, cur.user_id);
-    if (mid) { setMatchedUser(cur); setMatchId(mid); setShowMatch(true); }
+    if (mid) { setMatchedUser(cur); setMatchId(mid); openOverlay(setShowMatch); }
     loadTop(me);
   };
 
@@ -202,14 +212,14 @@ export default function FeedPage() {
       await supabase.from("swipes").insert({ from_id: me.user_id, to_id: cur.user_id, action: "super_like" });
       setSuperLikesLeft((prev) => prev - 1);
       const mid = await checkAndCreateMatch(me.user_id, cur.user_id);
-      if (mid) { setMatchedUser(cur); setMatchId(mid); setShowMatch(true); }
+      if (mid) { setMatchedUser(cur); setMatchId(mid); openOverlay(setShowMatch); }
       loadTop(me);
     } else {
-      setShowSLPaywall(true);
+      openOverlay(setShowSLPaywall);
     }
   };
 
-  const handleOpenMessageModal = () => setShowFIInput(true);
+  const handleOpenMessageModal = () => openOverlay(setShowFIInput);
 
   const handleSendMessage = async () => {
     if (!msgText.trim()) return;
@@ -220,20 +230,20 @@ export default function FeedPage() {
       await supabase.from("swipes").insert({ from_id: me.user_id, to_id: cur.user_id, action: "like" });
       await supabase.from("messages").insert({ from_id: me.user_id, to_id: cur.user_id, message: msgText });
       setFirstImpressionsLeft((prev) => prev - 1);
-      setShowFIInput(false); 
+      closeOverlay(setShowFIInput);
       setMsgText("");
       const mid = await checkAndCreateMatch(me.user_id, cur.user_id);
-      if (mid) { setMatchedUser(cur); setMatchId(mid); setShowMatch(true); }
+      if (mid) { setMatchedUser(cur); setMatchId(mid); openOverlay(setShowMatch); }
       loadTop(me);
     } else {
-      setShowFIInput(false); 
-      setShowFIPaywall(true);
+      closeOverlay(setShowFIInput);
+      setTimeout(() => openOverlay(setShowFIPaywall), 50);
     }
   };
 
   const handleOpenProfile = async () => {
     if (!top?.user_id) return;
-    setExpandedProfile(true);
+    openOverlay(setExpandedProfile);
     const { data } = await supabase.from("profiles").select("bio, intent, city").eq("user_id", top.user_id).single();
     if (data) setLiveProfileData(data);
   };
@@ -276,19 +286,14 @@ export default function FeedPage() {
     { id: 10, count: 10, price: "2.49", total: 24.90, label: L("პოპულარული", "Popular") },
   ];
 
-  if (isInitialLoad) return <div className="bg-black min-h-[100dvh]" />;
+  if (isInitialLoad) return <div className="bg-[#0b0e14] min-h-[100dvh]" />;
 
   const displayBio = liveProfileData?.bio !== undefined ? liveProfileData.bio : top?.bio;
   const displayIntent = liveProfileData?.intent !== undefined ? liveProfileData.intent : top?.intent;
   const displayCity = liveProfileData?.city !== undefined ? liveProfileData.city : top?.city;
 
   return (
-    // 🔥 აქ დაემატა overscroll-x-none და touch ივენთები
-    <div 
-      className="bg-[#11141a] min-h-screen flex justify-center overflow-hidden overscroll-x-none"
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-    >
+    <div className="bg-[#0b0e14] min-h-screen flex justify-center overflow-hidden overscroll-none">
       <div className="w-full max-w-lg relative" style={{ height: "100dvh" }}>
         
         <TinderCard
@@ -306,7 +311,7 @@ export default function FeedPage() {
           onOpenProfile={handleOpenProfile} 
           externalMatchId={matchId}
           externalShowMatch={showMatch}
-          onCloseMatch={() => { setShowMatch(false); setMatchId(null); setMatchedUser(null); }}
+          onCloseMatch={() => { closeOverlay(setShowMatch); setMatchId(null); setMatchedUser(null); }}
           onOpenChat={() => matchId && router.push(`/chat/${matchId}`)}
           matchedUserName={matchedUser?.first_name ?? matchedUser?.nickname ?? undefined}
           matchedUserPhoto={matchedUser?.photo1_url ?? undefined}
@@ -315,13 +320,13 @@ export default function FeedPage() {
 
         {/* ================= პროფილის ჩამოშლა ================= */}
         {expandedProfile && cardUser && (
-          <div className="absolute inset-0 z-50 bg-[#161a23] overflow-y-auto animate-in slide-in-from-bottom-full duration-300 pb-32">
+          <div className="absolute inset-0 z-50 bg-[#11141a] overflow-y-auto animate-in slide-in-from-bottom-full duration-300 pb-32">
             <div className="relative">
               <img src={cardUser.photo_url || ""} className="w-full h-[65vh] object-cover" alt="" />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#161a23] via-[#161a23]/30 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#11141a] via-[#11141a]/40 to-transparent" />
               
               <button 
-                onClick={() => setExpandedProfile(false)} 
+                onClick={() => closeOverlay(setExpandedProfile)} 
                 className="absolute bottom-4 right-6 w-10 h-10 bg-white/10 border border-white/20 backdrop-blur-md text-white rounded-full flex items-center justify-center shadow-lg z-10 hover:bg-white/20 transition"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -339,7 +344,7 @@ export default function FeedPage() {
             <div className="px-6 pt-6 space-y-7">
               <div>
                 <h3 className="text-white/50 font-semibold text-[14px] mb-3">{L("ვეძებ", "Looking for")}</h3>
-                <div className="inline-flex items-center gap-2 bg-[#212631] px-4 py-2 rounded-xl text-white text-[15px]">
+                <div className="inline-flex items-center gap-2 bg-[#1a1f2b] px-4 py-2 rounded-xl text-white text-[15px]">
                   <span>💝</span> {displayIntent || "short_term"}
                 </div>
               </div>
@@ -370,9 +375,9 @@ export default function FeedPage() {
 
         {/* ================= First Impressions მოდალი ================= */}
         {showFIInput && cardUser && (
-          <div className="absolute inset-0 z-[60] bg-[#0b101a] flex flex-col animate-in fade-in slide-in-from-bottom-4">
+          <div className="absolute inset-0 z-[60] bg-[#0b0e14] flex flex-col animate-in fade-in slide-in-from-bottom-4">
             <div className="p-4 flex items-center justify-between">
-              <button onClick={() => setShowFIInput(false)} className="text-white/50 text-2xl font-bold">✕</button>
+              <button onClick={() => closeOverlay(setShowFIInput)} className="text-white/50 text-2xl font-bold">✕</button>
               <div className="w-6 h-6 flex items-center justify-center rounded-full bg-[#1e293b] text-blue-500 font-bold text-xs">{firstImpressionsLeft}</div>
             </div>
             <div className="px-6 flex flex-col flex-1 pb-6">
@@ -389,7 +394,7 @@ export default function FeedPage() {
                 <div className="absolute bottom-5 left-5 font-bold text-2xl text-white drop-shadow-md">{cardUser.nickname}, {cardUser.age}</div>
               </div>
               <div className="mt-auto pt-6">
-                <div className="flex bg-[#1e293b] rounded-full p-1 pl-4 items-center">
+                <div className="flex bg-[#1a1f2b] rounded-full p-1 pl-4 items-center">
                   <input type="text" value={msgText} onChange={(e) => setMsgText(e.target.value)} placeholder={L("შენი მესიჯი", "Your message")} className="flex-1 bg-transparent text-white text-[15px] outline-none placeholder-zinc-500" autoFocus />
                   <button onClick={handleSendMessage} disabled={!msgText.trim()} className={`font-bold px-5 py-3 rounded-full transition-colors ${msgText.trim() ? "text-blue-500" : "text-zinc-600"}`}>
                     {L("გაგზავნა", "Send")}
@@ -402,10 +407,10 @@ export default function FeedPage() {
 
         {/* ================= First Impressions Paywall ================= */}
         {showFIPaywall && (
-          <div className="absolute inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-end animate-in fade-in">
-            <div className="bg-[#0f172a] w-full rounded-t-3xl pt-6 pb-8 px-5 shadow-2xl slide-in-from-bottom-full">
+          <div className="absolute inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-end animate-in fade-in">
+            <div className="bg-[#11141a] w-full rounded-t-3xl pt-6 pb-8 px-5 shadow-2xl slide-in-from-bottom-full border-t border-white/5">
               <div className="flex justify-between items-center mb-4">
-                <button onClick={() => setShowFIPaywall(false)} className="text-white/50 text-2xl font-bold">✕</button>
+                <button onClick={() => closeOverlay(setShowFIPaywall)} className="text-white/50 text-2xl font-bold">✕</button>
                 <div className="text-blue-500 font-bold flex items-center gap-2">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
                   {L("შეიძინე პირველი შთაბეჭდილება", "Get First Impressions")}
@@ -420,7 +425,7 @@ export default function FeedPage() {
                   const isSelected = selectedFIPack === pack.id;
                   return (
                     <button key={pack.id} onClick={() => setSelectedFIPack(pack.id)} 
-                      className={`w-full relative flex justify-between items-center p-4 rounded-xl border-2 transition ${isSelected ? "border-blue-500 bg-blue-500/10" : "border-zinc-700 bg-zinc-800"}`}>
+                      className={`w-full relative flex justify-between items-center p-4 rounded-xl border-2 transition ${isSelected ? "border-blue-500 bg-blue-500/10" : "border-white/5 bg-[#1a1f2b]"}`}>
                       {pack.label && <span className={`absolute -top-2.5 left-4 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${isSelected ? "bg-blue-500 text-white" : "bg-zinc-700 text-zinc-300"}`}>{pack.label}</span>}
                       {pack.save && <span className="absolute top-4 right-4 text-[11px] font-bold text-white bg-white/10 px-2 py-0.5 rounded-md">{L("დაზოგე", "Save")} {pack.save}</span>}
                       <span className={`font-bold text-[16px] ${isSelected ? "text-white" : "text-zinc-200"}`}>{pack.count} First Impressions</span>
@@ -430,10 +435,10 @@ export default function FeedPage() {
                 })}
               </div>
               <div className="text-center mb-6 relative">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-700"></div></div>
-                <span className="bg-[#0f172a] px-4 text-xs font-bold text-zinc-500 uppercase relative">or</span>
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/5"></div></div>
+                <span className="bg-[#11141a] px-4 text-xs font-bold text-zinc-500 uppercase relative">or</span>
               </div>
-              <button onClick={() => router.push("/premium")} className="w-full bg-[#1e293b] border border-zinc-700 rounded-xl p-4 flex justify-between items-center mb-6 hover:bg-zinc-800 transition">
+              <button onClick={() => router.push("/premium")} className="w-full bg-[#1a1f2b] border border-white/5 rounded-xl p-4 flex justify-between items-center mb-6 hover:bg-white/5 transition">
                 <div className="flex flex-col items-start">
                   <span className="text-[10px] font-bold text-white/50 uppercase mb-1">{L("შეიცავს 3 უფასოს კვირაში", "Includes 3 free First Impressions a week")}</span>
                   <div className="flex items-center gap-2"><span className="text-zinc-300 text-lg">🔥</span><span className="font-bold text-white">Get Shekhvdi Plus</span></div>
@@ -441,7 +446,7 @@ export default function FeedPage() {
                 <span className="bg-zinc-700 px-4 py-1.5 rounded-full text-xs font-bold">Select</span>
               </button>
               <button onClick={() => router.push(`/checkout?product=first_impression&pack=${selectedFIPack}`)} 
-                className="w-full bg-blue-500 text-white font-bold text-[16px] py-4 rounded-full active:scale-95 transition">
+                className="w-full bg-blue-500 text-white font-bold text-[16px] py-4 rounded-full active:scale-95 transition shadow-lg shadow-blue-500/20">
                 {L(`გაგრძელება ${fiPackages.find(p=>p.id===selectedFIPack)?.total.toFixed(2)} ₾`, `Continue for ${fiPackages.find(p=>p.id===selectedFIPack)?.total.toFixed(2)} ₾ total`)}
               </button>
             </div>
@@ -450,10 +455,10 @@ export default function FeedPage() {
 
         {/* ================= Super Like Paywall ================= */}
         {showSLPaywall && (
-          <div className="absolute inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-end animate-in fade-in">
-            <div className="bg-[#0f172a] w-full rounded-t-3xl pt-6 pb-8 px-5 shadow-2xl slide-in-from-bottom-full">
+          <div className="absolute inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-end animate-in fade-in">
+            <div className="bg-[#11141a] w-full rounded-t-3xl pt-6 pb-8 px-5 shadow-2xl slide-in-from-bottom-full border-t border-white/5">
               <div className="flex justify-between items-center mb-4">
-                <button onClick={() => setShowSLPaywall(false)} className="text-white/50 text-2xl font-bold">✕</button>
+                <button onClick={() => closeOverlay(setShowSLPaywall)} className="text-white/50 text-2xl font-bold">✕</button>
                 <div className="text-blue-400 font-bold flex items-center gap-2">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
                   {L("შეიძინე Super Likes", "Get Super Likes")}
@@ -468,13 +473,13 @@ export default function FeedPage() {
                   const isSelected = selectedSLPack === pack.id;
                   return (
                     <div key={pack.id} onClick={() => setSelectedSLPack(pack.id)} 
-                      className={`relative flex-1 rounded-2xl p-5 flex flex-col justify-between h-44 cursor-pointer transition border-2 ${isSelected ? "border-blue-500 bg-blue-500/10" : "border-zinc-700 bg-zinc-800"}`}>
+                      className={`relative flex-1 rounded-2xl p-5 flex flex-col justify-between h-44 cursor-pointer transition border-2 ${isSelected ? "border-blue-500 bg-blue-500/10" : "border-white/5 bg-[#1a1f2b]"}`}>
                       {pack.label && <span className={`absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] font-bold px-3 py-0.5 rounded-full uppercase whitespace-nowrap ${isSelected ? "bg-blue-500 text-white" : "bg-zinc-700 text-zinc-300"}`}>{pack.label}</span>}
                       <span className={`text-[16px] font-bold text-center mt-2 ${isSelected ? "text-white" : "text-zinc-200"}`}>{pack.count} Super Likes</span>
                       <div className="mt-auto">
                         <div className={`text-center text-[13px] mb-3 ${isSelected ? "text-blue-400" : "text-zinc-400"}`}>{pack.price} {L("₾/ცალი", "₾/ea")}</div>
                         <button onClick={(e) => { e.stopPropagation(); router.push(`/checkout?product=super_like&pack=${pack.id}`); }}
-                          className={`w-full font-bold py-2 rounded-full text-sm transition ${isSelected ? "bg-blue-500 text-white hover:bg-blue-600" : "bg-[#1e293b] text-blue-500 hover:bg-[#283548]"}`}>
+                          className={`w-full font-bold py-2 rounded-full text-sm transition ${isSelected ? "bg-blue-500 text-white hover:bg-blue-600" : "bg-white/10 text-blue-500 hover:bg-white/20"}`}>
                           {L("არჩევა", "Select")}
                         </button>
                       </div>
@@ -483,10 +488,10 @@ export default function FeedPage() {
                 })}
               </div>
               <div className="text-center mb-6 relative">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-700"></div></div>
-                <span className="bg-[#0f172a] px-4 text-xs font-bold text-zinc-500 uppercase relative">or</span>
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/5"></div></div>
+                <span className="bg-[#11141a] px-4 text-xs font-bold text-zinc-500 uppercase relative">or</span>
               </div>
-              <button onClick={() => router.push("/premium")} className="w-full bg-gradient-to-r from-amber-400 to-yellow-600 rounded-xl p-4 flex justify-between items-center active:scale-95 transition">
+              <button onClick={() => router.push("/premium")} className="w-full bg-gradient-to-r from-amber-400 to-yellow-600 rounded-xl p-4 flex justify-between items-center active:scale-95 transition shadow-lg shadow-amber-500/20">
                 <div className="flex flex-col items-start">
                   <span className="text-[10px] font-bold text-black/70 uppercase mb-1">{L("შეიცავს 2 უფასო Super Like-ს კვირაში", "Includes 2 free Super Likes every week")}</span>
                   <div className="flex items-center gap-2"><span className="text-black text-xl">💛</span><span className="font-bold text-black text-[16px]">Get Shekhvdi Plus</span></div>

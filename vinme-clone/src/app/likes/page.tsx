@@ -1,6 +1,6 @@
 "use client";
  
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { getLang } from "@/lib/i18n";
@@ -34,27 +34,16 @@ export default function LikesPage() {
     return[];
   });
 
-  // 🔥 აქ შეიცვალა ლოგიკა: თუ likeCount უკვე 0-ია ქეშში, აღარ ვხატავთ სკელეტონებს!
+  // 🔥 თუ 0-ია ეგრევე ვთიშავთ ლოუდინგს
   const[loading, setLoading] = useState(() => {
     if (typeof window !== "undefined") {
       const cachedCount = localStorage.getItem("likes_count_cache");
       const cachedList = localStorage.getItem("likes_list_cache");
-      if (cachedCount === "0") return false; // პირდაპირ ვთიშავთ ლოდინს თუ 0-ია
+      if (cachedCount === "0") return false; 
       return !cachedList;
     }
     return true;
   });
-
-  // 🔥 SIDEBACK: ეკრანის კიდიდან სვაიპით Feed-ზე დაბრუნება
-  const touchStartX = useRef(0);
-  const handleTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    const touchEndX = e.changedTouches[0].clientX;
-    // თუ მარცხენა კიდიდან (პირველი 40px) გამოიწია თითი მინიმუმ 100px-ით
-    if (touchStartX.current < 40 && touchEndX - touchStartX.current > 100) {
-      router.push("/feed");
-    }
-  };
  
   useEffect(() => {
     let alive = true;
@@ -160,11 +149,7 @@ export default function LikesPage() {
   const skeletons = Array.from({ length: Math.min(likeCount || 4, 10) });
  
   return (
-    <main 
-      className="min-h-[100dvh] bg-[#11141a] text-white pb-36 overflow-x-hidden"
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-    >
+    <main className="min-h-[100dvh] bg-[#0b0e14] text-white pb-36 overflow-x-hidden">
       <div className="mx-auto w-full max-w-md px-4 pt-6">
         <h1 className="text-2xl font-extrabold mb-1">{L("მოწონებები", "Likes")}</h1>
         
@@ -181,7 +166,7 @@ export default function LikesPage() {
         {loading ? (
           <div className="grid grid-cols-2 gap-3">
             {skeletons.map((_, i) => (
-              <div key={i} className="relative aspect-[3/4] rounded-lg overflow-hidden bg-[#1a1f2b] select-none">
+              <div key={i} className="relative aspect-[3/4] rounded-2xl overflow-hidden bg-[#161a23] select-none">
                 <div className="absolute inset-0 bg-gradient-to-br from-pink-500/5 to-purple-500/5 blur-xl scale-110 opacity-70" />
               </div>
             ))}
@@ -194,21 +179,22 @@ export default function LikesPage() {
           ) : (
             <div className="grid grid-cols-2 gap-3">
               {likers.map((liker) => (
-                <div key={liker.id} onClick={() => router.push(`/profile/${liker.id}`)} className="relative aspect-[3/4] rounded-xl overflow-hidden bg-[#1a1f2b] cursor-pointer active:scale-95 transition shadow-lg">
+                <div key={liker.id} onClick={() => router.push(`/profile/${liker.id}`)} className="relative aspect-[3/4] rounded-2xl overflow-hidden bg-black cursor-pointer active:scale-95 transition shadow-lg">
                   {liker.photo ? (
                     <img src={liker.photo} alt={liker.name} className="absolute inset-0 w-full h-full object-cover" />
                   ) : (
-                    <div className="absolute inset-0 bg-zinc-800" />
+                    <div className="absolute inset-0 bg-zinc-900" />
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#11141a] via-[#11141a]/40 to-transparent" />
+                  {/* 🔥 სუფთა შავი გრადიენტი */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent pointer-events-none" />
                   
                   <div className="absolute bottom-16 left-3">
-                    <div className="font-bold text-sm">{liker.name}{liker.age ? `, ${liker.age}` : ""}</div>
+                    <div className="font-bold text-[15px]">{liker.name}{liker.age ? `, ${liker.age}` : ""}</div>
                   </div>
 
                   <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-3">
-                    <button onClick={(e) => handleQuickAction(liker.id, "pass", e)} className="w-10 h-10 flex items-center justify-center bg-zinc-800/80 backdrop-blur rounded-full text-red-500 hover:bg-red-500 hover:text-white transition shadow-lg">✕</button>
-                    <button onClick={(e) => handleQuickAction(liker.id, "like", e)} className="w-10 h-10 flex items-center justify-center bg-zinc-800/80 backdrop-blur rounded-full text-green-500 hover:bg-green-500 hover:text-white transition shadow-lg">❤️</button>
+                    <button onClick={(e) => handleQuickAction(liker.id, "pass", e)} className="w-10 h-10 flex items-center justify-center bg-black/40 backdrop-blur-md rounded-full text-red-500 hover:bg-red-500 hover:text-white transition shadow-xl border border-white/10">✕</button>
+                    <button onClick={(e) => handleQuickAction(liker.id, "like", e)} className="w-10 h-10 flex items-center justify-center bg-black/40 backdrop-blur-md rounded-full text-green-500 hover:bg-green-500 hover:text-white transition shadow-xl border border-white/10">❤️</button>
                   </div>
                 </div>
               ))}
@@ -231,15 +217,16 @@ export default function LikesPage() {
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 {likers.map((liker) => (
-                  <div key={liker.id} className="relative aspect-[3/4] rounded-xl overflow-hidden bg-[#1a1f2b] select-none shadow-lg">
+                  <div key={liker.id} className="relative aspect-[3/4] rounded-2xl overflow-hidden bg-black select-none shadow-lg">
                     {liker.photo ? (
-                      <img src={liker.photo} alt={liker.name} className="absolute inset-0 w-full h-full object-cover blur-xl scale-[1.15] opacity-80" />
+                      <img src={liker.photo} alt={liker.name} className="absolute inset-0 w-full h-full object-cover blur-2xl scale-[1.2] opacity-80" />
                     ) : (
                       <div className="absolute inset-0 bg-gradient-to-br from-pink-500/20 to-purple-500/20 blur-xl scale-110" />
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#11141a]/90 via-[#11141a]/20 to-transparent" />
+                    {/* 🔥 შავი გრადიენტი, რომ ბლარი ქვედა მხრიდან არ გაიჭრას */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
                     
-                    <div className="absolute bottom-3 left-3 z-10">
+                    <div className="absolute bottom-4 left-4 z-10">
                       <div className="font-bold text-[15px] text-white drop-shadow-md">
                         {liker.name}{liker.age ? `, ${liker.age}` : ""}
                       </div>
