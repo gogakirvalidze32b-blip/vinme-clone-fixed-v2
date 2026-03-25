@@ -130,10 +130,11 @@ export default function FeedPage() {
 
     let query = supabase
       .from("profiles")
-      .select("user_id,first_name,nickname,age,city,photo1_url,last_seen,lat,lng,seeking,gender,onboarding_completed,bio,intent,is_premium,hide_age,hide_distance")
-      .eq("onboarding_completed", true)
+.select("user_id,first_name,nickname,age,city,photo1_url,last_seen,lat,lng,seeking,gender,onboarding_completed,bio,intent,is_premium,hide_age,hide_distance")      .eq("onboarding_completed", true)
       .neq("user_id", myId)
       .not("photo1_url", "is", null);
+
+
 
     if (mySeeking !== "everyone" && mySeeking !== "both") query = query.eq("gender", mySeeking);
     if (myGender) query = query.or(`seeking.eq.everyone,seeking.eq.both,seeking.eq.${myGender},seeking.is.null`);
